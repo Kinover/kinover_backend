@@ -36,7 +36,7 @@ jobs:
         uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.EC2_HOST }}
-          username: ec2-user
+          username: ubuntu
           key: ${{ secrets.EC2_KEY }}
           source: "build/libs/*.jar"
           target: "/home/ec2-user/app"
@@ -45,7 +45,7 @@ jobs:
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST }}
-          username: ec2-user
+          username: ubuntu
           key: ${{ secrets.EC2_KEY }}
           script: |
             pkill -f 'java -jar' || true
