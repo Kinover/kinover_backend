@@ -36,16 +36,16 @@ jobs:
         uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.EC2_HOST }}
-          username: ubuntu
+          username: ubuntu  # 여기서 'ubuntu'로 수정
           key: ${{ secrets.EC2_KEY }}
           source: "build/libs/*.jar"
-          target: "/home/ec2-user/app"
+          target: "/home/ubuntu/app"  # EC2에서 ubuntu 계정으로 경로 설정
 
       - name: SSH to EC2 and restart app
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST }}
-          username: ubuntu
+          username: ubuntu  # 여기서 'ubuntu'로 수정
           key: ${{ secrets.EC2_KEY }}
           script: |
             pkill -f 'java -jar' || true
@@ -54,5 +54,4 @@ jobs:
             export SPRING_DATASOURCE_PASSWORD=${{ secrets.SPRING_DATASOURCE_PASSWORD }}
             export JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
             export OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
-
-            nohup java -jar /home/ec2-user/app/*.jar > app.log 2>&1 &
+            nohup java -jar /home/ubuntu/app/*.jar > app.log 2>&1 &
