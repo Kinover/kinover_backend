@@ -7,6 +7,7 @@ import com.example.kinover_backend.entity.Message;
 import com.example.kinover_backend.service.ChatRoomService;
 import com.example.kinover_backend.service.MessageService;
 import com.example.kinover_backend.JwtUtil;
+import com.example.kinover_backend.service.OpenAIService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -15,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -27,11 +29,14 @@ public class ChatRoomController {
     private final ChatRoomService chatRoomService;
     private final MessageService messageService;
     private final JwtUtil jwtUtil; // JwtUtil 추가
+    private final OpenAIService openAIService;
 
-    public ChatRoomController(ChatRoomService chatRoomService, MessageService messageService, JwtUtil jwtUtil) {
+
+    public ChatRoomController(ChatRoomService chatRoomService, MessageService messageService, JwtUtil jwtUtil, OpenAIService openAIService) {
         this.chatRoomService = chatRoomService;
         this.messageService = messageService;
         this.jwtUtil = jwtUtil;
+        this.openAIService = openAIService;
     }
 
     // 특정 유저가 가진 채팅방 조회
@@ -59,7 +64,7 @@ public class ChatRoomController {
     @Operation(summary = "메세지 발신 및 저장", description = "메세지를 보내고 저장시킵니다.")
     @PostMapping("/messages/send")
     public ResponseEntity<Message> saveMessage(
-            @RequestBody Message message ,
+            @RequestBody Message message,
             @RequestHeader("Authorization") String authorizationHeader) { // 메시지는 POST 요청 바디에서 받음
 
         Message savedMessage = messageService.saveMessage(message);
@@ -67,12 +72,27 @@ public class ChatRoomController {
     }
 
     // 특정 채팅방의 다른 유저 정보 조회
-    @Operation(summary = "채팅방 내 다른 유저 조회",description="")
+    @Operation(summary = "채팅방 내 다른 유저 조회", description = "")
     @PostMapping("/{chatRoomId}/users/get")
     public List<UserDTO> getUsersByChatRoom(
             @Parameter(description = "채팅방 아이디", required = true) @PathVariable UUID chatRoomId,
-            @RequestHeader("Authorization") String authorizationHeader){
+            @RequestHeader("Authorization") String authorizationHeader) {
         return chatRoomService.getUsersByChatRoom(chatRoomId);
+    }
+
+
+    // AI
+    @Operation(summary = "AI 챗봇 키노 채팅", description = "챗봇에게 채팅 수신")
+    @PostMapping("/ai")
+    public ResponseEntity<?> chat(@RequestBody Map<String, String> request) {
+        String userMessage = request.get("message");
+
+        try {
+            String reply = openAIService.askChatGPT(userMessage);
+            return ResponseEntity.ok(Map.of("reply", reply));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("ChatGPT 호출 실패: " + e.getMessage());
+        }
     }
 
 }
