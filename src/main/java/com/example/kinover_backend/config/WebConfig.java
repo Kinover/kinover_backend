@@ -13,7 +13,7 @@ public class WebConfig {
             @Override
             public void addCorsMappings(CorsRegistry registry) {
                 registry.addMapping("/**") // 모든 경로에 대해
-                        .allowedOrigins("http://localhost:3000", "http://13.209.70.77") // 프론트 주소들 허용
+                        .allowedOrigins("http://localhost:8080","http://localhost:8081", "http://13.209.70.77") // 프론트 주소들 허용
                         .allowedMethods("*") // 모든 HTTP 메소드 허용
                         .allowedHeaders("*")
                         .allowCredentials(true); // 쿠키/인증 정보 포함 허용
