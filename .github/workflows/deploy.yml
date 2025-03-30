@@ -49,4 +49,10 @@ jobs:
           key: ${{ secrets.EC2_KEY }}
           script: |
             pkill -f 'java -jar' || true
+            export SPRING_DATASOURCE_URL=${{ secrets.SPRING_DATASOURCE_URL }}
+            export SPRING_DATASOURCE_USERNAME=${{ secrets.SPRING_DATASOURCE_USERNAME }}
+            export SPRING_DATASOURCE_PASSWORD=${{ secrets.SPRING_DATASOURCE_PASSWORD }}
+            export JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
+            export OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+
             nohup java -jar /home/ec2-user/app/*.jar > app.log 2>&1 &
