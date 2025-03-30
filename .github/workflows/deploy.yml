@@ -1,10 +1,14 @@
-name: GitHub Actions Demo
-run-name: ${{ github.actor }} is testing out GitHub Actions 🚀
-on: [push]
+name: Deploy Spring Boot to EC2
+
+on:
+  push:
+    branches:
+      - main  # 또는 네가 사용하는 브랜치 이름
+
 jobs:
-  Explore-GitHub-Actions:
+  deploy:
     runs-on: ubuntu-latest
-    
+
     env:
       SPRING_DATASOURCE_URL: ${{ secrets.SPRING_DATASOURCE_URL }}
       SPRING_DATASOURCE_USERNAME: ${{ secrets.SPRING_DATASOURCE_USERNAME }}
@@ -12,18 +16,37 @@ jobs:
       JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
-
-
     steps:
-      - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
-      - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
-      - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
-      - name: Check out repository code
+      - name: Checkout
         uses: actions/checkout@v4
-      - run: echo "💡 The ${{ github.repository }} repository has been cloned to the runner."
-      - run: echo "🖥️ The workflow is now ready to test your code on the runner."
-      - name: List files in the repository
-        run: |
-          ls ${{ github.workspace }}
-      - run: echo "🍏 This job's status is ${{ job.status }}."
 
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'  # 네가 사용하는 버전으로 설정
+
+      - name: Grant permission to execute Gradle
+        run: chmod +x gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew build
+
+      - name: Deploy to EC2
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_KEY }}
+          source: "build/libs/*.jar"
+          target: "/home/ec2-user/app"
+
+      - name: SSH to EC2 and restart app
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_KEY }}
+          script: |
+            pkill -f 'java -jar' || true
+            nohup java -jar /home/ec2-user/app/*.jar > app.log 2>&1 &
