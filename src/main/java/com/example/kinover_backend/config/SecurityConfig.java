@@ -25,6 +25,7 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable()) // CSRF 비활성화 (필요시 활성화)
                 .authorizeHttpRequests(auth -> auth
+
                         .requestMatchers("/api/login/kakao").permitAll() // 로그인 관련 API는 인증 없이 접근 허용
                         .requestMatchers("/swagger-ui/**", "/api-docs/**","/v3/api-docs/**", "/swagger-ui.html").permitAll() // Swagger UI와 API 문서도 인증 없이 허용
                         .requestMatchers("/api/**").authenticated() // /api/** 요청은 모두 JWT 인증 필요
