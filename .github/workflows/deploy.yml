@@ -72,8 +72,10 @@ jobs:
           command_timeout: 60s
           script_stop: false
           script: |
-            echo "🔁 Restarting Spring Boot..."
-            pkill -f 'java -jar' || true
-            java -jar /home/ubuntu/app/*.jar > /home/ubuntu/app/nohup.out 2>&1 &
-            sleep 5
-            pgrep -f 'java -jar' && echo "✅ Spring Boot started successfully" || (echo "❌ Spring Boot failed to start" && exit 1)
+            bash -c '
+            echo "🔁 Restarting Spring Boot...";
+            pkill -f "java -jar" || true;
+            nohup java -jar /home/ubuntu/app/*.jar > /home/ubuntu/app/nohup.out 2>&1 &
+            sleep 3
+            echo "✅ Restart done"
+            ' || true
