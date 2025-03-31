@@ -62,7 +62,7 @@ jobs:
         run: |
           scp -i kinover-key.pem -o StrictHostKeyChecking=no *.jar ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/app/
 
-      - name: Restart Spring Boot App via SSH
+      - name: Restart Spring Boot App via SSH (with Redis config)
         run: |
           ssh -i kinover-key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
             echo "🔁 Restarting Spring Boot..."
@@ -75,8 +75,9 @@ jobs:
             SPRING_DATASOURCE_PASSWORD="${{ secrets.SPRING_DATASOURCE_PASSWORD }}" \
             JWT_SECRET_KEY="${{ secrets.JWT_SECRET_KEY }}" \
             OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
+            REDIS_HOST=localhost \
+            REDIS_PORT=6379 \
             nohup java -jar \$JAR_NAME > nohup.out 2>&1 &
             sleep 3
             echo "✅ Restart complete"
           EOF
-
