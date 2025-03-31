@@ -47,7 +47,11 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(Collections.singletonList("*")); // or 구체적인 도메인 지정
+        config.setAllowedOriginPatterns(Arrays.asList(
+                "http://localhost:8081",
+                "http://localhost:3000",
+                "http://13.209.88.75:8081"
+        )); // ✅ 프론트 주소만 정확히 넣기
         config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(Collections.singletonList("*"));
         config.setAllowCredentials(true);
