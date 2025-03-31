@@ -53,29 +53,21 @@ jobs:
         with:
           name: spring-boot-app
 
-      - name: Deploy to EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "*.jar"
-          target: "/home/ubuntu/app/"
+      - name: Save PEM file
+        run: |
+          echo "${{ secrets.EC2_SSH_KEY }}" > kinover-key.pem
+          chmod 600 kinover-key.pem
 
-      - name: Restart Spring Boot App (via SSH)
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          timeout: 60s
-          command_timeout: 60s
-          script_stop: false
-          script: |
-            bash -c '
-            echo "🔁 Restarting Spring Boot...";
-            pkill -f "java -jar" || true;
+      - name: Copy JAR to EC2 via scp
+        run: |
+          scp -i kinover-key.pem -o StrictHostKeyChecking=no *.jar ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/app/
+
+      - name: Restart Spring Boot App via SSH
+        run: |
+          ssh -i kinover-key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            echo "🔁 Restarting Spring Boot..."
+            pkill -f "java -jar" || true
             nohup java -jar /home/ubuntu/app/*.jar > /home/ubuntu/app/nohup.out 2>&1 &
             sleep 3
-            echo "✅ Restart done"
-            ' || true
+            echo "✅ Restart complete"
+          EOF
