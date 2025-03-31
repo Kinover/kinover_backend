@@ -50,6 +50,7 @@ public class SecurityConfig {
         config.setAllowedOrigins(Arrays.asList(
                 "http://localhost:8081",
                 "http://localhost:3000",
+                "http://localhost:3001",
                 "http://13.209.88.75:8081"
         )); // ✅ 프론트 주소만 정확히 넣기
         config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
