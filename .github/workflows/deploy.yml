@@ -67,7 +67,9 @@ jobs:
           ssh -i kinover-key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
             echo "🔁 Restarting Spring Boot..."
             pkill -f "java -jar" || true
-            nohup java -jar /home/ubuntu/app/*.jar > /home/ubuntu/app/nohup.out 2>&1 &
+            JAR_NAME=$(ls /home/ubuntu/app | grep -v plain.jar | grep '.jar$' | head -n 1)
+            echo "✅ Running JAR: \$JAR_NAME"
+            nohup java -jar /home/ubuntu/app/\$JAR_NAME > /home/ubuntu/app/nohup.out 2>&1 &
             sleep 3
             echo "✅ Restart complete"
           EOF
