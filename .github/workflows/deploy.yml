@@ -2,18 +2,11 @@ name: Deploy Spring Boot App
 
 on:
   push:
-    branches: [ main ]  # main 브랜치에 push될 때만 작동
+    branches: [ main ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
-    env:
-      SPRING_DATASOURCE_URL: ${{ secrets.SPRING_DATASOURCE_URL }}
-      SPRING_DATASOURCE_USERNAME: ${{ secrets.SPRING_DATASOURCE_USERNAME }}
-      SPRING_DATASOURCE_PASSWORD: ${{ secrets.SPRING_DATASOURCE_PASSWORD }}
-      JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
     steps:
       - name: Checkout Code
@@ -28,56 +21,39 @@ jobs:
       - name: Grant execute permission for Gradle
         run: chmod +x gradlew
 
-      - name: Build with Gradle and pass secrets to JVM
+      - name: Build with Gradle
+        run: ./gradlew clean build -x test
+
+      - name: Create .env file
         run: |
-          ./gradlew clean build -x test \
-            -Dspring.datasource.url="${{ secrets.SPRING_DATASOURCE_URL }}" \
-            -Dspring.datasource.username="${{ secrets.SPRING_DATASOURCE_USERNAME }}" \
-            -Dspring.datasource.password="${{ secrets.SPRING_DATASOURCE_PASSWORD }}" \
-            -Djwt.secret="${{ secrets.JWT_SECRET_KEY }}" \
-            -Dopenai.api.key="${{ secrets.OPENAI_API_KEY }}"
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: spring-boot-app
-          path: build/libs/*.jar
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: spring-boot-app
+          cat <<EOF > .env
+          SPRING_DATASOURCE_URL=${{ secrets.SPRING_DATASOURCE_URL }}
+          SPRING_DATASOURCE_USERNAME=${{ secrets.SPRING_DATASOURCE_USERNAME }}
+          SPRING_DATASOURCE_PASSWORD=${{ secrets.SPRING_DATASOURCE_PASSWORD }}
+          JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          REDIS_HOST=localhost
+          REDIS_PORT=6379
+          EOF
 
       - name: Save PEM file
         run: |
           echo "${{ secrets.EC2_SSH_KEY }}" > kinover-key.pem
           chmod 600 kinover-key.pem
 
-      - name: Copy JAR to EC2 via scp
+      - name: Deploy to EC2 (JAR + .env)
         run: |
-          scp -i kinover-key.pem -o StrictHostKeyChecking=no *.jar ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/app/
+          scp -i kinover-key.pem -o StrictHostKeyChecking=no build/libs/*.jar .env ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/app/
 
-      - name: Restart Spring Boot App via SSH (with Redis config)
+      - name: Restart Spring Boot App via SSH
         run: |
-          ssh -i kinover-key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
+          ssh -i kinover-key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
             echo "🔁 Restarting Spring Boot..."
             pkill -f "java -jar" || true
             cd /home/ubuntu/app
-            JAR_NAME=\$(ls | grep -v plain.jar | grep '.jar$' | head -n 1)
-            echo "✅ Running JAR: \$JAR_NAME"
-            SPRING_DATASOURCE_URL="${{ secrets.SPRING_DATASOURCE_URL }}" \
-            SPRING_DATASOURCE_USERNAME="${{ secrets.SPRING_DATASOURCE_USERNAME }}" \
-            SPRING_DATASOURCE_PASSWORD="${{ secrets.SPRING_DATASOURCE_PASSWORD }}" \
-            JWT_SECRET_KEY="${{ secrets.JWT_SECRET_KEY }}" \
-            OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
-            REDIS_HOST=localhost \
-            REDIS_PORT=6379 \
-            nohup java -jar \$JAR_NAME > nohup.out 2>&1 &
+            JAR_NAME=$(ls | grep -v plain.jar | grep '.jar$' | head -n 1)
+            echo "✅ Running JAR: $JAR_NAME"
+            nohup java -jar $JAR_NAME > nohup.out 2>&1 &
             sleep 3
             echo "✅ Restart complete"
           EOF
