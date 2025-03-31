@@ -65,12 +65,18 @@ jobs:
       - name: Restart Spring Boot App via SSH
         run: |
           ssh -i kinover-key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
-           echo "🔁 Restarting Spring Boot..."
-           pkill -f "java -jar" || true
-           cd /home/ubuntu/app
-           JAR_NAME=\$(ls | grep -v plain.jar | grep '.jar$' | head -n 1)
-           echo "✅ Running JAR: \$JAR_NAME"
-           nohup java -jar \$JAR_NAME > nohup.out 2>&1 &
-           sleep 3
-           echo "✅ Restart complete"
+            echo "🔁 Restarting Spring Boot..."
+            pkill -f "java -jar" || true
+            cd /home/ubuntu/app
+            JAR_NAME=\$(ls | grep -v plain.jar | grep '.jar$' | head -n 1)
+            echo "✅ Running JAR: \$JAR_NAME"
+            SPRING_DATASOURCE_URL="${{ secrets.SPRING_DATASOURCE_URL }}" \
+            SPRING_DATASOURCE_USERNAME="${{ secrets.SPRING_DATASOURCE_USERNAME }}" \
+            SPRING_DATASOURCE_PASSWORD="${{ secrets.SPRING_DATASOURCE_PASSWORD }}" \
+            JWT_SECRET_KEY="${{ secrets.JWT_SECRET_KEY }}" \
+            OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
+            nohup java -jar \$JAR_NAME > nohup.out 2>&1 &
+            sleep 3
+            echo "✅ Restart complete"
           EOF
+
