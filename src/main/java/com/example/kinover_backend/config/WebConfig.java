@@ -1,4 +1,5 @@
 package com.example.kinover_backend.config;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
@@ -12,11 +13,11 @@ public class WebConfig {
         return new WebMvcConfigurer() {
             @Override
             public void addCorsMappings(CorsRegistry registry) {
-                registry.addMapping("/**") // 모든 경로에 대해
-                        .allowedOrigins("http://localhost:8080","http://localhost:8081","http://localhost:3000", "http://13.209.88.75:8081") // 프론트 도메인 정확히 명시
-                        .allowedMethods("*") // 모든 HTTP 메소드 허용
+                registry.addMapping("/**")
+                        .allowedOriginPatterns("*") // ✅ 이걸로 변경 (패턴 허용)
+                        .allowedMethods("*")
                         .allowedHeaders("*")
-                        .allowCredentials(true); // 쿠키/인증 정보 포함 허용
+                        .allowCredentials(true); // ✅ 인증 정보 허용 시 *은 안 됨 → patterns만 가능
             }
         };
     }
