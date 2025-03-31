@@ -28,8 +28,14 @@ jobs:
       - name: Grant execute permission for Gradle
         run: chmod +x gradlew
 
-      - name: Build with Gradle
-        run: ./gradlew clean build
+      - name: Build with Gradle and pass secrets to JVM
+        run: |
+          ./gradlew clean build \
+            -Dspring.datasource.url="${{ secrets.SPRING_DATASOURCE_URL }}" \
+            -Dspring.datasource.username="${{ secrets.SPRING_DATASOURCE_USERNAME }}" \
+            -Dspring.datasource.password="${{ secrets.SPRING_DATASOURCE_PASSWORD }}" \
+            -Djwt.secret="${{ secrets.JWT_SECRET_KEY }}" \
+            -Dopenai.api.key="${{ secrets.OPENAI_API_KEY }}"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
