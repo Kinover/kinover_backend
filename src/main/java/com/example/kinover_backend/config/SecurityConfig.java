@@ -9,6 +9,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.context.SecurityContextPersistenceFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
+
+import java.util.Arrays;
+import java.util.Collections;
 
 @Configuration
 @EnableWebSecurity
@@ -23,7 +29,10 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
+
                 .csrf(csrf -> csrf.disable()) // CSRF 비활성화 (필요시 활성화)
+                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // ✅ 여기서 직접 지정
+
                 .authorizeHttpRequests(auth -> auth
 
                         .requestMatchers("/api/login/kakao").permitAll() // 로그인 관련 API는 인증 없이 접근 허용
@@ -37,6 +46,20 @@ public class SecurityConfig {
                 .httpBasic(httpBasic -> httpBasic.disable()); // 기본 HTTP 인증 비활성화
 
         return http.build();
+    }
+
+    // ✅ CORS 설정 직접 정의
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOriginPatterns(Collections.singletonList("*")); // OR 실제 도메인 목록
+        config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(Collections.singletonList("*"));
+        config.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return (CorsConfigurationSource) source;
     }
 
     @Bean
