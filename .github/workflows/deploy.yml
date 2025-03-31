@@ -65,11 +65,13 @@ jobs:
       - name: Restart Spring Boot App (via SSH)
         uses: appleboy/ssh-action@v1.0.0
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
+           host: ${{ secrets.EC2_HOST }}
+           username: ${{ secrets.EC2_USER }}
+           key: ${{ secrets.EC2_SSH_KEY }}
+           timeout: 60
+           script: |
+            echo "🔁 Restarting Spring Boot..."
             pkill -f 'java -jar' || true
             nohup java -jar /home/ubuntu/app/*.jar > /home/ubuntu/app/nohup.out 2>&1 &
-            echo "Spring Boot restarted successfully"
-            exit 0
+            sleep 3
+            echo "✅ Spring Boot restarted successfully"
