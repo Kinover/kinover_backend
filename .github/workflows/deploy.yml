@@ -68,7 +68,7 @@ jobs:
            host: ${{ secrets.EC2_HOST }}
            username: ${{ secrets.EC2_USER }}
            key: ${{ secrets.EC2_SSH_KEY }}
-           timeout: 60
+           timeout: 60s
            script: |
             echo "🔁 Restarting Spring Boot..."
             pkill -f 'java -jar' || true
