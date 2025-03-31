@@ -7,11 +7,10 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.context.SecurityContextPersistenceFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
-import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource; // ✅ 수정된 import
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -29,37 +28,33 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-
-                .csrf(csrf -> csrf.disable()) // CSRF 비활성화 (필요시 활성화)
-                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // ✅ 여기서 직접 지정
-
+                .csrf(csrf -> csrf.disable())
+                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // ✅ CORS 설정 적용
                 .authorizeHttpRequests(auth -> auth
-
-                        .requestMatchers("/api/login/kakao").permitAll() // 로그인 관련 API는 인증 없이 접근 허용
-                        .requestMatchers("/swagger-ui/**", "/api-docs/**","/v3/api-docs/**", "/swagger-ui.html").permitAll() // Swagger UI와 API 문서도 인증 없이 허용
-                        .requestMatchers("/api/**").authenticated() // /api/** 요청은 모두 JWT 인증 필요
-                        .anyRequest().authenticated() // 나머지 요청은 인증 필요
+                        .requestMatchers("/api/login/kakao").permitAll()
+                        .requestMatchers("/swagger-ui/**", "/api-docs/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
+                        .requestMatchers("/api/**").authenticated()
+                        .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, SecurityContextPersistenceFilter.class)
-                .formLogin((formLogin) -> formLogin.disable())
-                .logout((logoutConfig) -> logoutConfig.disable())
-                .httpBasic(httpBasic -> httpBasic.disable()); // 기본 HTTP 인증 비활성화
+                .formLogin(formLogin -> formLogin.disable())
+                .logout(logoutConfig -> logoutConfig.disable())
+                .httpBasic(httpBasic -> httpBasic.disable());
 
         return http.build();
     }
 
-    // ✅ CORS 설정 직접 정의
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(Collections.singletonList("*")); // OR 실제 도메인 목록
+        config.setAllowedOriginPatterns(Collections.singletonList("*")); // or 구체적인 도메인 지정
         config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(Collections.singletonList("*"));
         config.setAllowCredentials(true);
 
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource(); // ✅ Servlet 기반
         source.registerCorsConfiguration("/**", config);
-        return (CorsConfigurationSource) source;
+        return source;
     }
 
     @Bean
