@@ -74,7 +74,6 @@ jobs:
           script: |
             echo "🔁 Restarting Spring Boot..."
             pkill -f 'java -jar' || true
-            nohup java -jar /home/ubuntu/app/*.jar > /home/ubuntu/app/nohup.out 2>&1 &
-            sleep 3
-            echo "✅ Spring Boot restarted successfully"
-            exit 0
+            java -jar /home/ubuntu/app/*.jar > /home/ubuntu/app/nohup.out 2>&1 &
+            sleep 5
+            pgrep -f 'java -jar' && echo "✅ Spring Boot started successfully" || (echo "❌ Spring Boot failed to start" && exit 1)
