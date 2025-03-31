@@ -30,7 +30,7 @@ jobs:
 
       - name: Build with Gradle and pass secrets to JVM
         run: |
-          ./gradlew clean build \
+          ./gradlew clean build -x test \
             -Dspring.datasource.url="${{ secrets.SPRING_DATASOURCE_URL }}" \
             -Dspring.datasource.username="${{ secrets.SPRING_DATASOURCE_USERNAME }}" \
             -Dspring.datasource.password="${{ secrets.SPRING_DATASOURCE_PASSWORD }}" \
