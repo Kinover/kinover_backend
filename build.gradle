@@ -43,10 +43,8 @@ dependencies {
 
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-security'
-    implementation 'org.springframework.boot:spring-boot-starter-web'
 
     implementation 'org.springframework.boot:spring-boot-starter-web' // Spring Web 스타터 (서블릿 관련 기능 포함)
-    implementation 'javax.servlet:javax.servlet-api:4.0.1'  // 서블릿 API 의존성 추가 (배포 환경에서만 필요)
 
     implementation 'com.fasterxml.jackson.core:jackson-databind'
 
