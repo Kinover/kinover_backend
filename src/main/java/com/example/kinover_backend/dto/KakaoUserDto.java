@@ -7,6 +7,8 @@ import lombok.Setter;
 @Getter
 @Setter
 public class KakaoUserDto {
+    private String accessToken; // RN 요청에서 받을 필드
+
     @JsonProperty("id")
     private Long kakaoId;
 
@@ -30,6 +32,7 @@ public class KakaoUserDto {
     @Setter
     public static class KakaoAccount {
         private String email;
+
         @JsonProperty("profile")
         private Profile profile;
 

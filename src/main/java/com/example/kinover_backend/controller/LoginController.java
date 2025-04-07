@@ -1,6 +1,6 @@
 package com.example.kinover_backend.controller;
 
-import com.example.kinover_backend.dto.KakaoTokenRequest;
+import com.example.kinover_backend.dto.KakaoUserDto;
 import com.example.kinover_backend.service.KakaoUserService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
@@ -19,19 +19,14 @@ public class LoginController {
     }
 
     @PostMapping("/kakao")
-    public ResponseEntity<String> kakaoLogin(@RequestBody KakaoTokenRequest tokenRequest) {
-        if (tokenRequest == null || tokenRequest.getAccessToken() == null) {
+    public ResponseEntity<String> kakaoLogin(@RequestBody KakaoUserDto kakaoUserDto) {
+        if (kakaoUserDto == null || kakaoUserDto.getAccessToken() == null) {
             System.out.println("액세스 토큰이 제공되지 않음");
             return ResponseEntity.badRequest().body("Access token is required");
         }
 
-        try {
-            System.out.println("카카오 로그인 요청 들어옴: " + tokenRequest.getAccessToken());
-            String jwtToken = kakaoUserService.processKakaoLogin(tokenRequest.getAccessToken());
-            return ResponseEntity.ok(jwtToken);
-        } catch (RuntimeException e) {
-            System.out.println("카카오 로그인 실패: " + e.getMessage());
-            return ResponseEntity.status(500).body("Login failed: " + e.getMessage());
-        }
+        System.out.println("카카오 로그인 요청 들어옴: " + kakaoUserDto.getAccessToken());
+        String jwtToken = kakaoUserService.processKakaoLogin(kakaoUserDto.getAccessToken());
+        return ResponseEntity.ok(jwtToken);
     }
 }
