@@ -20,6 +20,9 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+
 @Service
 @RequiredArgsConstructor
 public class KakaoUserService {
@@ -67,6 +70,7 @@ public class KakaoUserService {
         if (kakaoUserDto == null || kakaoUserDto.getKakaoId() == null) {
             throw new RuntimeException("카카오 사용자 정보를 가져오지 못했습니다.");
         }
+        logger.info("Kakao API Response: {}", kakaoUserDto); // 응답 로그 추가
         return kakaoUserDto;
     }
 
@@ -87,6 +91,18 @@ public class KakaoUserService {
             user.setEmail(kakaoUserDto.getEmail());
             user.setName(kakaoUserDto.getNickname());
             user.setImage(kakaoUserDto.getProfileImageUrl());
+            user.setPhoneNumber(kakaoUserDto.getPhoneNumber());
+            // 생년월일 설정 (birthyear + birthday 조합)
+            if (kakaoUserDto.getBirthyear() != null && kakaoUserDto.getBirthday() != null) {
+                String birthDateStr = kakaoUserDto.getBirthyear() + "-" + kakaoUserDto.getBirthday().substring(0, 2) + "-" + kakaoUserDto.getBirthday().substring(2);
+                user.setBirth(LocalDate.parse(birthDateStr, DateTimeFormatter.ISO_LOCAL_DATE));
+            }
+            user.setCreatedAt(LocalDate.now());
+            user.setUpdatedAt(LocalDate.now());
+            user.setStatus("ACTIVE");
+            user.setVersion(0); // 초기 버전 설정
+            logger.info("Creating user: id={}, name={}, email={}, phone={}, birth={}",
+                    user.getUserId(), user.getName(), user.getEmail(), user.getPhoneNumber(), user.getBirth());
             return userRepository.saveAndFlush(user);
         } catch (DataIntegrityViolationException e) {
             logger.error("데이터베이스 제약조건 위반: {}", e.getMessage());
@@ -101,6 +117,12 @@ public class KakaoUserService {
         user.setName(kakaoUserDto.getNickname());
         user.setEmail(kakaoUserDto.getEmail());
         user.setImage(kakaoUserDto.getProfileImageUrl());
+        user.setPhoneNumber(kakaoUserDto.getPhoneNumber());
+        if (kakaoUserDto.getBirthyear() != null && kakaoUserDto.getBirthday() != null) {
+            String birthDateStr = kakaoUserDto.getBirthyear() + "-" + kakaoUserDto.getBirthday().substring(0, 2) + "-" + kakaoUserDto.getBirthday().substring(2);
+            user.setBirth(LocalDate.parse(birthDateStr, DateTimeFormatter.ISO_LOCAL_DATE));
+        }
+        user.setUpdatedAt(LocalDate.now());
         return userRepository.saveAndFlush(user);
     }
 }

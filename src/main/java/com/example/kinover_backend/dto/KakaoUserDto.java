@@ -7,7 +7,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class KakaoUserDto {
-    private String accessToken; // RN 요청에서 받을 필드
+    private String accessToken;
 
     @JsonProperty("id")
     private Long kakaoId;
@@ -32,6 +32,11 @@ public class KakaoUserDto {
     @Setter
     public static class KakaoAccount {
         private String email;
+        @JsonProperty("phone_number")
+        private String phoneNumber;  // 전화번호 추가
+        private String birthyear;    // 생년 추가
+        private String birthday;     // 생일 추가 (MMDD 형식)
+        private String name;         // 이름 추가
 
         @JsonProperty("profile")
         private Profile profile;
@@ -57,5 +62,17 @@ public class KakaoUserDto {
 
     public String getEmail() {
         return kakaoAccount != null ? kakaoAccount.getEmail() : null;
+    }
+
+    public String getPhoneNumber() {
+        return kakaoAccount != null ? kakaoAccount.getPhoneNumber() : null;
+    }
+
+    public String getBirthyear() {
+        return kakaoAccount != null ? kakaoAccount.getBirthyear() : null;
+    }
+
+    public String getBirthday() {
+        return kakaoAccount != null ? kakaoAccount.getBirthday() : null;
     }
 }
