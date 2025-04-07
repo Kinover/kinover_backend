@@ -40,10 +40,10 @@ public class User {
     @Column(columnDefinition = "VARCHAR(20)")
     private String phoneNumber;
 
-    @Column(columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+    @Column(columnDefinition = "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP")
     private Date createdAt;
 
-    @Column(columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+    @Column(columnDefinition = "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
     private Date updatedAt;
 
     @OneToMany(mappedBy = "sender", fetch = FetchType.LAZY)
