@@ -26,7 +26,7 @@ public class KakaoUserService {
 
     private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
-    private final RestTemplate restTemplate; // 카카오 API 호출용
+    private final RestTemplate restTemplate;
 
     @Autowired
     private EntityManager entityManager;
@@ -39,15 +39,11 @@ public class KakaoUserService {
     @Transactional
     public String processKakaoLogin(String accessToken) {
         try {
-            // 1. 카카오 API로 사용자 정보 조회
             KakaoUserDto kakaoUserDto = getKakaoUserInfo(accessToken);
             logger.info("Kakao User Info Retrieved: Kakao ID = {}", kakaoUserDto.getKakaoId());
 
-            // 2. 사용자 조회 또는 생성
             User user = findOrCreateUser(kakaoUserDto);
-
-            // 3. JWT 생성 (userId는 Long 타입이므로 String으로 변환)
-            return jwtUtil.generateToken(String.valueOf(user.getUserId()));
+            return jwtUtil.generateToken(user.getUserId()); // Long 타입 직접 전달
         } catch (ObjectOptimisticLockingFailureException ex) {
             logger.error("데이터 충돌 발생: {}", ex.getMessage());
             throw new RuntimeException("데이터 충돌이 발생했습니다. 다시 시도해주세요.", ex);
@@ -57,7 +53,6 @@ public class KakaoUserService {
         }
     }
 
-    // 카카오 API 호출로 사용자 정보 가져오기
     private KakaoUserDto getKakaoUserInfo(String accessToken) {
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "Bearer " + accessToken);
@@ -90,11 +85,9 @@ public class KakaoUserService {
                 user = new User();
                 user.setUserId(kakaoUserDto.getKakaoId());
             }
-
             user.setEmail(kakaoUserDto.getEmail());
             user.setName(kakaoUserDto.getNickname());
             user.setImage(kakaoUserDto.getProfileImageUrl());
-
             return userRepository.saveAndFlush(user);
         } catch (DataIntegrityViolationException e) {
             logger.error("데이터베이스 제약조건 위반: {}", e.getMessage());
