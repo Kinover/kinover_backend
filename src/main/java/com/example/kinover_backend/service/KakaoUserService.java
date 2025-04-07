@@ -26,7 +26,6 @@ public class KakaoUserService {
 
     private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
-    private final RestTemplate restTemplate;
 
     @Autowired
     private EntityManager entityManager;
