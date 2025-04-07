@@ -70,7 +70,7 @@ public class KakaoUserService {
         if (kakaoUserDto == null || kakaoUserDto.getKakaoId() == null) {
             throw new RuntimeException("카카오 사용자 정보를 가져오지 못했습니다.");
         }
-        logger.info("Kakao API Response: {}", kakaoUserDto); // 응답 로그 추가
+        logger.info("Kakao API Response: {}", kakaoUserDto);
         return kakaoUserDto;
     }
 
@@ -92,15 +92,11 @@ public class KakaoUserService {
             user.setName(kakaoUserDto.getNickname());
             user.setImage(kakaoUserDto.getProfileImageUrl());
             user.setPhoneNumber(kakaoUserDto.getPhoneNumber());
-            // 생년월일 설정 (birthyear + birthday 조합)
             if (kakaoUserDto.getBirthyear() != null && kakaoUserDto.getBirthday() != null) {
                 String birthDateStr = kakaoUserDto.getBirthyear() + "-" + kakaoUserDto.getBirthday().substring(0, 2) + "-" + kakaoUserDto.getBirthday().substring(2);
                 user.setBirth(LocalDate.parse(birthDateStr, DateTimeFormatter.ISO_LOCAL_DATE));
             }
-            user.setCreatedAt(LocalDate.now());
-            user.setUpdatedAt(LocalDate.now());
-            user.setStatus("ACTIVE");
-            user.setVersion(0); // 초기 버전 설정
+            // created_at, updated_at, status, version은 DB에서 자동 설정
             logger.info("Creating user: id={}, name={}, email={}, phone={}, birth={}",
                     user.getUserId(), user.getName(), user.getEmail(), user.getPhoneNumber(), user.getBirth());
             return userRepository.saveAndFlush(user);
@@ -122,7 +118,7 @@ public class KakaoUserService {
             String birthDateStr = kakaoUserDto.getBirthyear() + "-" + kakaoUserDto.getBirthday().substring(0, 2) + "-" + kakaoUserDto.getBirthday().substring(2);
             user.setBirth(LocalDate.parse(birthDateStr, DateTimeFormatter.ISO_LOCAL_DATE));
         }
-        user.setUpdatedAt(LocalDate.now());
+        // updated_at은 DB에서 자동 갱신, version은 JPA @Version으로 관리
         return userRepository.saveAndFlush(user);
     }
 }
