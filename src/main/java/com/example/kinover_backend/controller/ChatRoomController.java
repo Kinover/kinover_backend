@@ -49,7 +49,6 @@ public class ChatRoomController {
         String token = authorizationHeader.replace("Bearer ", "");
         Long authenticatedUserId = jwtUtil.getUserIdFromToken(token);
 
-        // userIds를 쉼표로 분리하여 Long 리스트로 변환
         List<Long> userIdList = Arrays.stream(userIds.split(","))
                 .map(Long::parseLong)
                 .collect(Collectors.toList());
@@ -85,10 +84,11 @@ public class ChatRoomController {
         return new ResponseEntity<>(updatedChatRoom, HttpStatus.OK);
     }
 
-    // 특정 유저가 가진 채팅방 조회
+    // 특정 유저가 가진 채팅방 조회 (familyId 추가, 사용하지 않음)
     @Operation(summary = "채팅방 조회", description = "특정 유저의 모든 채팅방을 조회합니다.")
-    @PostMapping("/{userId}")
+    @PostMapping("/{familyId}/{userId}")
     public List<ChatRoomDTO> getAllChatRooms(
+            @Parameter(description = "가족 아이디 (사용되지 않음)", required = true) @PathVariable UUID familyId,
             @Parameter(description = "유저 아이디", required = true) @PathVariable Long userId,
             @RequestHeader("Authorization") String authorizationHeader) {
         String token = authorizationHeader.replace("Bearer ", "");
@@ -96,7 +96,7 @@ public class ChatRoomController {
         if (!authenticatedUserId.equals(userId)) {
             throw new RuntimeException("인증된 유저와 요청 유저가 일치하지 않습니다");
         }
-        return chatRoomService.getAllChatRooms(userId);
+        return chatRoomService.getAllChatRooms(userId); // familyId는 사용하지 않음
     }
 
     // 채팅방의 모든 메시지 조회
