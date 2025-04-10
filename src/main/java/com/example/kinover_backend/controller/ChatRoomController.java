@@ -19,7 +19,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors; 
+import java.util.stream.Collectors;
 
 @Tag(name = "채팅방 Controller", description = "채팅방 관련 API를 제공합니다.")
 @RestController
