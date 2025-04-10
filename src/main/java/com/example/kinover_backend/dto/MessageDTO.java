@@ -24,7 +24,7 @@ public class MessageDTO {
         this.content = message.getContent();
         this.createdAt = message.getCreatedAt();
         this.chatRoom = new ChatRoomDTO(message.getChatRoom());
-        this.messageType = message.getMessageType(); 
+        this.messageType = message.getMessageType();
         this.sender = new UserDTO(message.getSender());
     }
 }
