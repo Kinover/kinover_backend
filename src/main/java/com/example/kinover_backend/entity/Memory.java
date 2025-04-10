@@ -24,8 +24,8 @@ public class Memory {
     @Column(columnDefinition = "VARCHAR(100)")
     private String image;
 
-    @Column(columnDefinition = "DATE")
-    private Date createdAt;
+    @Column(columnDefinition = "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP")
+    private java.util.Date createdAt;
 
     // 외래키
     @ManyToOne(cascade = CascadeType.ALL)

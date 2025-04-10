@@ -21,11 +21,11 @@ public class Family {
     @Column(columnDefinition = "VARCHAR(30)")
     private String name;
 
-    @Column(columnDefinition = "DATE")
-    private Date createdAt;
+    @Column(columnDefinition = "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP")
+    private java.util.Date createdAt;
 
-    @Column(columnDefinition = "DATE")
-    private Date updatedAt;
+    @Column(columnDefinition = "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+    private java.util.Date updatedAt;
 
     @Enumerated(EnumType.STRING) // Enum 값을 문자열로 저장
     private FamilyRelationship relationship;

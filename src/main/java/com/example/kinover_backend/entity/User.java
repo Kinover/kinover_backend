@@ -31,7 +31,7 @@ public class User {
     @Column(columnDefinition = "VARCHAR(255)")
     private String pwd;
 
-    @Column(columnDefinition = "VARCHAR(50) DEFAULT 'ACTIVE'")
+    @Column(columnDefinition = "VARCHAR(50)")
     private String status;
 
     @Column(columnDefinition = "TEXT")

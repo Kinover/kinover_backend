@@ -18,8 +18,8 @@ public class Comment {
     @Column(columnDefinition = "VARCHAR(255)")
     private String content;
 
-    @Column(columnDefinition = "DATE")
-    private Date createdAt;
+    @Column(columnDefinition = "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP")
+    private java.util.Date createdAt;
 
     @ManyToOne(cascade = CascadeType.ALL)
     @JoinColumn(name = "memoryId", nullable = false)

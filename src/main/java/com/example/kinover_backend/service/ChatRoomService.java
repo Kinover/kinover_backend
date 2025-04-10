@@ -33,20 +33,13 @@ public class ChatRoomService {
     }
 
     // familyId와 userId에 맞는 채팅방 조회
-    public List<ChatRoomDTO> getAllChatRooms(UUID familyId, Long userId) {
-        // 특정 유저가 속한 UserChatRoom 리스트 조회
+    public List<ChatRoomDTO> getAllChatRooms(Long userId) {
         List<UserChatRoom> userChatRooms = userChatRoomRepository.findByUserId(userId);
-
-        // 중복을 방지하기 위해 Set 사용
         Set<UUID> chatRoomIds = userChatRooms.stream()
                 .map(UserChatRoom::getChatRoom)
-                .filter(chatRoom -> chatRoom.getFamily().getFamilyId().equals(familyId)) // 특정 가족 ID만 필터링
-                .map(ChatRoom::getChatRoomId) // ChatRoom ID 추출
-                .collect(Collectors.toSet()); // 중복 제거
-
-        // 채팅방 ID에 해당하는 ChatRoom 리스트 조회
+                .map(ChatRoom::getChatRoomId)
+                .collect(Collectors.toSet());
         List<ChatRoom> chatRooms = chatRoomRepository.findByChatRoomIdIn(chatRoomIds);
-
         return chatRooms.stream()
                 .map(chatRoomMapper::toDTO)
                 .collect(Collectors.toList());
