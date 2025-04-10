@@ -74,7 +74,7 @@ public class UserFamilyService {
         ChatRoom kinoChatRoom = new ChatRoom();
         kinoChatRoom.setChatRoomId(UUID.randomUUID());
         kinoChatRoom.setRoomName("챗봇 키노");
-        kinoChatRoom.setIsKino(true);
+        kinoChatRoom.setKino(true); // setIsKino -> setKino로 수정
         kinoChatRoom.setFamilyType("personal");
         kinoChatRoom.setImage(kino.getImage());
         kinoChatRoom.setFamily(null);
