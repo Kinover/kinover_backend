@@ -15,9 +15,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors; 
 
 @Tag(name = "채팅방 Controller", description = "채팅방 관련 API를 제공합니다.")
 @RestController
@@ -90,7 +92,7 @@ public class ChatRoomController {
             @Parameter(description = "유저 아이디", required = true) @PathVariable Long userId,
             @RequestHeader("Authorization") String authorizationHeader) {
         String token = authorizationHeader.replace("Bearer ", "");
-        Long authenticatedUserId = jwtUtil.getUserIdFromToken(token); // JwtUtil에서 getUserIdFromToken 사용
+        Long authenticatedUserId = jwtUtil.getUserIdFromToken(token);
         if (!authenticatedUserId.equals(userId)) {
             throw new RuntimeException("인증된 유저와 요청 유저가 일치하지 않습니다");
         }
