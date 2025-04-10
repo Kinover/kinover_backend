@@ -37,6 +37,52 @@ public class ChatRoomController {
         this.openAIService = openAIService;
     }
 
+    // 채팅방 생성
+    @Operation(summary = "채팅방 생성", description = "새로운 채팅방을 생성합니다. userIds는 쉼표로 구분된 문자열로 전달 (예: 1,2,3)")
+    @PostMapping("/create/{roomName}/{userIds}")
+    public ResponseEntity<ChatRoomDTO> createChatRoom(
+            @Parameter(description = "채팅방 이름", required = true) @PathVariable String roomName,
+            @Parameter(description = "참여 유저 ID 리스트 (쉼표로 구분)", required = true) @PathVariable String userIds,
+            @RequestHeader("Authorization") String authorizationHeader) {
+        String token = authorizationHeader.replace("Bearer ", "");
+        Long authenticatedUserId = jwtUtil.getUserIdFromToken(token);
+
+        // userIds를 쉼표로 분리하여 Long 리스트로 변환
+        List<Long> userIdList = Arrays.stream(userIds.split(","))
+                .map(Long::parseLong)
+                .collect(Collectors.toList());
+
+        ChatRoomDTO createdChatRoom = chatRoomService.createChatRoom(authenticatedUserId, roomName, userIdList);
+        return new ResponseEntity<>(createdChatRoom, HttpStatus.CREATED);
+    }
+
+    // 채팅방에 유저 추가
+    @Operation(summary = "채팅방에 유저 추가", description = "기존 채팅방에 새로운 유저를 추가합니다. userIds는 쉼표로 구분된 문자열로 전달 (예: 1,2,3)")
+    @PostMapping("/{chatRoomId}/addUsers/{userIds}")
+    public ResponseEntity<ChatRoomDTO> addUsersToChatRoom(
+            @Parameter(description = "채팅방 아이디", required = true) @PathVariable UUID chatRoomId,
+            @Parameter(description = "추가할 유저 ID 리스트 (쉼표로 구분)", required = true) @PathVariable String userIds,
+            @RequestHeader("Authorization") String authorizationHeader) {
+        String token = authorizationHeader.replace("Bearer ", "");
+        Long authenticatedUserId = jwtUtil.getUserIdFromToken(token);
+
+        if (userIds == null || userIds.trim().isEmpty()) {
+            throw new IllegalArgumentException("추가할 유저 ID 리스트는 비어있을 수 없습니다");
+        }
+
+        List<Long> userIdList;
+        try {
+            userIdList = Arrays.stream(userIds.split(","))
+                    .map(Long::parseLong)
+                    .collect(Collectors.toList());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("userIds 형식이 잘못되었습니다. 쉼표로 구분된 숫자여야 합니다.");
+        }
+
+        ChatRoomDTO updatedChatRoom = chatRoomService.addUsersToChatRoom(chatRoomId, userIdList, authenticatedUserId);
+        return new ResponseEntity<>(updatedChatRoom, HttpStatus.OK);
+    }
+
     // 특정 유저가 가진 채팅방 조회
     @Operation(summary = "채팅방 조회", description = "특정 유저의 모든 채팅방을 조회합니다.")
     @PostMapping("/{userId}")
