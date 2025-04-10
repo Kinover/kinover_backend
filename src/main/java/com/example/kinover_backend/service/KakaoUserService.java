@@ -92,14 +92,19 @@ public class KakaoUserService {
             }
             user.setEmail(kakaoUserDto.getEmail());
             user.setName(kakaoUserDto.getNickname());
-            user.setImage(kakaoUserDto.getProfileImageUrl());
+            // 이미지 URL을 https로 변환
+            String profileImageUrl = kakaoUserDto.getProfileImageUrl();
+            // 이미지 URL을 https로 변환 (ios에서 http:// 이미지 안열리는 이슈)
+            if (profileImageUrl != null && profileImageUrl.startsWith("http://")) {
+                profileImageUrl = "https://" + profileImageUrl.substring(7);
+            }
+            user.setImage(profileImageUrl);
             user.setPhoneNumber(kakaoUserDto.getPhoneNumber());
             if (kakaoUserDto.getBirthyear() != null && kakaoUserDto.getBirthday() != null) {
                 String birthDateStr = kakaoUserDto.getBirthyear() + "-" + kakaoUserDto.getBirthday().substring(0, 2) + "-" + kakaoUserDto.getBirthday().substring(2);
                 LocalDate birthDate = LocalDate.parse(birthDateStr, DateTimeFormatter.ISO_LOCAL_DATE);
                 user.setBirth(Date.from(birthDate.atStartOfDay(ZoneId.systemDefault()).toInstant()));
             }
-            // created_at, updated_at, status, version은 DB에서 자동 설정
             logger.info("Creating user: id={}, name={}, email={}, phone={}, birth={}",
                     user.getUserId(), user.getName(), user.getEmail(), user.getPhoneNumber(), user.getBirth());
             return userRepository.saveAndFlush(user);
@@ -115,14 +120,18 @@ public class KakaoUserService {
     protected User updateUser(User user, KakaoUserDto kakaoUserDto) {
         user.setName(kakaoUserDto.getNickname());
         user.setEmail(kakaoUserDto.getEmail());
-        user.setImage(kakaoUserDto.getProfileImageUrl());
+        // 이미지 URL을 https로 변환 (ios에서 http:// 이미지 안열리는 이슈)
+        String profileImageUrl = kakaoUserDto.getProfileImageUrl();
+        if (profileImageUrl != null && profileImageUrl.startsWith("http://")) {
+            profileImageUrl = "https://" + profileImageUrl.substring(7);
+        }
+        user.setImage(profileImageUrl);
         user.setPhoneNumber(kakaoUserDto.getPhoneNumber());
         if (kakaoUserDto.getBirthyear() != null && kakaoUserDto.getBirthday() != null) {
             String birthDateStr = kakaoUserDto.getBirthyear() + "-" + kakaoUserDto.getBirthday().substring(0, 2) + "-" + kakaoUserDto.getBirthday().substring(2);
             LocalDate birthDate = LocalDate.parse(birthDateStr, DateTimeFormatter.ISO_LOCAL_DATE);
             user.setBirth(Date.from(birthDate.atStartOfDay(ZoneId.systemDefault()).toInstant()));
         }
-        // updated_at은 DB에서 자동 갱신, version은 JPA @Version으로 관리
         return userRepository.saveAndFlush(user);
     }
 }
