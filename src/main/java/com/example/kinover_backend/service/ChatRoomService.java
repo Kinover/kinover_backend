@@ -1,6 +1,5 @@
 package com.example.kinover_backend.service;
 
-
 import com.example.kinover_backend.dto.ChatRoomDTO;
 import com.example.kinover_backend.dto.ChatRoomMapper;
 import com.example.kinover_backend.dto.UserDTO;
@@ -9,8 +8,8 @@ import com.example.kinover_backend.entity.User;
 import com.example.kinover_backend.entity.UserChatRoom;
 import com.example.kinover_backend.repository.ChatRoomRepository;
 import com.example.kinover_backend.repository.UserChatRoomRepository;
+import com.example.kinover_backend.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
