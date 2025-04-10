@@ -55,8 +55,7 @@ public class UserFamilyService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("유저를 찾을 수 없습니다: " + userId));
 
-        // Family 객체 조회
-        Family family = familyRepository.findByFamilyId(familyId);
+        Family family = familyRepository.findFamilyById(familyId);
         if (family == null) {
             throw new RuntimeException("가족을 찾을 수 없습니다: " + familyId);
         }
