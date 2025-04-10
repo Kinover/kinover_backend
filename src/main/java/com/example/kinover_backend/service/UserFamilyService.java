@@ -2,10 +2,12 @@ package com.example.kinover_backend.service;
 
 import com.example.kinover_backend.dto.UserDTO;
 import com.example.kinover_backend.entity.ChatRoom;
+import com.example.kinover_backend.entity.Family;
 import com.example.kinover_backend.entity.User;
 import com.example.kinover_backend.entity.UserChatRoom;
 import com.example.kinover_backend.entity.UserFamily;
 import com.example.kinover_backend.repository.ChatRoomRepository;
+import com.example.kinover_backend.repository.FamilyRepository;
 import com.example.kinover_backend.repository.UserChatRoomRepository;
 import com.example.kinover_backend.repository.UserFamilyRepository;
 import com.example.kinover_backend.repository.UserRepository;
@@ -21,15 +23,18 @@ public class UserFamilyService {
     private final UserRepository userRepository;
     private final ChatRoomRepository chatRoomRepository;
     private final UserChatRoomRepository userChatRoomRepository;
+    private final FamilyRepository familyRepository;
 
     public UserFamilyService(UserFamilyRepository userFamilyRepository,
                              UserRepository userRepository,
                              ChatRoomRepository chatRoomRepository,
-                             UserChatRoomRepository userChatRoomRepository) {
+                             UserChatRoomRepository userChatRoomRepository,
+                             FamilyRepository familyRepository) {
         this.userFamilyRepository = userFamilyRepository;
         this.userRepository = userRepository;
         this.chatRoomRepository = chatRoomRepository;
         this.userChatRoomRepository = userChatRoomRepository;
+        this.familyRepository = familyRepository;
     }
 
     public List<UserDTO> getUsersByFamilyId(UUID familyId) {
@@ -59,7 +64,7 @@ public class UserFamilyService {
         UserFamily userFamily = new UserFamily();
         userFamily.setUserFamilyId(UUID.randomUUID());
         userFamily.setRole("member");
-        userFamily.setFamily(family); // Family 객체 설정
+        userFamily.setFamily(family);
         userFamily.setUser(user);
         userFamilyRepository.save(userFamily);
 
