@@ -47,15 +47,19 @@ public class UserFamilyService {
     }
 
     public void addUserByFamilyIdAndUserId(UUID familyId, Long userId) {
-        // 유저 조회
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("유저를 찾을 수 없습니다: " + userId));
 
-        // user_family에 유저 추가
+        // Family 객체 조회
+        Family family = familyRepository.findByFamilyId(familyId);
+        if (family == null) {
+            throw new RuntimeException("가족을 찾을 수 없습니다: " + familyId);
+        }
+
         UserFamily userFamily = new UserFamily();
         userFamily.setUserFamilyId(UUID.randomUUID());
-        userFamily.setRole("member"); // 기본 역할, 필요 시 프론트에서 전달받아 설정 가능
-        userFamily.setFamilyId(familyId);
+        userFamily.setRole("member");
+        userFamily.setFamily(family); // Family 객체 설정
         userFamily.setUser(user);
         userFamilyRepository.save(userFamily);
 

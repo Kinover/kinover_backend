@@ -2,10 +2,10 @@ package com.example.kinover_backend.dto;
 
 import com.example.kinover_backend.entity.Family;
 import com.example.kinover_backend.enums.FamilyRelationship;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.Getter;
-import org.webjars.NotFoundException;
 
-import java.sql.Date;
+import java.util.Date;
 import java.util.UUID;
 
 @Getter
@@ -19,9 +19,9 @@ public class FamilyDTO {
 
     public FamilyDTO(Family family) {
         if (family == null) {
-            throw new NotFoundException("Family not found for id: " + familyId);
+            throw new EntityNotFoundException("Family not found");
         }
-        if(family.getFamilyId()==null){
+        if (family.getFamilyId() == null) {
             family.setFamilyId(UUID.randomUUID());
         }
         this.familyId = family.getFamilyId();
@@ -29,6 +29,6 @@ public class FamilyDTO {
         this.createdAt = family.getCreatedAt();
         this.updatedAt = family.getUpdatedAt();
         this.notice = family.getNotice();
-        this.relationship =family.getRelationship();
+        this.relationship = family.getRelationship();
     }
 }
