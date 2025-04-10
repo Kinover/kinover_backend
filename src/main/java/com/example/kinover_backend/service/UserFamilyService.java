@@ -59,7 +59,7 @@ public class UserFamilyService {
         userFamily.setUser(user);
         userFamilyRepository.save(userFamily);
 
-        // Kino 채팅방 생성 및 연결 
+        // Kino 채팅방 생성 및 연결
         User kino = userRepository.findById(9999999999L)
                 .orElseThrow(() -> new RuntimeException("Kino 유저를 찾을 수 없습니다"));
 
