@@ -1,32 +1,26 @@
 package com.example.kinover_backend.enums;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonValue;
+import jakarta.persistence.AttributeConverter;
+import jakarta.persistence.Converter;
 
-public enum MessageType {
-    TEXT("text"),
-    IMAGE("image"),
-    VIDEO("video");
+@Converter(autoApply = true)
+public class MessageTypeConverter implements AttributeConverter<MessageType, String> {
 
-    private final String value;
-
-    MessageType(String value) {
-        this.value = value;
+    @Override
+    public String convertToDatabaseColumn(MessageType attribute) {
+        return attribute != null ? attribute.getValue() : null;
     }
 
-    @JsonValue
-    public String getValue() {
-        return value;
-    }
+    @Override
+    public MessageType convertToEntityAttribute(String dbData) {
+        if (dbData == null) return null;
 
-    @JsonCreator
-    public static MessageType fromValue(String value) {
-        if (value == null) return null;
         for (MessageType type : MessageType.values()) {
-            if (type.value.equalsIgnoreCase(value.trim())) {
+            if (type.getValue().equalsIgnoreCase(dbData.trim())) {
                 return type;
             }
         }
-        throw new IllegalArgumentException("Unknown MessageType: " + value);
+
+        throw new IllegalArgumentException("Unknown value: " + dbData);
     }
 }
