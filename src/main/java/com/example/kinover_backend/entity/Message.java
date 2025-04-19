@@ -12,6 +12,7 @@ import java.util.UUID;
 @Setter
 @Entity
 public class Message {
+
     @Id
     @GeneratedValue
     private UUID messageId;
@@ -22,20 +23,22 @@ public class Message {
     @Column(columnDefinition = "DATETIME")
     private LocalDateTime createdAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private MessageType messageType;
+
     @ManyToOne
     @JoinColumn(name = "chatRoomId", nullable = false)
     private ChatRoom chatRoom;
 
-    @ManyToOne(fetch = FetchType.LAZY)//여러 메세지가 한명의 sender와 연결됨.
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "senderId", nullable = false)
     private User sender;
 
-    @Enumerated(EnumType.STRING) // ENUM 값을 문자열로 저장
-    @Column(columnDefinition = "VARCHAR(50)", nullable = false)
-    private MessageType messageType; // Enum 타입 text, image, video..
-
     @PrePersist
     protected void onCreate() {
-        this.createdAt = LocalDateTime.now();
+        if (this.createdAt == null) {
+            this.createdAt = LocalDateTime.now();
+        }
     }
 }
