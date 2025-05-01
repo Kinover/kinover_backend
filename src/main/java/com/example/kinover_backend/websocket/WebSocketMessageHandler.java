@@ -1,8 +1,8 @@
 package com.example.kinover_backend.websocket;
 
+import com.example.kinover_backend.JwtUtil;
 import com.example.kinover_backend.dto.MessageDTO;
 import com.example.kinover_backend.service.MessageService;
-import com.example.kinover_backend.util.JwtUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
