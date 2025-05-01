@@ -100,14 +100,14 @@ public class ChatRoomController {
     }
 
     // 채팅방의 모든 메시지 조회
-    @Operation(summary = "메세지 수신", description = "채팅방의 모든 메세지를 가져옵니다.")
+    @Operation(summary = "메세지 불러오기", description = "채팅방의 모든 메세지를 가져옵니다.")
     @PostMapping("/{chatRoomId}/messages/fetch")
     public List<MessageDTO> getAllMessages(
             @Parameter(description = "채팅방 아이디", required = true) @PathVariable UUID chatRoomId,
             @RequestHeader("Authorization") String authorizationHeader) {
         return messageService.getAllMessagesByChatRoomId(chatRoomId);
     }
-    
+
 
     // 특정 채팅방의 다른 유저 정보 조회
     @Operation(summary = "채팅방 내 다른 유저 조회", description = "")
