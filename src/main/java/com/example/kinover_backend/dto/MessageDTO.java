@@ -30,6 +30,6 @@ public class MessageDTO {
         this.chatRoom = new ChatRoomDTO(message.getChatRoom());
         this.messageType = message.getMessageType();
         this.sender = new UserDTO(message.getSender());
-        this.createdAt = message.getCreatedAt(); 
+        this.createdAt = message.getCreatedAt();
     }
 }
