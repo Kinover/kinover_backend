@@ -107,16 +107,7 @@ public class ChatRoomController {
             @RequestHeader("Authorization") String authorizationHeader) {
         return messageService.getAllMessagesByChatRoomId(chatRoomId);
     }
-
-    // 메시지 전송 및 저장
-    @Operation(summary = "메세지 발신 및 저장", description = "메세지를 보내고 저장시킵니다.")
-    @PostMapping("/messages/send")
-    public ResponseEntity<Message> saveMessage(
-            @RequestBody Message message,
-            @RequestHeader("Authorization") String authorizationHeader) {
-        Message savedMessage = messageService.saveMessage(message);
-        return new ResponseEntity<>(savedMessage, HttpStatus.CREATED);
-    }
+    
 
     // 특정 채팅방의 다른 유저 정보 조회
     @Operation(summary = "채팅방 내 다른 유저 조회", description = "")
