@@ -30,7 +30,7 @@ public class MessageService {
     public void addMessage(MessageDTO dto) {
         Message message = new Message();
         message.setContent(dto.getContent());
-        message.setMessageType(dto.getMessageType() != null ? dto.getMessageType() : MessageType.TEXT);
+        message.setMessageType(dto.getMessageType() != null ? dto.getMessageType() : MessageType.text);
         message.setCreatedAt(dto.getCreatedAt());
 
         userRepository.findById(dto.getSender().getUserId())
