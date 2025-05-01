@@ -13,10 +13,11 @@ import java.util.UUID;
 public class MessageDTO {
     private UUID messageId;
     private String content;
-    private LocalDateTime createdAt;
     private ChatRoomDTO chatRoom;
     private MessageType messageType;
     private UserDTO sender;
+
+    private LocalDateTime createdAt;
 
     public MessageDTO() {}
 
@@ -26,9 +27,9 @@ public class MessageDTO {
         }
         this.messageId = message.getMessageId();
         this.content = message.getContent();
-        this.createdAt = message.getCreatedAt();
         this.chatRoom = new ChatRoomDTO(message.getChatRoom());
         this.messageType = message.getMessageType();
         this.sender = new UserDTO(message.getSender());
+        this.createdAt = message.getCreatedAt(); 
     }
 }

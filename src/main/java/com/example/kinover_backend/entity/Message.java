@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.Date;
 import java.util.UUID;
 
 @Getter
@@ -20,7 +21,7 @@ public class Message {
     @Column(columnDefinition = "TEXT")
     private String content;
 
-    @Column(columnDefinition = "DATETIME")
+    @Column(columnDefinition = "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP")
     private LocalDateTime createdAt;
 
     @Enumerated(EnumType.STRING)
