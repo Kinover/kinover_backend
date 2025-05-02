@@ -34,6 +34,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/login/kakao").permitAll()
                         .requestMatchers("/swagger-ui/**", "/api-docs/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/api/**").authenticated()
+                        .requestMatchers("/chat").permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, SecurityContextPersistenceFilter.class)
