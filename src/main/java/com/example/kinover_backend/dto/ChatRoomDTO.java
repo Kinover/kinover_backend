@@ -37,9 +37,6 @@ public class ChatRoomDTO {
         this.familyType = chatRoom.getFamilyType();
         this.createdAt = chatRoom.getCreatedAt();
         this.family = chatRoom.getFamily() != null ? new FamilyDTO(chatRoom.getFamily()) : null;
-        this.userChatRooms = chatRoom.getUserChatRooms().stream()
-                .map(UserChatRoomDTO::new)
-                .collect(Collectors.toList());
     }
 
     // ChatRoom 리스트를 ChatRoomDTO 리스트로 변환
