@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.*;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
+import com.example.kinover_backend.service.OpenAiService;
 
 import java.net.URI;
 import java.util.Map;
