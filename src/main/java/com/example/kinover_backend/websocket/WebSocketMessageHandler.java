@@ -31,6 +31,7 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
     private final MessageService messageService;
     private final ObjectMapper objectMapper;
     private final OpenAiService openAiService;
+    private final UserService userService;
 
     // 사용자별 다중 세션 지원 (Set 사용)
     private final Map<Long, Set<WebSocketSession>> sessions = new ConcurrentHashMap<>();
