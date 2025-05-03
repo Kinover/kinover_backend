@@ -81,8 +81,8 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
             kinoReply.setMessageType(MessageType.text);
 
             // Kino 사용자 설정 (DB에 이미 userId=9999999999로 존재함)
-            User kinoUser = userService.getUserById(9999999999L);
-            kinoReply.setSender(new UserDTO(kinoUser));
+            UserDTO kinoUser = userService.getUserById(9999999999L);
+            kinoReply.setSender(kinoUser);
 
             messageService.addMessage(kinoReply);
         }
