@@ -25,6 +25,12 @@ public class OpenAiService {
     @Value("${openai.api-key}")
     private String apiKey;
 
+    @Value("${openai.kino.history-limit}")
+    private int historyLimit;
+
+    @Value("${openai.kino.model}")
+    private String gptModel;
+
     private static final String SYSTEM_PROMPT = """
         너는 킨오버의 챗봇 '키노'로, 가족용 폐쇄형 SNS에서 친구처럼 위로해주는 상담 역할을 해.
         너의 역할은 친구처럼 편안하게 대화를 나누고 위로해주는 것이야.
@@ -40,9 +46,9 @@ public class OpenAiService {
         ChatRoom chatRoom = chatRoomRepository.findById(chatRoomId)
                 .orElseThrow(() -> new RuntimeException("ChatRoom not found"));
 
-        List<Message> recentMessages = messageRepository
-                .findTop10ByChatRoomOrderByCreatedAtDesc(chatRoom);
-        Collections.reverse(recentMessages); // 오래된 순 정렬
+        PageRequest pageRequest = PageRequest.of(0, historyLimit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        List<Message> recentMessages = messageRepository.findByChatRoom(chatRoom, pageRequest).getContent();
+        Collections.reverse(recentMessages); // 오래된 순으로 정렬
 
         List<Map<String, String>> inputMessages = new ArrayList<>();
 
@@ -63,7 +69,7 @@ public class OpenAiService {
 
         // 요청 본문
         Map<String, Object> requestBody = new HashMap<>();
-        requestBody.put("model", "gpt-4.1-mini");
+        requestBody.put("model", gptModel);
         requestBody.put("input", inputMessages); // ✅ 주의: "input"
 
         HttpHeaders headers = new HttpHeaders();
