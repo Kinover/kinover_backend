@@ -14,6 +14,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
+import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -48,6 +50,7 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
             return;
         }
 
+        // 사용자 메시지 수신
         MessageDTO dto = objectMapper.readValue(message.getPayload(), MessageDTO.class);
 
         if (dto.getSender() == null || !userId.equals(dto.getSender().getUserId())) {
@@ -56,8 +59,28 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
             return;
         }
 
+        // 메시지 저장 (Redis 발행 포함)
         messageService.addMessage(dto);
+
+        // 만약 이 채팅방이 Kino 채팅방이라면 kino 응답 생성 후 키노 응답도 addMessage 해줌.
+        if (dto.getChatRoom() != null && dto.getChatRoom().isKino()) {
+            String reply = openAiService.getKinoResponse(dto.getChatRoom().getChatRoomId());
+
+            MessageDTO kinoReply = new MessageDTO();
+            kinoReply.setMessageId(UUID.randomUUID());
+            kinoReply.setContent(reply);
+            kinoReply.setCreatedAt(LocalDateTime.now());
+            kinoReply.setChatRoom(dto.getChatRoom());
+            kinoReply.setMessageType(MessageType.text);
+
+            // Kino 사용자 설정 (DB에 이미 userId=9999999999로 존재함)
+            User kinoUser = userService.getUserById(9999999999L);
+            kinoReply.setSender(new UserDTO(kinoUser));
+
+            messageService.addMessage(kinoReply);
+        }
     }
+
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {

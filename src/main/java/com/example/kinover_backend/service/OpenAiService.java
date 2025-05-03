@@ -48,7 +48,7 @@ public class OpenAiService {
 
         PageRequest pageRequest = PageRequest.of(0, historyLimit, Sort.by(Sort.Direction.DESC, "createdAt"));
         List<Message> recentMessages = messageRepository.findByChatRoom(chatRoom, pageRequest).getContent();
-        Collections.reverse(recentMessages); // 오래된 순으로 정렬
+        Collections.reverse(recentMessages); // → 오래된 순서로 재정렬
 
         List<Map<String, String>> inputMessages = new ArrayList<>();
 
