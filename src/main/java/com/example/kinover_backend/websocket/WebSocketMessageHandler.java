@@ -3,12 +3,13 @@ package com.example.kinover_backend.websocket;
 import com.example.kinover_backend.JwtUtil;
 import com.example.kinover_backend.dto.MessageDTO;
 import com.example.kinover_backend.service.MessageService;
+import com.example.kinover_backend.service.OpenAiService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.*;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
-import com.example.kinover_backend.service.OpenAiService;
+import com.example.kinover_backend.enums.MessageType;
 
 import java.net.URI;
 import java.util.Map;
@@ -25,6 +26,7 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
     private final JwtUtil jwtUtil;
     private final MessageService messageService;
     private final ObjectMapper objectMapper;
+    private final OpenAiService openAiService;
 
     // 사용자별 다중 세션 지원 (Set 사용)
     private final Map<Long, Set<WebSocketSession>> sessions = new ConcurrentHashMap<>();
@@ -70,7 +72,6 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
             MessageDTO kinoReply = new MessageDTO();
             kinoReply.setMessageId(UUID.randomUUID());
             kinoReply.setContent(reply);
-            kinoReply.setCreatedAt(LocalDateTime.now());
             kinoReply.setChatRoom(dto.getChatRoom());
             kinoReply.setMessageType(MessageType.text);
 
