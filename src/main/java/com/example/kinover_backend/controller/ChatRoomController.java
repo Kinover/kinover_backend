@@ -7,7 +7,6 @@ import com.example.kinover_backend.entity.Message;
 import com.example.kinover_backend.service.ChatRoomService;
 import com.example.kinover_backend.service.MessageService;
 import com.example.kinover_backend.JwtUtil;
-import com.example.kinover_backend.service.OpenAIService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,13 +29,11 @@ public class ChatRoomController {
     private final ChatRoomService chatRoomService;
     private final MessageService messageService;
     private final JwtUtil jwtUtil;
-    private final OpenAIService openAIService;
 
-    public ChatRoomController(ChatRoomService chatRoomService, MessageService messageService, JwtUtil jwtUtil, OpenAIService openAIService) {
+    public ChatRoomController(ChatRoomService chatRoomService, MessageService messageService, JwtUtil jwtUtil) {
         this.chatRoomService = chatRoomService;
         this.messageService = messageService;
         this.jwtUtil = jwtUtil;
-        this.openAIService = openAIService;
     }
 
     // 채팅방 생성
@@ -118,16 +115,4 @@ public class ChatRoomController {
         return chatRoomService.getUsersByChatRoom(chatRoomId);
     }
 
-    // AI
-    @Operation(summary = "AI 챗봇 키노 채팅", description = "챗봇에게 채팅 수신")
-    @PostMapping("/ai")
-    public ResponseEntity<?> chat(@RequestBody Map<String, String> request) {
-        String userMessage = request.get("message");
-        try {
-            String reply = openAIService.askChatGPT(userMessage);
-            return ResponseEntity.ok(Map.of("reply", reply));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("ChatGPT 호출 실패: " + e.getMessage());
-        }
-    }
 }
