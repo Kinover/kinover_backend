@@ -10,6 +10,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.socket.*;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 import com.example.kinover_backend.enums.MessageType;
+import com.example.kinover_backend.dto.UserDTO;
+import com.example.kinover_backend.entity.User;
+import com.example.kinover_backend.service.UserService;
+
 
 import java.net.URI;
 import java.util.Map;
