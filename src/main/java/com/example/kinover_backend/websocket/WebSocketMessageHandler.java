@@ -58,14 +58,26 @@
                 return;
             }
 
-            // 사용자 메시지 수신
-            MessageDTO dto = objectMapper.readValue(message.getPayload(), MessageDTO.class);
+            // 1. raw JSON 문자열 출력
+            String rawPayload = message.getPayload();
+            System.out.println("[수신 메시지 원문 JSON] " + rawPayload);
+
+            // 2. 역직렬화
+            MessageDTO dto = objectMapper.readValue(rawPayload, MessageDTO.class);
+
+            // 3. DTO 내용 전체 출력
+            System.out.println("[역직렬화된 MessageDTO] " + dto);
+
+            // 4. 메시지 ID는 null로 강제 초기화 (merge 방지)
+            dto.setMessageId(null);
 
             if (dto.getSenderId() == null || !userId.equals(dto.getSenderId())) {
                 System.out.println("[WebSocket] sender ID 불일치: JWT=" + userId + ", DTO=" + dto.getSenderId());
                 session.close(CloseStatus.NOT_ACCEPTABLE);
                 return;
             }
+
+            System.out.printf("[DEBUG] chatRoomId=%s%n", dto.getChatRoomId());
 
             // 메시지 저장 (Redis 발행 포함)
             messageService.addMessage(dto);
