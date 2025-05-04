@@ -23,14 +23,4 @@ public class MessageDTO {
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss", timezone = "Asia/Seoul")
     private LocalDateTime createdAt;
-
-    public MessageDTO(UUID messageId, String content, UUID chatRoomId, Long senderId,
-                      MessageType messageType, LocalDateTime createdAt) {
-        this.messageId = messageId;
-        this.content = content;
-        this.chatRoomId = chatRoomId;
-        this.senderId = senderId;
-        this.messageType = messageType;
-        this.createdAt = createdAt;
-    }
 }
