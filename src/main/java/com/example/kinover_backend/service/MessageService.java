@@ -37,7 +37,7 @@ public class MessageService {
 
         // 메시지 생성
         Message message = new Message();
-        message.setMessageId(dto.getMessageId() != null ? dto.getMessageId() : UUID.randomUUID());
+        message.setMessageId(UUID.randomUUID());
         message.setContent(dto.getContent());
         message.setMessageType(dto.getMessageType() != null ? dto.getMessageType() : MessageType.text);
         message.setChatRoom(chatRoom);
