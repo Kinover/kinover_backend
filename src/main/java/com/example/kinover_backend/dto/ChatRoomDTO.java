@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -18,6 +20,7 @@ import java.util.stream.Collectors;
 public class ChatRoomDTO {
     private UUID chatRoomId;
     private String roomName;
+    @JsonProperty("kino")
     private boolean isKino; // RoomType 대신 boolean으로 kino 여부만 구분
     private String familyType;
     private String image;
