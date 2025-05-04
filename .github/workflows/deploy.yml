@@ -60,7 +60,8 @@ jobs:
             source .env
             set +a
       
-            nohup java -jar $JAR_NAME > nohup.out 2>&1 &
+            nohup java -Duser.timezone=Asia/Seoul -jar $JAR_NAME > nohup.out 2>&1 &
+          
             sleep 3
             echo "✅ Restart complete"
           EOF
