@@ -52,6 +52,8 @@ public class MessageService {
                     saved.getContent(),
                     saved.getChatRoom().getChatRoomId(),
                     saved.getSender().getUserId(),
+                    saved.getSender().getName(),
+                    saved.getSender().getImage(),
                     saved.getMessageType(),
                     saved.getCreatedAt()
             );
@@ -70,6 +72,8 @@ public class MessageService {
                         message.getContent(),
                         message.getChatRoom().getChatRoomId(),
                         message.getSender().getUserId(),
+                        message.getSender().getName(),
+                        message.getSender().getImage(),
                         message.getMessageType(),
                         message.getCreatedAt()
                 ))

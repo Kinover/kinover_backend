@@ -19,6 +19,8 @@ public class MessageDTO {
     private String content;
     private UUID chatRoomId;
     private Long senderId;
+    private String senderName;
+    private String senderImage;
     private MessageType messageType;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss", timezone = "Asia/Seoul")
