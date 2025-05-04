@@ -62,7 +62,7 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
         MessageDTO dto = objectMapper.readValue(message.getPayload(), MessageDTO.class);
 
         if (dto.getSenderId() == null || !userId.equals(dto.getSenderId())) {
-            System.out.println("[WebSocket] sender ID 불일치: JWT=" + userId + ", DTO=" + dto.getSender().getUserId());
+            System.out.println("[WebSocket] sender ID 불일치: JWT=" + userId + ", DTO=" + dto.getSenderId());
             session.close(CloseStatus.NOT_ACCEPTABLE);
             return;
         }

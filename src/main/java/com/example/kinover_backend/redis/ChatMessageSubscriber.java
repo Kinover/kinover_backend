@@ -32,7 +32,7 @@ public class ChatMessageSubscriber implements MessageListener {
 
             // 채팅방 ID로 참여자 목록 조회
             List<UserDTO> participants = chatRoomService.getUsersByChatRoom(
-                    messageDTO.getChatRoom().getChatRoomId()
+                    messageDTO.getChatRoomId()
             );
 
             for (UserDTO user : participants) {
