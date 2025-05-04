@@ -70,6 +70,11 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
         // 메시지 저장 (Redis 발행 포함)
         messageService.addMessage(dto);
 
+        System.out.printf("[DEBUG] chatRoom=%s, isKino=%s%n",
+                dto.getChatRoom() == null ? "null" : dto.getChatRoom().getChatRoomId(),
+                dto.getChatRoom() != null ? dto.getChatRoom().isKino() : "N/A"
+        );
+
         // 만약 이 채팅방이 Kino 채팅방이라면 kino 응답 생성 후 키노 응답도 addMessage 해줌.
         if (dto.getChatRoom() != null && dto.getChatRoom().isKino()) {
             String reply = openAiService.getKinoResponse(dto.getChatRoom().getChatRoomId());
