@@ -20,8 +20,10 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 public class ChatRoomDTO {
     private UUID chatRoomId;
     private String roomName;
+
     @JsonProperty("kino")
     private boolean isKino; // RoomType 대신 boolean으로 kino 여부만 구분
+
     private String familyType;
     private String image;
     private Date createdAt;

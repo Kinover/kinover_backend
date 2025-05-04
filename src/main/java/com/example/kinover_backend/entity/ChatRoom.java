@@ -7,6 +7,7 @@ import lombok.Setter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.Date;
 
 @Getter
 @Setter
@@ -25,8 +26,8 @@ public class ChatRoom {
     @Column(columnDefinition = "VARCHAR(55)")
     private String familyType;
 
-    @Column(columnDefinition = "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP")
-    private java.util.Date createdAt;
+    @Column(columnDefinition = "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP", insertable = false, updatable = false)
+    private Date createdAt;
 
     @Column(columnDefinition = "VARCHAR(255)")
     private String image;

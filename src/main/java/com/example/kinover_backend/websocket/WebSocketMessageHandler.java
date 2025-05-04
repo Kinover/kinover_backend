@@ -58,24 +58,32 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
             return;
         }
 
-        // 사용자 메시지 수신
+        // [1] WebSocket 메시지 원문 출력
+        System.out.println("[DEBUG] ▶ Raw WebSocket message: " + message.getPayload());
+
+        // [2] JSON 파싱 (DTO 변환)
         MessageDTO dto = objectMapper.readValue(message.getPayload(), MessageDTO.class);
 
+        // [3] DTO 전체 구조 출력 (kino 포함 여부 확인)
+        System.out.println("[DEBUG] ▶ Parsed MessageDTO: " + objectMapper.writeValueAsString(dto));
+
+        // [4] sender 유효성 체크
         if (dto.getSender() == null || !userId.equals(dto.getSender().getUserId())) {
             System.out.println("[WebSocket] sender ID 불일치: JWT=" + userId + ", DTO=" + dto.getSender().getUserId());
             session.close(CloseStatus.NOT_ACCEPTABLE);
             return;
         }
 
-        // 메시지 저장 (Redis 발행 포함)
+        // [5] 메시지 저장
         messageService.addMessage(dto);
 
-        System.out.printf("[DEBUG] chatRoom=%s, isKino=%s%n",
+        // [6] chatRoom 및 isKino 확인
+        System.out.printf("[DEBUG] ▶ chatRoom=%s, isKino=%s%n",
                 dto.getChatRoom() == null ? "null" : dto.getChatRoom().getChatRoomId(),
                 dto.getChatRoom() != null ? dto.getChatRoom().isKino() : "N/A"
         );
 
-        // 만약 이 채팅방이 Kino 채팅방이라면 kino 응답 생성 후 키노 응답도 addMessage 해줌.
+        // [7] Kino 처리
         if (dto.getChatRoom() != null && dto.getChatRoom().isKino()) {
             String reply = openAiService.getKinoResponse(dto.getChatRoom().getChatRoomId());
 
@@ -85,13 +93,13 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
             kinoReply.setChatRoom(dto.getChatRoom());
             kinoReply.setMessageType(MessageType.text);
 
-            // Kino 사용자 설정 (DB에 이미 userId=9999999999로 존재함)
             UserDTO kinoUser = userService.getUserById(9999999999L);
             kinoReply.setSender(kinoUser);
 
             messageService.addMessage(kinoReply);
         }
     }
+
 
 
     @Override
