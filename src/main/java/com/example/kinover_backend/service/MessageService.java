@@ -28,21 +28,35 @@ public class MessageService {
     private final ChannelTopic channelTopic = new ChannelTopic("chat:messages");
 
     public void addMessage(MessageDTO dto) {
+        // ID로 ChatRoom과 User 조회
+        var chatRoom = chatRoomRepository.findById(dto.getChatRoomId())
+                .orElseThrow(() -> new IllegalArgumentException("ChatRoom not found"));
+
+        var sender = userRepository.findById(dto.getSenderId())
+                .orElseThrow(() -> new IllegalArgumentException("Sender not found"));
+
+        // 메시지 생성
         Message message = new Message();
+        message.setMessageId(dto.getMessageId() != null ? dto.getMessageId() : UUID.randomUUID());
         message.setContent(dto.getContent());
         message.setMessageType(dto.getMessageType() != null ? dto.getMessageType() : MessageType.text);
-        message.setCreatedAt(dto.getCreatedAt());
-
-        userRepository.findById(dto.getSender().getUserId())
-                .ifPresent(message::setSender);
-
-        chatRoomRepository.findById(dto.getChatRoom().getChatRoomId())
-                .ifPresent(message::setChatRoom);
+        message.setChatRoom(chatRoom);
+        message.setSender(sender);
 
         Message saved = messageRepository.save(message);
 
+        // Redis 발행
         try {
-            String json = objectMapper.writeValueAsString(new MessageDTO(saved));
+            MessageDTO responseDto = new MessageDTO(
+                    saved.getMessageId(),
+                    saved.getContent(),
+                    saved.getChatRoom().getChatRoomId(),
+                    saved.getSender().getUserId(),
+                    saved.getMessageType(),
+                    saved.getCreatedAt()
+            );
+
+            String json = objectMapper.writeValueAsString(responseDto);
             redisTemplate.convertAndSend(channelTopic.getTopic(), json);
         } catch (Exception e) {
             throw new RuntimeException("Redis 발행 중 오류", e);
@@ -51,7 +65,14 @@ public class MessageService {
 
     public List<MessageDTO> getAllMessagesByChatRoomId(UUID chatRoomId) {
         return messageRepository.findAllByChatRoomId(chatRoomId).stream()
-                .map(MessageDTO::new)
+                .map(message -> new MessageDTO(
+                        message.getMessageId(),
+                        message.getContent(),
+                        message.getChatRoom().getChatRoomId(),
+                        message.getSender().getUserId(),
+                        message.getMessageType(),
+                        message.getCreatedAt()
+                ))
                 .collect(Collectors.toList());
     }
 }

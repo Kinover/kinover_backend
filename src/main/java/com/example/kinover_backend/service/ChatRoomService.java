@@ -124,4 +124,11 @@ public class ChatRoomService {
         }
         return userDTOList;
     }
+
+    public boolean isKinoRoom(UUID chatRoomId) {
+        return chatRoomRepository.findById(chatRoomId)
+                .map(ChatRoom::isKino)
+                .orElse(false);  // 없으면 false 처리
+    }
+
 }
