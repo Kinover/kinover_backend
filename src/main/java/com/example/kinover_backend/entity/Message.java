@@ -15,13 +15,13 @@ import java.util.UUID;
 public class Message {
 
     @Id
-    @GeneratedValue
+    @Column(name = "message_id", nullable = false, columnDefinition = "BINARY(16)")
     private UUID messageId;
 
     @Column(columnDefinition = "TEXT")
     private String content;
 
-    @Column(columnDefinition = "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP")
+    @Column(name = "created_at", updatable = false, insertable = false)
     private LocalDateTime createdAt;
 
     @Enumerated(EnumType.STRING)
