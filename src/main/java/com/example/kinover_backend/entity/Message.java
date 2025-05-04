@@ -6,40 +6,35 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
-import java.util.Date;
 import java.util.UUID;
 
 @Getter
 @Setter
 @Entity
+@Table(name = "message")
 public class Message {
 
     @Id
-    @Column(name = "messageId", nullable = false, columnDefinition = "BINARY(16)")
+    @Column(name = "message_id", columnDefinition = "BINARY(16)")
     private UUID messageId;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "content", columnDefinition = "TEXT")
     private String content;
 
-    @Column(name = "createdAt", updatable = false, insertable = false)
+    // MariaDB에선 created_at이 default current_timestamp()라 insertable=false로 지정
+    @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(name = "message_type", nullable = false)
     private MessageType messageType;
 
-    @ManyToOne
-    @JoinColumn(name = "chatRoomId", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "chat_room_id", nullable = false)
     private ChatRoom chatRoom;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "senderId", nullable = false)
+    @JoinColumn(name = "sender_id", nullable = false)
     private User sender;
 
-    @PrePersist
-    protected void onCreate() {
-        if (this.createdAt == null) {
-            this.createdAt = LocalDateTime.now();
-        }
-    }
 }
