@@ -68,6 +68,7 @@ public class MessageService {
             e.printStackTrace(); // 반드시 필요
             throw new RuntimeException("Redis 발행 중 오류", e);
         }
+    }
 
     public List<MessageDTO> getAllMessagesByChatRoomId(UUID chatRoomId) {
         return messageRepository.findAllByChatRoomId(chatRoomId).stream()
