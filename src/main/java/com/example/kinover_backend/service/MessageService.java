@@ -45,15 +45,7 @@ public class MessageService {
         message.setChatRoom(chatRoom);
         message.setSender(sender);
 
-        System.out.println("[DEBUG] 저장 전 Message 객체: " + message);
-
         Message saved = messageRepository.save(message);
-        System.out.println("[DEBUG] 저장된 Message ID: " + saved.getMessageId());
-        System.out.println("[DEBUG] 저장된 ChatRoom ID: " + saved.getChatRoom().getChatRoomId());
-        System.out.println("[DEBUG] 저장된 Sender ID: " + saved.getSender().getUserId());
-        System.out.println("[DEBUG] 저장된 Sender Name: " + saved.getSender().getName());
-        System.out.println("[DEBUG] 저장된 Sender Image: " + saved.getSender().getImage());
-        System.out.println("[DEBUG] 저장된 CreatedAt: " + saved.getCreatedAt());
 
         // Redis 발행
         try {
