@@ -53,12 +53,12 @@ jobs:
             set +a
             
             echo "Stopping existing application"
-            PID=$(pgrep -f "kinover_backend.*\.jar")
-            if [ -n "$PID" ]; then
-              echo "Found process with PID $PID. Stopping it."
+            if lsof -i:9090 -t >/dev/null; then
+              PID=$(lsof -i:9090 -t)
+              echo "Killing process on port 9090: $PID"
               kill $PID
             else
-              echo "No matching Spring Boot process found."
+              echo "No process on port 9090"
             fi
 
             echo "Starting application"
