@@ -27,12 +27,12 @@ public class Message {
     @Column(nullable = false)
     private MessageType messageType;
 
-    @ManyToOne
-    @JoinColumn(name = "chatRoomId", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "chat_room_id", nullable = false)
     private ChatRoom chatRoom;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "senderId", nullable = false)
+    @JoinColumn(name = "sender_id", nullable = false)
     private User sender;
 
     @PrePersist
