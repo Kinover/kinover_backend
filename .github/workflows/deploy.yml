@@ -36,19 +36,30 @@ jobs:
             cd build/libs
             
             echo "Creating .env file"
-            echo 'SPRING_DATASOURCE_URL="${{ secrets.SPRING_DATASOURCE_URL }}"' > .env
-            echo 'SPRING_DATASOURCE_USERNAME=${{ secrets.SPRING_DATASOURCE_USERNAME }}' >> .env
-            echo 'SPRING_DATASOURCE_PASSWORD=${{ secrets.SPRING_DATASOURCE_PASSWORD }}' >> .env
-            echo 'JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}' >> .env
-            echo 'OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}' >> .env
-            echo 'KAKAO_REST_API_KEY=${{ secrets.KAKAO_REST_API_KEY }}' >> .env
-            echo 'REDIS_HOST=localhost' >> .env
-            echo 'REDIS_PORT=6379' >> .env
+            cat <<EOF > .env
+            SPRING_DATASOURCE_URL="${{ secrets.SPRING_DATASOURCE_URL }}"
+            SPRING_DATASOURCE_USERNAME=${{ secrets.SPRING_DATASOURCE_USERNAME }}
+            SPRING_DATASOURCE_PASSWORD=${{ secrets.SPRING_DATASOURCE_PASSWORD }}
+            JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
+            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+            KAKAO_REST_API_KEY=${{ secrets.KAKAO_REST_API_KEY }}
+            REDIS_HOST=localhost
+            REDIS_PORT=6379
+            EOF
             
             echo "Exporting .env file"
             set -a
             source .env
             set +a
+            
+            echo "Stopping existing application"
+            PID=$(pgrep -f "kinover_backend.*\.jar")
+            if [ -n "$PID" ]; then
+              echo "Found process with PID $PID. Stopping it."
+              kill $PID
+            else
+              echo "No matching Spring Boot process found."
+            fi
 
             echo "Starting application"
             JAR_NAME=$(ls | grep -v plain.jar | grep '.jar$' | head -n 1)
