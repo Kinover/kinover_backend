@@ -74,5 +74,5 @@ jobs:
 
             nohup java -Duser.timezone=Asia/Seoul -jar $JAR_NAME > nohup.out 2>&1 &
 
-            sleep 3
+            sleep 1
             echo "Deployment complete"
