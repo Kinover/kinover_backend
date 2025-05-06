@@ -58,12 +58,16 @@ public class MessageService {
                     saved.getCreatedAt()
             );
 
+            System.out.println("[Redis 발행용 DTO] " + responseDto);
+
             String json = objectMapper.writeValueAsString(responseDto);
+            System.out.println("[Redis 직렬화된 JSON] " + json);
+
             redisTemplate.convertAndSend(channelTopic.getTopic(), json);
         } catch (Exception e) {
+            e.printStackTrace(); // 반드시 필요
             throw new RuntimeException("Redis 발행 중 오류", e);
         }
-    }
 
     public List<MessageDTO> getAllMessagesByChatRoomId(UUID chatRoomId) {
         return messageRepository.findAllByChatRoomId(chatRoomId).stream()
