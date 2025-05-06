@@ -31,9 +31,11 @@ public class MessageService {
         // ID로 ChatRoom과 User 조회
         var chatRoom = chatRoomRepository.findById(dto.getChatRoomId())
                 .orElseThrow(() -> new IllegalArgumentException("ChatRoom not found"));
+        System.out.println("[DEBUG] 조회된 ChatRoom: " + chatRoom.getChatRoomId());
 
         var sender = userRepository.findById(dto.getSenderId())
                 .orElseThrow(() -> new IllegalArgumentException("Sender not found"));
+        System.out.println("[DEBUG] 조회된 Sender: " + sender.getUserId() + ", name=" + sender.getName());
 
         // 메시지 생성
         Message message = new Message();
@@ -43,7 +45,15 @@ public class MessageService {
         message.setChatRoom(chatRoom);
         message.setSender(sender);
 
+        System.out.println("[DEBUG] 저장 전 Message 객체: " + message);
+
         Message saved = messageRepository.save(message);
+        System.out.println("[DEBUG] 저장된 Message ID: " + saved.getMessageId());
+        System.out.println("[DEBUG] 저장된 ChatRoom ID: " + saved.getChatRoom().getChatRoomId());
+        System.out.println("[DEBUG] 저장된 Sender ID: " + saved.getSender().getUserId());
+        System.out.println("[DEBUG] 저장된 Sender Name: " + saved.getSender().getName());
+        System.out.println("[DEBUG] 저장된 Sender Image: " + saved.getSender().getImage());
+        System.out.println("[DEBUG] 저장된 CreatedAt: " + saved.getCreatedAt());
 
         // Redis 발행
         try {
@@ -65,7 +75,7 @@ public class MessageService {
 
             redisTemplate.convertAndSend(channelTopic.getTopic(), json);
         } catch (Exception e) {
-            e.printStackTrace(); // 반드시 필요
+            e.printStackTrace(); // 반드시 로그 출력
             throw new RuntimeException("Redis 발행 중 오류", e);
         }
     }
