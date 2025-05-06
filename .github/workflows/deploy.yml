@@ -27,8 +27,7 @@ jobs:
             echo "Pulling latest changes"
             git pull origin main
 
-            echo "Stopping existing application"
-            pkill -f "java -Duser.timezone=Asia/Seoul -jar" || true
+            echo "----"
 
             echo "Building project"
             chmod +x ./gradlew
