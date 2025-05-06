@@ -30,10 +30,10 @@ jobs:
             CHANGED_FILES=$(git diff --name-only HEAD@{1} HEAD)
             if echo "$CHANGED_FILES" | grep -E 'build.gradle|application.properties'; then
             echo "Detected critical file changes. Doing clean build."
-            GRADLE_CMD="./gradlew clean build --no-daemon -x test"
+            GRADLE_CMD="./gradlew clean build -x test"
             else
             echo "No critical build file changes. Doing normal build."
-            GRADLE_CMD="./gradlew build --no-daemon -x test"
+            GRADLE_CMD="./gradlew build -x test"
             fi
             
             echo "Building project"
