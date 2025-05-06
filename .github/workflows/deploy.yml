@@ -65,7 +65,7 @@ jobs:
             JAR_NAME=$(ls | grep -v plain.jar | grep '.jar$' | head -n 1)
             echo "Jar to execute: $JAR_NAME"
 
-            nohup java -Xms128m -Xmx512m -Duser.timezone=Asia/Seoul -jar $JAR_NAME > nohup.out 2>&1 &
+            nohup java -Duser.timezone=Asia/Seoul -jar $JAR_NAME > nohup.out 2>&1 &
 
             sleep 3
             echo "Deployment complete"
