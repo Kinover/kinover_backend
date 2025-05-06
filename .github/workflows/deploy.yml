@@ -40,6 +40,9 @@ jobs:
             chmod +x ./gradlew
             $GRADLE_CMD
             
+            echo "Stopping Gradle Daemon"
+            ./gradlew --stop || echo "No active daemon to stop"
+            
             cd build/libs
             
             echo "Creating .env file"
