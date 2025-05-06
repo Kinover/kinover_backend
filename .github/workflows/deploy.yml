@@ -34,6 +34,8 @@ jobs:
             chmod +x ./gradlew
             ./gradlew clean build --console=plain -x test
             
+            cd build/libs
+            
             echo "Creating .env file"
             echo 'SPRING_DATASOURCE_URL="${{ secrets.SPRING_DATASOURCE_URL }}"' > .env
             echo 'SPRING_DATASOURCE_USERNAME=${{ secrets.SPRING_DATASOURCE_USERNAME }}' >> .env
@@ -50,7 +52,6 @@ jobs:
             set +a
 
             echo "Starting application"
-            cd build/libs
             JAR_NAME=$(ls | grep -v plain.jar | grep '.jar$' | head -n 1)
             echo "Jar to execute: $JAR_NAME"
 
