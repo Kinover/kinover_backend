@@ -51,8 +51,8 @@ public class OpenAiService {
                 .orElseThrow(() -> new RuntimeException("ChatRoom not found"));
 
         PageRequest pageRequest = PageRequest.of(0, historyLimit, Sort.by(Sort.Direction.DESC, "createdAt"));
-        List<Message> recentMessages = messageRepository.findByChatRoom(chatRoom, pageRequest).getContent();
-        Collections.reverse(recentMessages); // → 오래된 순서로 재정렬
+        List<Message> recentMessages = new ArrayList<>(messageRepository.findByChatRoom(chatRoom, pageRequest).getContent());
+        Collections.reverse(recentMessages);
 
         List<Map<String, String>> inputMessages = new ArrayList<>();
 
