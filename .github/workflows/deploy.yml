@@ -55,6 +55,8 @@ jobs:
             KAKAO_REST_API_KEY=${{ secrets.KAKAO_REST_API_KEY }}
             REDIS_HOST=localhost
             REDIS_PORT=6379
+            AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
+            AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
             EOF
             
             echo "Exporting .env file"

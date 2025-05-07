@@ -60,6 +60,10 @@ dependencies {
 
     implementation 'jakarta.validation:jakarta.validation-api:3.0.2'
     implementation 'org.hibernate.validator:hibernate-validator:8.0.1.Final'
+
+    implementation platform("software.amazon.awssdk:bom:2.25.28")
+    implementation 'software.amazon.awssdk:s3'
+    implementation 'software.amazon.awssdk:s3-presigner'
 }
 
 bootRun {
