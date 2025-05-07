@@ -37,7 +37,7 @@ dependencies {
     implementation 'com.auth0:java-jwt:3.18.2'
     implementation 'io.jsonwebtoken:jjwt:0.12.0' // 최신 버전의 JJWT 사용
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
-    implementation 'org.redisson:redisson-spring-data-27:3.17.4' // 🔄 다운그레이드
+    implementation 'org.redisson:redisson-spring-data-27:3.17.4'
     implementation 'io.github.cdimascio:java-dotenv:5.2.2'
 
 
