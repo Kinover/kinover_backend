@@ -2,6 +2,7 @@ package com.example.kinover_backend.controller;
 
 import com.example.kinover_backend.dto.CommentDTO;
 import com.example.kinover_backend.service.CommentService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -11,6 +12,7 @@ import com.example.kinover_backend.JwtUtil;
 import java.util.List;
 import java.util.UUID;
 
+@Tag(name = "댓글 Controller", description = "댓글 조회, 생성, 삭제 API를 제공합니다.")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/comments")

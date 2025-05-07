@@ -5,6 +5,7 @@ import com.example.kinover_backend.entity.*;
 import com.example.kinover_backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import com.example.kinover_backend.service.S3Service;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,7 +20,9 @@ public class PostService {
     private final FamilyRepository familyRepository;
     private final CategoryRepository categoryRepository;
     private final PostRepository postRepository;
+    private final CommentRepository commentRepository;
     private final UserFamilyRepository userFamilyRepository;
+    private final S3Service s3Service;
 
     public void createPost(PostDTO postDTO) {
         // 1. 작성자 조회
@@ -64,5 +67,47 @@ public class PostService {
 
         // 6. 저장
         postRepository.save(post);
+    }
+
+    public void deleteImage(UUID postId, String imageUrl) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new RuntimeException("게시글 없음"));
+
+        PostImage imageToDelete = post.getImages().stream()
+                .filter(img -> img.getImageUrl().equals(imageUrl))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("이미지 없음"));
+
+        // S3에서 이미지 삭제
+        String fileName = imageUrl.substring(imageUrl.indexOf("post/"));
+        s3Service.deleteImageFromS3(fileName);
+
+        // 이미지 리스트에서 제거
+        post.getImages().remove(imageToDelete);
+
+        // 남은 이미지가 없으면 게시글 전체 삭제
+        if (post.getImages().isEmpty()) {
+            postRepository.delete(post);
+        } else {
+            postRepository.save(post);
+        }
+    }
+
+    public void deletePost(UUID postId) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new RuntimeException("게시글 없음"));
+
+        // S3에서 이미지 삭제
+        for (PostImage image : post.getImages()) {
+            String imageUrl = image.getImageUrl();
+            String fileName = imageUrl.substring(imageUrl.indexOf("post/"));
+            s3Service.deleteImageFromS3(fileName);
+        }
+
+        // 댓글 삭제
+        commentRepository.deleteAllByPost(post);
+
+        // 게시글 삭제
+        postRepository.delete(post);
     }
 }
