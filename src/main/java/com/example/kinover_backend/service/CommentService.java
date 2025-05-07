@@ -1,49 +1,73 @@
 package com.example.kinover_backend.service;
 
 import com.example.kinover_backend.dto.CommentDTO;
-import com.example.kinover_backend.entity.Comment;
-import com.example.kinover_backend.repository.CommentRepository;
-import com.example.kinover_backend.repository.MemoryRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.example.kinover_backend.entity.*;
+import com.example.kinover_backend.repository.*;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.Date;
 import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.UUID;
 
 @Service
+@RequiredArgsConstructor
 public class CommentService {
+
     private final CommentRepository commentRepository;
-    private final MemoryRepository memoryRepository;
+    private final PostRepository postRepository;
+    private final UserRepository userRepository;
 
-    @Autowired
-    public CommentService(CommentRepository commentRepository, MemoryRepository memoryRepository) {
-        this.commentRepository = commentRepository;
-        this.memoryRepository = memoryRepository;
+    public void createComment(CommentDTO dto) {
+        Post post = postRepository.findById(dto.getPostId())
+                .orElseThrow(() -> new RuntimeException("게시물 없음"));
+        User author = userRepository.findById(dto.getAuthorId())
+                .orElseThrow(() -> new RuntimeException("작성자 없음"));
+
+        Comment comment = new Comment();
+        comment.setPost(post);
+        comment.setAuthor(author);
+        comment.setContent(dto.getContent());
+
+        commentRepository.save(comment);
+
+        post.setCommentCount(post.getCommentCount() + 1);
+        postRepository.save(post);
     }
 
-    // 댓글 조회 (CommentDTO 반환)
-    public Optional<List<CommentDTO>> findByMemoryId(UUID memoryId){
-        Optional<List<Comment>> comments = commentRepository.findByMemoryId(memoryId);
-        if (comments.isPresent()) {
-            List<CommentDTO> commentDTOs = comments.get().stream()
-                    .map(CommentDTO::new)
-                    .collect(Collectors.toList());
-            return Optional.of(commentDTOs);
-        } else {
-            return Optional.empty();
-        }
+    public List<CommentDTO> getCommentsForPost(UUID postId) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new RuntimeException("게시물 없음"));
+
+        return commentRepository.findByPostOrderByCreatedAtAsc(post)
+                .stream().map(comment -> {
+                    CommentDTO dto = new CommentDTO();
+                    dto.setCommentId(comment.getCommentId());
+                    dto.setPostId(postId);
+                    dto.setContent(comment.getContent());
+                    dto.setAuthorId(comment.getAuthor().getUserId());
+                    dto.setAuthorName(comment.getAuthor().getName());
+                    dto.setAuthorImage(comment.getAuthor().getImage());
+                    dto.setCreatedAt(comment.getCreatedAt());
+                    return dto;
+                }).collect(Collectors.toList());
     }
 
-    // 댓글 추가 (CommentDTO 반환)
-    public CommentDTO addComment(Comment comment){
-        Comment savedComment = commentRepository.save(comment);
-        return new CommentDTO(savedComment);
-    }
+    public void deleteComment(Long commentId) {
+        Comment comment = commentRepository.findById(commentId)
+                .orElseThrow(() -> new RuntimeException("댓글 없음"));
 
-    // 댓글 삭제
-    public void removeComment(UUID commentId){
-        commentRepository.deleteById(commentId);
+        Post post = comment.getPost();
+
+        // 댓글 삭제
+        commentRepository.delete(comment);
+
+        // 댓글 수 감소 (음수 방지)
+        int newCount = Math.max(0, post.getCommentCount() - 1);
+        post.setCommentCount(newCount);
+        postRepository.save(post);
     }
 }
+
+

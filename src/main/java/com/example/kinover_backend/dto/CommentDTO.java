@@ -1,26 +1,21 @@
 package com.example.kinover_backend.dto;
 
-import com.example.kinover_backend.entity.Comment;
-import com.example.kinover_backend.entity.Memory;
 import lombok.Getter;
+import lombok.Setter;
+
 import java.util.Date;
 import java.util.UUID;
 
 @Getter
+@Setter
 public class CommentDTO {
-    private UUID commentId;
-    private String content;
-    private Date createdAt;
-    private MemoryDTO memory;  // Memory 엔티티의 DTO (순환참조 방지)
 
-    // Comment 엔티티를 CommentDTO로 변환하는 생성자
-    public CommentDTO(Comment comment) {
-        if(comment.getCommentId()==null){
-            comment.setCommentId(UUID.randomUUID());
-        }
-        this.commentId = comment.getCommentId();
-        this.content = comment.getContent();
-        this.createdAt = comment.getCreatedAt();
-        this.memory = new MemoryDTO(comment.getMemory()); // MemoryDTO로 변환
-    }
+    private Long commentId;       // 서버 응답 시 채워짐
+    private String content;       // 요청/응답 공통
+    private UUID postId;// 요청 시 사용
+    private Long authorId;        // 요청 시 사용
+
+    private String authorName;    // 응답 시 추가
+    private String authorImage;   // 응답 시 추가
+    private Date createdAt;       // 응답 시 자동 포함
 }

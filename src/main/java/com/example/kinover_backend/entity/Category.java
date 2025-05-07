@@ -9,22 +9,18 @@ import java.util.Date;
 @Getter
 @Setter
 @Entity
-public class Comment {
+public class Category {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long commentId;
+    private Long categoryId;
 
     @ManyToOne
-    @JoinColumn(name = "post_id", nullable = false)
-    private Post post;
+    @JoinColumn(name = "family_id", nullable = false)
+    private Family family;
 
-    @ManyToOne
-    @JoinColumn(name = "author_id", nullable = false)
-    private User author;
-
-    @Column(columnDefinition = "TEXT", nullable = false)
-    private String content;
+    @Column(nullable = false)
+    private String title;
 
     @Column(name = "created_at", columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP", updatable = false, insertable = false)
     private Date createdAt;
