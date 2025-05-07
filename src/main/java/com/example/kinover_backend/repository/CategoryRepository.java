@@ -5,7 +5,8 @@ import com.example.kinover_backend.entity.Family;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.UUID;
 
-public interface CategoryRepository extends JpaRepository<Category, Long> {
+public interface CategoryRepository extends JpaRepository<Category, UUID> {
     List<Category> findByFamily(Family family);
 }

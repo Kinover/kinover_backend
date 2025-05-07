@@ -37,7 +37,7 @@ public class CategoryService {
         return categoryRepository.findByFamily(family)
                 .stream().map(category -> {
                     CategoryDTO dto = new CategoryDTO();
-                    dto.setCategoryId(category.getCategoryId());
+                    dto.setCategoryId(UUID.randomUUID());
                     dto.setTitle(category.getTitle());
                     dto.setFamilyId(familyId);
                     dto.setCreatedAt(category.getCreatedAt());

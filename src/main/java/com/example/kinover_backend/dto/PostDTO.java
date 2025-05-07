@@ -13,7 +13,7 @@ public class PostDTO {
 
     // 클라이언트 → 서버 요청 시 포함 (작성 시)
     private Long authorId;
-    private Long categoryId;
+    private UUID categoryId;
     private List<String> imageUrls;
     private String content;
 

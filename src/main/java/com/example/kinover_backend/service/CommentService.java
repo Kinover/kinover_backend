@@ -43,7 +43,7 @@ public class CommentService {
         return commentRepository.findByPostOrderByCreatedAtAsc(post)
                 .stream().map(comment -> {
                     CommentDTO dto = new CommentDTO();
-                    dto.setCommentId(comment.getCommentId());
+                    dto.setCommentId(UUID.randomUUID());
                     dto.setPostId(postId);
                     dto.setContent(comment.getContent());
                     dto.setAuthorId(comment.getAuthor().getUserId());
@@ -54,7 +54,7 @@ public class CommentService {
                 }).collect(Collectors.toList());
     }
 
-    public void deleteComment(Long commentId) {
+    public void deleteComment(UUID commentId) {
         Comment comment = commentRepository.findById(commentId)
                 .orElseThrow(() -> new RuntimeException("댓글 없음"));
 

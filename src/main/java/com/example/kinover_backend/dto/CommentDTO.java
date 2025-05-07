@@ -10,7 +10,7 @@ import java.util.UUID;
 @Setter
 public class CommentDTO {
 
-    private Long commentId;       // 서버 응답 시 채워짐
+    private UUID commentId;       // 서버 응답 시 채워짐
     private String content;       // 요청/응답 공통
     private UUID postId;// 요청 시 사용
     private Long authorId;        // 요청 시 사용
