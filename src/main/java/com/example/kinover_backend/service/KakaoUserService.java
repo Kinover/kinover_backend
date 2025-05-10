@@ -2,6 +2,7 @@ package com.example.kinover_backend.service;
 
 import com.example.kinover_backend.JwtUtil;
 import com.example.kinover_backend.dto.KakaoUserDto;
+import com.example.kinover_backend.dto.LoginResponseDto;
 import com.example.kinover_backend.entity.User;
 import com.example.kinover_backend.repository.UserRepository;
 import jakarta.persistence.EntityManager;
@@ -27,7 +28,7 @@ import java.util.Date;
 
 @Service
 @RequiredArgsConstructor
-public class KakaoUserService {
+public class    KakaoUserService {
 
     private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
@@ -42,12 +43,13 @@ public class KakaoUserService {
     private static final Logger logger = LoggerFactory.getLogger(KakaoUserService.class);
 
     @Transactional
-    public String processKakaoLogin(String accessToken) {
+    public LoginResponseDto processKakaoLogin(String accessToken) {
         try {
             KakaoUserDto kakaoUserDto = getKakaoUserInfo(accessToken);
             logger.info("Kakao User Info Retrieved: Kakao ID = {}", kakaoUserDto.getKakaoId());
             User user = findOrCreateUser(kakaoUserDto);
-            return jwtUtil.generateToken(user.getUserId());
+            boolean hasFamily = userFamilyRepository.existsByUser_UserId(user.getUserId());
+            return new LoginResponseDto(jwtUtil.generateToken(user.getUserId()), hasFamily);
         } catch (ObjectOptimisticLockingFailureException ex) {
             logger.error("데이터 충돌 발생: {}", ex.getMessage());
             throw new RuntimeException("데이터 충돌이 발생했습니다. 다시 시도해주세요.", ex);

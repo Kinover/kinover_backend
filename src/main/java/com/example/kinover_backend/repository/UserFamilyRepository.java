@@ -33,4 +33,6 @@ public interface UserFamilyRepository extends JpaRepository<UserFamily, UUID> {
 
     @Query("SELECT uf.family FROM UserFamily uf WHERE uf.user.userId = :userId")
     Optional<Family> findFamilyByUserId(@Param("userId") Long userId);
+
+    boolean existsByUser_UserId(Long userId);
 }

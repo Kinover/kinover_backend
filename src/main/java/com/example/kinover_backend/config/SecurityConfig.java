@@ -54,7 +54,7 @@ public class SecurityConfig {
                 "http://localhost:3001",
                 "http://13.124.192.206:8081",
                 "http://13.124.192.206"
-                )); // ✅ 프론트 주소만 정확히 넣기
+                )); // 프론트 주소
         config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(Collections.singletonList("*"));
         config.setAllowCredentials(true);
