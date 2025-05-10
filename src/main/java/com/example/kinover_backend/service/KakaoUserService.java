@@ -5,6 +5,7 @@ import com.example.kinover_backend.dto.KakaoUserDto;
 import com.example.kinover_backend.dto.LoginResponseDto;
 import com.example.kinover_backend.entity.User;
 import com.example.kinover_backend.repository.UserRepository;
+import com.example.kinover_backend.repository.UserFamilyRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import jakarta.transaction.Transactional;
@@ -31,6 +32,7 @@ import java.util.Date;
 public class    KakaoUserService {
 
     private final UserRepository userRepository;
+    private final UserFamilyRepository userFamilyRepository;
     private final JwtUtil jwtUtil;
     private final RestTemplate restTemplate;
 
