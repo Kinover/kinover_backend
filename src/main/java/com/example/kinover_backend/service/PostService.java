@@ -52,6 +52,7 @@ public class PostService {
         if (urls != null) {
             for (int i = 0; i < urls.size(); i++) {
                 PostImage img = new PostImage();
+                img.setId(UUID.randomUUID());
                 img.setImageUrl(urls.get(i));
                 img.setImageOrder(i);
                 imageEntities.add(img);
