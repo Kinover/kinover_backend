@@ -4,6 +4,7 @@ import com.example.kinover_backend.dto.PostDTO;
 import com.example.kinover_backend.entity.*;
 import com.example.kinover_backend.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import com.example.kinover_backend.service.S3Service;
 
@@ -23,12 +24,15 @@ public class PostService {
     private final CommentRepository commentRepository;
     private final S3Service s3Service;
 
+    @Value("${cloudfront.domain}")
+    private String cloudFrontDomain;
+
     public void createPost(PostDTO postDTO) {
         // 1. 작성자 조회
         User author = userRepository.findById(postDTO.getAuthorId())
                 .orElseThrow(() -> new RuntimeException("작성자 정보 없음"));
 
-        // 2. 작성자의 가족 정보 조회
+        // 2. 가족 조회
         Family family = familyRepository.findFamilyById(postDTO.getFamilyId())
                 .orElseThrow(() -> new RuntimeException("가족 정보 없음"));
 
@@ -36,31 +40,33 @@ public class PostService {
         Category category = categoryRepository.findById(postDTO.getCategoryId())
                 .orElseThrow(() -> new RuntimeException("카테고리 정보 없음"));
 
-        // 4. Post 엔티티 생성
+        // 4. Post 생성
         Post post = new Post();
         post.setAuthor(author);
         post.setFamily(family);
         post.setCategory(category);
         post.setContent(postDTO.getContent());
-        post.setCommentCount(0); // 초기 댓글 수
+        post.setCommentCount(0);
 
-        // 5. PostImage 리스트 생성 (정렬 순서 유지)
+        // 5. 이미지 URL → CloudFront URL 변환
         List<PostImage> imageEntities = new ArrayList<>();
-        List<String> urls = postDTO.getImageUrls();
+        List<String> s3ObjectKeys = postDTO.getImageUrls();
 
-        if (urls != null) {
-            for (int i = 0; i < urls.size(); i++) {
+        if (s3ObjectKeys != null) {
+            for (int i = 0; i < s3ObjectKeys.size(); i++) {
+                String s3Key = s3ObjectKeys.get(i);
+                String cloudFrontUrl = cloudFrontDomain + s3Key;
+
                 PostImage img = new PostImage();
                 img.setPost(post);
-                img.setImageUrl(urls.get(i));
+                img.setImageUrl(cloudFrontUrl);
                 img.setImageOrder(i);
                 imageEntities.add(img);
             }
         }
 
+        //6.저장
         post.setImages(imageEntities);
-
-        // 6. 저장
         postRepository.save(post);
     }
 
