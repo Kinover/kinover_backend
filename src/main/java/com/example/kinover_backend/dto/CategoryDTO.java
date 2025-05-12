@@ -1,5 +1,8 @@
 package com.example.kinover_backend.dto;
 
+import com.example.kinover_backend.entity.Category;
+import com.example.kinover_backend.entity.Family;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.Getter;
 import lombok.Setter;
 

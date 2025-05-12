@@ -15,7 +15,6 @@ public class Category {
 
     @Id
     @GeneratedValue(generator = "UUID")
-    @GenericGenerator(name = "UUID", strategy = "org.hibernate.id.UUIDGenerator")
     private UUID categoryId;
 
     @ManyToOne
