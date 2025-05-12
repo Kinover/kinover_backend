@@ -1,6 +1,7 @@
 package com.example.kinover_backend.service;
 
 import com.example.kinover_backend.dto.CategoryDTO;
+import com.example.kinover_backend.dto.MessageDTO;
 import com.example.kinover_backend.entity.Category;
 import com.example.kinover_backend.entity.Family;
 import com.example.kinover_backend.repository.CategoryRepository;
@@ -36,13 +37,12 @@ public class CategoryService {
                 .orElseThrow(() -> new RuntimeException("가족 없음"));
 
         return categoryRepository.findByFamily(family)
-                .stream().map(category -> {
-                    CategoryDTO dto = new CategoryDTO();
-                    dto.setCategoryId(UUID.randomUUID());
-                    dto.setTitle(category.getTitle());
-                    dto.setFamilyId(familyId);
-                    dto.setCreatedAt(category.getCreatedAt());
-                    return dto;
-                }).collect(Collectors.toList());
+                .stream().map(category -> new CategoryDTO(
+                        category.getCategoryId(),
+                        category.getFamily().getFamilyId(),
+                        category.getTitle(),
+                        category.getCreatedAt()
+                ))
+                .collect(Collectors.toList());
     }
 }
