@@ -30,7 +30,7 @@ public class PostService {
                 .orElseThrow(() -> new RuntimeException("작성자 정보 없음"));
 
         // 2. 작성자의 가족 정보 조회
-        Family family = FamilyRepository.findFamilyById(postDTO.getFamilyId())
+        Family family = familyRepository.findFamilyById(postDTO.getFamilyId())
                 .orElseThrow(() -> new RuntimeException("가족 정보 없음"));
 
         // 3. 카테고리 조회 (nullable)
