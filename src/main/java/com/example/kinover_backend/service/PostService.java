@@ -38,7 +38,6 @@ public class PostService {
 
         // 4. Post 엔티티 생성
         Post post = new Post();
-        post.setPostId(UUID.randomUUID());
         post.setAuthor(author);
         post.setFamily(family);
         post.setCategory(category);
@@ -52,7 +51,7 @@ public class PostService {
         if (urls != null) {
             for (int i = 0; i < urls.size(); i++) {
                 PostImage img = new PostImage();
-                img.setId(UUID.randomUUID());
+                img.setPost(post);
                 img.setImageUrl(urls.get(i));
                 img.setImageOrder(i);
                 imageEntities.add(img);
