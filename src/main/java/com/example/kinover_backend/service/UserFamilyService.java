@@ -55,10 +55,8 @@ public class UserFamilyService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("유저를 찾을 수 없습니다: " + userId));
 
-        Family family = familyRepository.findFamilyById(familyId);
-        if (family == null) {
-            throw new RuntimeException("가족을 찾을 수 없습니다: " + familyId);
-        }
+        Family family = familyRepository.findFamilyById(familyId)
+                .orElseThrow(() -> new RuntimeException("가족 정보 없음"));
 
         UserFamily userFamily = new UserFamily();
         userFamily.setUserFamilyId(UUID.randomUUID());

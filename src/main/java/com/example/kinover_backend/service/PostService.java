@@ -21,7 +21,6 @@ public class PostService {
     private final CategoryRepository categoryRepository;
     private final PostRepository postRepository;
     private final CommentRepository commentRepository;
-    private final FamilyRepository FamilyRepository;
     private final S3Service s3Service;
 
     public void createPost(PostDTO postDTO) {
