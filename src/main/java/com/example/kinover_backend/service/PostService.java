@@ -52,7 +52,6 @@ public class PostService {
         if (urls != null) {
             for (int i = 0; i < urls.size(); i++) {
                 PostImage img = new PostImage();
-                img.setPost(post);
                 img.setImageUrl(urls.get(i));
                 img.setImageOrder(i);
                 imageEntities.add(img);
