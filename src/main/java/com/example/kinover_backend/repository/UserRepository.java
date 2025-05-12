@@ -17,7 +17,7 @@ public interface UserRepository extends JpaRepository<User,Long> {
     // 유저 아이디로 유저 찾기
     @Lock(LockModeType.PESSIMISTIC_WRITE) // Pessimistic Write Lock
     @Query("SELECT u FROM User u WHERE u.userId = :userId")
-    Optional<User> findByUserId(Long userId); // Optional<User>로 수정
+    Optional<User> findByUserId(Long userId);
 
     // userId 리스트를 받아 해당하는 User 엔티티 리스트 조회
     @Query("SELECT u FROM User u WHERE u.userId IN :userIds")

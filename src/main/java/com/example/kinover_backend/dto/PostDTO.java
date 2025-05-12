@@ -19,7 +19,7 @@ public class PostDTO {
 
     // 서버 → 클라이언트 응답 시 채워짐
     private UUID postId;
-    private Long familyId;
+    private UUID familyId;
     private String authorName;
     private String authorImage;
     private Date createdAt;
