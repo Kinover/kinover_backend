@@ -34,11 +34,8 @@ public class PostService {
                 .orElseThrow(() -> new RuntimeException("가족 정보 없음"));
 
         // 3. 카테고리 조회 (nullable)
-        Category category = null;
-        if (postDTO.getCategoryId() != null) {
-            category = categoryRepository.findById(postDTO.getCategoryId())
-                    .orElseThrow(() -> new RuntimeException("카테고리 정보 없음"));
-        }
+        Category category = categoryRepository.findById(postDTO.getCategoryId())
+                .orElseThrow(() -> new RuntimeException("카테고리 정보 없음"));
 
         // 4. Post 엔티티 생성
         Post post = new Post();

@@ -13,13 +13,13 @@ public class PostDTO {
 
     // 클라이언트 → 서버 요청 시 포함 (작성 시)
     private Long authorId;
+    private UUID familyId;
     private UUID categoryId;
     private List<String> imageUrls;
     private String content;
 
     // 서버 → 클라이언트 응답 시 채워짐
     private UUID postId;
-    private UUID familyId;
     private String authorName;
     private String authorImage;
     private Date createdAt;

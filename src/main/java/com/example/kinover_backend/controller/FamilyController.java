@@ -45,10 +45,10 @@ public class FamilyController {
 
     @Operation(summary = "가족 추가", description = "새로운 가족을 추가합니다.")
     @PostMapping("/add")
-    public void addFamily(
+    public FamilyDTO addFamily(
             @RequestBody Family family,
             @RequestHeader("Authorization") String authorizationHeader) {
-        familyService.addFamily(family);
+        return familyService.addFamily(family);
     }
 
     @Operation(summary = "가족 삭제", description = "특정 가족을 삭제합니다.")

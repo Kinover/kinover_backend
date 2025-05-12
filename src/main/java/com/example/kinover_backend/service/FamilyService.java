@@ -27,12 +27,10 @@ public class FamilyService {
 
     // [R] 가족 조회 (DTO 반환)
     public FamilyDTO getFamilyById(UUID familyId) {
-        Family family = familyRepository.findFamilyById(familyId);
 
-        // 패밀리 객체가 없으면 예외를 던지기
-        if (family == null) {
-            throw new EntityNotFoundException("Family with ID " + familyId + " not found.");
-        }
+        Family family = familyRepository.findFamilyById(familyId)
+                .orElseThrow(() -> new EntityNotFoundException("Family with ID " + familyId + " not found."));
+
         return new FamilyDTO(family); // Family 엔티티를 FamilyDTO로 변환하여 반환
     }
 
@@ -43,7 +41,6 @@ public class FamilyService {
 
     // 가족 정보 수정
     public FamilyDTO modifyFamily(Family family){
-        FamilyDTO familyDto= new FamilyDTO(familyRepository.save(family));
-        return familyDto;
+        return new FamilyDTO(familyRepository.save(family));
     }
 }
