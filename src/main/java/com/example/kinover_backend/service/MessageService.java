@@ -8,6 +8,8 @@ import com.example.kinover_backend.repository.MessageRepository;
 import com.example.kinover_backend.repository.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.jetbrains.annotations.NotNull;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.stereotype.Service;
@@ -27,6 +29,9 @@ public class MessageService {
     private final ObjectMapper objectMapper;
     private final ChannelTopic channelTopic = new ChannelTopic("chat:messages");
 
+    @Value("${cloudfront.domain}")
+    private String cloudFrontDomain;
+
     public void addMessage(MessageDTO dto) {
         // ID로 ChatRoom과 User 조회
         var chatRoom = chatRoomRepository.findById(dto.getChatRoomId())
@@ -41,24 +46,31 @@ public class MessageService {
         Message message = new Message();
         message.setMessageId(UUID.randomUUID());
         message.setContent(dto.getContent());
-        message.setMessageType(dto.getMessageType() != null ? dto.getMessageType() : MessageType.text);
         message.setChatRoom(chatRoom);
         message.setSender(sender);
+        message.setMessageType(dto.getMessageType());
+
+        if (dto.getMessageType() == MessageType.image || dto.getMessageType() == MessageType.video) {
+            List<String> fileNames = dto.getImageUrls();
+            if (fileNames == null || fileNames.isEmpty()) {
+                throw new RuntimeException("이미지 파일명이 비어 있습니다.");
+            }
+
+            List<String> imageUrls = fileNames.stream()
+                    .map(fileName -> cloudFrontDomain + fileName)
+                    .collect(Collectors.toList());
+
+            String content = String.join(",", imageUrls); // ,로 이어붙이기
+            message.setContent(content);
+        } else {
+            message.setContent(dto.getContent());
+        }
 
         Message saved = messageRepository.save(message);
 
         // Redis 발행
         try {
-            MessageDTO responseDto = new MessageDTO(
-                    saved.getMessageId(),
-                    saved.getContent(),
-                    saved.getChatRoom().getChatRoomId(),
-                    saved.getSender().getUserId(),
-                    saved.getSender().getName(),
-                    saved.getSender().getImage(),
-                    saved.getMessageType(),
-                    saved.getCreatedAt()
-            );
+            MessageDTO responseDto = getMessageDTO(saved);
 
             System.out.println("[Redis 발행용 DTO] " + responseDto);
 
@@ -72,18 +84,37 @@ public class MessageService {
         }
     }
 
+    @NotNull
+    private static MessageDTO getMessageDTO(Message saved) {
+        MessageDTO responseDto = new MessageDTO();
+        responseDto.setMessageId(saved.getMessageId());
+        responseDto.setChatRoomId(saved.getChatRoom().getChatRoomId());
+        responseDto.setSenderId(saved.getSender().getUserId());
+        responseDto.setSenderName(saved.getSender().getName());
+        responseDto.setSenderImage(saved.getSender().getImage());
+        responseDto.setMessageType(saved.getMessageType());
+        responseDto.setCreatedAt(saved.getCreatedAt());
+
+        if (saved.getMessageType() == MessageType.image || saved.getMessageType() == MessageType.video) {
+            // CloudFront URL들이 콤마(,)로 저장되어 있다고 가정하고 분리
+            if (saved.getContent() != null && !saved.getContent().isEmpty()) {
+                List<String> imageUrls = List.of(saved.getContent().split(","));
+                responseDto.setImageUrls(imageUrls);
+            } else {
+                responseDto.setImageUrls(List.of());
+            }
+            responseDto.setContent(null);
+        } else {
+            responseDto.setContent(saved.getContent());
+            responseDto.setImageUrls(null);
+        }
+
+        return responseDto;
+    }
+
     public List<MessageDTO> getAllMessagesByChatRoomId(UUID chatRoomId) {
         return messageRepository.findAllByChatRoomId(chatRoomId).stream()
-                .map(message -> new MessageDTO(
-                        message.getMessageId(),
-                        message.getContent(),
-                        message.getChatRoom().getChatRoomId(),
-                        message.getSender().getUserId(),
-                        message.getSender().getName(),
-                        message.getSender().getImage(),
-                        message.getMessageType(),
-                        message.getCreatedAt()
-                ))
+                .map(MessageService::getMessageDTO)
                 .collect(Collectors.toList());
     }
 }

@@ -9,6 +9,7 @@ import lombok.AllArgsConstructor;
 import lombok.ToString;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -24,6 +25,7 @@ public class MessageDTO {
     private String senderName;
     private String senderImage;
     private MessageType messageType;
+    private List<String> ImageUrls;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss", timezone = "Asia/Seoul")
     private LocalDateTime createdAt;
