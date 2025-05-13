@@ -19,4 +19,6 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
     List<Message> findAllByChatRoomId(@Param("chatRoomId") UUID chatRoomId);
 
     Page<Message> findByChatRoom(ChatRoom chatRoom, Pageable pageable);
+
+    void deleteByChatRoom(ChatRoom chatRoom);
 }

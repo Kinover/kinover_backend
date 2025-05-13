@@ -7,10 +7,12 @@ import com.example.kinover_backend.entity.ChatRoom;
 import com.example.kinover_backend.entity.User;
 import com.example.kinover_backend.entity.UserChatRoom;
 import com.example.kinover_backend.repository.ChatRoomRepository;
+import com.example.kinover_backend.repository.MessageRepository;
 import com.example.kinover_backend.repository.UserChatRoomRepository;
 import com.example.kinover_backend.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -21,15 +23,15 @@ public class ChatRoomService {
     private final ChatRoomRepository chatRoomRepository;
     private final UserChatRoomRepository userChatRoomRepository;
     private final UserRepository userRepository;
+    private final MessageRepository messageRepository;
 
-    @Autowired
     private ChatRoomMapper chatRoomMapper;
 
-    @Autowired
-    public ChatRoomService(ChatRoomRepository chatRoomRepository, UserChatRoomRepository userChatRoomRepository, UserRepository userRepository) {
+    public ChatRoomService(ChatRoomRepository chatRoomRepository, UserChatRoomRepository userChatRoomRepository, UserRepository userRepository, MessageRepository messageRepository) {
         this.chatRoomRepository = chatRoomRepository;
         this.userChatRoomRepository = userChatRoomRepository;
         this.userRepository = userRepository;
+        this.messageRepository = messageRepository;
     }
 
     // 채팅방 생성 메서드
@@ -129,6 +131,27 @@ public class ChatRoomService {
         return chatRoomRepository.findById(chatRoomId)
                 .map(ChatRoom::isKino)
                 .orElse(false);  // 없으면 false 처리
+    }
+
+    @Transactional
+    public void leaveChatRoom(UUID chatRoomId, Long userId) {
+        // 1. 유저-채팅방 관계 삭제
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("사용자 정보를 찾을 수 없습니다."));
+
+        ChatRoom chatRoom = chatRoomRepository.findById(chatRoomId)
+                .orElseThrow(() -> new RuntimeException("채팅방을 찾을 수 없습니다."));
+
+        userChatRoomRepository.deleteByUserAndChatRoom(user, chatRoom);
+
+        // 2. 남은 유저 수 확인
+        int remainingUsers = userChatRoomRepository.countByChatRoom(chatRoom);
+
+        // 3. 마지막 사용자였다면, 메시지 + 채팅방 삭제
+        if (remainingUsers == 0) {
+            messageRepository.deleteByChatRoom(chatRoom);
+            chatRoomRepository.delete(chatRoom);
+        }
     }
 
 }

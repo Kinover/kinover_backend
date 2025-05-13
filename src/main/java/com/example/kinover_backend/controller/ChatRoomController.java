@@ -115,4 +115,19 @@ public class ChatRoomController {
         return chatRoomService.getUsersByChatRoom(chatRoomId);
     }
 
+    @Operation(
+            summary = "채팅방 나가기",
+            description = "사용자가 채팅방을 나갑니다. 채팅방에 마지막 사용자가 나갈 경우, 해당 채팅방과 메시지들이 함께 삭제됩니다."
+    )
+    @DeleteMapping("/{chatRoomId}/leave")
+    public ResponseEntity<Void> leaveChatRoom(
+            @RequestHeader("Authorization") String authorizationHeader,
+            @PathVariable UUID chatRoomId
+    ) {
+        String token = authorizationHeader.replace("Bearer ", "");
+        Long userId = jwtUtil.getUserIdFromToken(token);
+
+        chatRoomService.leaveChatRoom(chatRoomId, userId);
+        return ResponseEntity.ok().build();
+    }
 }

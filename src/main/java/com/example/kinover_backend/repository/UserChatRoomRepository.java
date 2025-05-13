@@ -1,6 +1,7 @@
 package com.example.kinover_backend.repository;
 
 import com.example.kinover_backend.dto.UserDTO;
+import com.example.kinover_backend.entity.ChatRoom;
 import com.example.kinover_backend.entity.User;
 import com.example.kinover_backend.entity.UserChatRoom;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -21,4 +22,7 @@ public interface UserChatRoomRepository extends JpaRepository<UserChatRoom, UUID
     @Query("SELECT ucr.user FROM UserChatRoom ucr WHERE ucr.chatRoom.chatRoomId= :chatRoomId")
     List<User> findUsersByChatRoomId(UUID chatRoomId);
 
+    void deleteByUserAndChatRoom(User user, ChatRoom chatRoom);
+
+    int countByChatRoom(ChatRoom chatRoom);
 }
