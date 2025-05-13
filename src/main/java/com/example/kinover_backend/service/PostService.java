@@ -4,6 +4,7 @@ import com.example.kinover_backend.dto.PostDTO;
 import com.example.kinover_backend.entity.*;
 import com.example.kinover_backend.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import com.example.kinover_backend.service.S3Service;
@@ -111,4 +112,41 @@ public class PostService {
         // 게시글 삭제
         postRepository.delete(post);
     }
+
+    public List<PostDTO> getPostsByFamilyAndCategory(Long userId, UUID familyId, UUID categoryId) {
+        List<Post> posts;
+
+        if (categoryId == null) {
+            posts = postRepository.findAllByFamily_FamilyIdOrderByCreatedAtDesc(familyId);
+        } else {
+            posts = postRepository.findAllByFamily_FamilyIdAndCategory_CategoryIdOrderByCreatedAtDesc(familyId, categoryId);
+        }
+
+        List<PostDTO> result = new ArrayList<>();
+        for (Post post : posts) {
+            PostDTO dto = getPostDTO(post);
+            result.add(dto);
+        }
+
+        return result;
+    }
+
+    @NotNull
+    private static PostDTO getPostDTO(Post post) {
+        PostDTO dto = new PostDTO();
+        dto.setPostId(post.getPostId());
+        dto.setAuthorName(post.getAuthor().getName());
+        dto.setAuthorImage(post.getAuthor().getImage());
+        dto.setCreatedAt(post.getCreatedAt());
+        dto.setContent(post.getContent());
+        dto.setCommentCount(post.getCommentCount());
+
+        List<String> imageUrls = new ArrayList<>();
+        for (PostImage img : post.getImages()) {
+            imageUrls.add(img.getImageUrl());
+        }
+        dto.setImageUrls(imageUrls);
+        return dto;
+    }
+
 }

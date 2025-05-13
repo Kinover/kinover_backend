@@ -9,6 +9,8 @@ import java.util.UUID;
 
 public interface PostRepository extends JpaRepository<Post, UUID> {
 
-    // 특정 가족의 게시물만 조회 (최신순)
-    List<Post> findAllByFamilyOrderByCreatedAtDesc(Family family);
+    List<Post> findAllByFamily_FamilyIdOrderByCreatedAtDesc(UUID familyId);
+
+    List<Post> findAllByFamily_FamilyIdAndCategory_CategoryIdOrderByCreatedAtDesc(UUID familyId, UUID categoryId);
+
 }
