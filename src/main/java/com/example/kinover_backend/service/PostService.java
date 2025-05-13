@@ -2,6 +2,7 @@ package com.example.kinover_backend.service;
 
 import com.example.kinover_backend.dto.PostDTO;
 import com.example.kinover_backend.entity.*;
+import com.example.kinover_backend.enums.PostType;
 import com.example.kinover_backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
@@ -52,8 +53,12 @@ public class PostService {
         // 5. 이미지 URL → CloudFront URL 변환
         List<PostImage> imageEntities = new ArrayList<>();
         List<String> s3ObjectKeys = postDTO.getImageUrls();
+        List<PostType> types = postDTO.getPostTypes();
 
-        if (s3ObjectKeys != null) {
+        if (s3ObjectKeys != null && types != null) {
+            if (s3ObjectKeys.size() != types.size()) {
+                throw new IllegalArgumentException("imageUrls와 postTypes의 개수가 일치하지 않습니다.");
+            }
             for (int i = 0; i < s3ObjectKeys.size(); i++) {
                 String s3Key = s3ObjectKeys.get(i);
                 String cloudFrontUrl = cloudFrontDomain + s3Key;
@@ -61,6 +66,7 @@ public class PostService {
                 PostImage img = new PostImage();
                 img.setPost(post);
                 img.setImageUrl(cloudFrontUrl);
+                img.setPostType(types.get(i));
                 img.setImageOrder(i);
                 imageEntities.add(img);
             }
@@ -142,10 +148,13 @@ public class PostService {
         dto.setCommentCount(post.getCommentCount());
 
         List<String> imageUrls = new ArrayList<>();
+        List<PostType> postTypes = new ArrayList<>();
         for (PostImage img : post.getImages()) {
             imageUrls.add(img.getImageUrl());
+            postTypes.add(img.getPostType());
         }
         dto.setImageUrls(imageUrls);
+        dto.setPostTypes(postTypes);
         return dto;
     }
 

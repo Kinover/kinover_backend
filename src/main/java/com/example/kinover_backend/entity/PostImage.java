@@ -1,5 +1,6 @@
 package com.example.kinover_backend.entity;
 
+import com.example.kinover_backend.enums.PostType;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -24,6 +25,11 @@ public class PostImage {
     @Column(nullable = false, length = 1000)
     private String imageUrl;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private PostType postType;
+
     @Column(nullable = false)
     private int imageOrder;
+
 }

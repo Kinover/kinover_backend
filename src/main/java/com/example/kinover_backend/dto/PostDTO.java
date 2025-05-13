@@ -1,5 +1,6 @@
 package com.example.kinover_backend.dto;
 
+import com.example.kinover_backend.enums.PostType;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -16,6 +17,7 @@ public class PostDTO {
     private UUID familyId;
     private UUID categoryId;
     private List<String> imageUrls;
+    private List<PostType> postTypes;
     private String content;
 
     // 서버 → 클라이언트 응답 시 채워짐
