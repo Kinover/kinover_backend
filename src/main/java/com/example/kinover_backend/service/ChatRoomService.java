@@ -10,6 +10,7 @@ import com.example.kinover_backend.repository.ChatRoomRepository;
 import com.example.kinover_backend.repository.MessageRepository;
 import com.example.kinover_backend.repository.UserChatRoomRepository;
 import com.example.kinover_backend.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +19,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class ChatRoomService {
 
     private final ChatRoomRepository chatRoomRepository;
@@ -25,14 +27,8 @@ public class ChatRoomService {
     private final UserRepository userRepository;
     private final MessageRepository messageRepository;
 
+    @Autowired
     private ChatRoomMapper chatRoomMapper;
-
-    public ChatRoomService(ChatRoomRepository chatRoomRepository, UserChatRoomRepository userChatRoomRepository, UserRepository userRepository, MessageRepository messageRepository) {
-        this.chatRoomRepository = chatRoomRepository;
-        this.userChatRoomRepository = userChatRoomRepository;
-        this.userRepository = userRepository;
-        this.messageRepository = messageRepository;
-    }
 
     // 채팅방 생성 메서드
     public ChatRoomDTO createChatRoom(Long creatorId, String roomName, List<Long> userIds) {
