@@ -10,10 +10,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -112,9 +116,18 @@ public class MessageService {
         return responseDto;
     }
 
-    public List<MessageDTO> getAllMessagesByChatRoomId(UUID chatRoomId) {
-        return messageRepository.findAllByChatRoomId(chatRoomId).stream()
+    public List<MessageDTO> fetchMessagesBefore(UUID chatRoomId, LocalDateTime before, int limit) {
+        PageRequest pageRequest = PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        LocalDateTime beforeTime = (before != null) ? before : LocalDateTime.now();
+
+        List<Message> messages = messageRepository
+                .findByChatRoom_ChatRoomIdAndCreatedAtBefore(chatRoomId, beforeTime, pageRequest)
+                .getContent();
+
+        Collections.reverse(messages); // 오래된 순으로 보여주기 위해
+
+        return messages.stream()
                 .map(MessageService::getMessageDTO)
-                .collect(Collectors.toList());
+                .toList();
     }
 }

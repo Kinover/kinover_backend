@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -21,4 +22,7 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
     Page<Message> findByChatRoom(ChatRoom chatRoom, Pageable pageable);
 
     void deleteByChatRoom(ChatRoom chatRoom);
+
+    Page<Message> findByChatRoom_ChatRoomIdAndCreatedAtBefore(UUID chatRoomId, LocalDateTime before, Pageable pageable);
+
 }

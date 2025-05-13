@@ -10,10 +10,12 @@ import com.example.kinover_backend.JwtUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -98,11 +100,13 @@ public class ChatRoomController {
 
     // 채팅방의 모든 메시지 조회
     @Operation(summary = "메세지 불러오기", description = "채팅방의 모든 메세지를 가져옵니다.")
-    @PostMapping("/{chatRoomId}/messages/fetch")
-    public List<MessageDTO> getAllMessages(
-            @Parameter(description = "채팅방 아이디", required = true) @PathVariable UUID chatRoomId,
+    @GetMapping("/{chatRoomId}/messages/fetch")
+    public List<MessageDTO> fetchMessages(
+            @PathVariable UUID chatRoomId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime before,
+            @RequestParam(defaultValue = "20") int limit,
             @RequestHeader("Authorization") String authorizationHeader) {
-        return messageService.getAllMessagesByChatRoomId(chatRoomId);
+        return messageService.fetchMessagesBefore(chatRoomId, before, limit);
     }
 
 
