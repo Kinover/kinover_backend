@@ -87,7 +87,7 @@
 
             // 만약 이 채팅방이 Kino 채팅방이라면 kino 응답 생성 후 키노 응답도 addMessage 해줌.
             if (chatRoomService.isKinoRoom(dto.getChatRoomId())) {
-                String reply = openAiService.getKinoResponse(dto.getChatRoomId());
+                String reply = openAiService.getKinoResponse(dto.getChatRoomId(), dto.getSenderId());
 
                 MessageDTO kinoReply = new MessageDTO();
                 kinoReply.setMessageId(UUID.randomUUID());
