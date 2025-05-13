@@ -17,6 +17,7 @@ import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
@@ -120,9 +121,10 @@ public class MessageService {
         PageRequest pageRequest = PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
         LocalDateTime beforeTime = (before != null) ? before : LocalDateTime.now();
 
-        List<Message> messages = messageRepository
-                .findByChatRoom_ChatRoomIdAndCreatedAtBefore(chatRoomId, beforeTime, pageRequest)
-                .getContent();
+        List<Message> messages = new ArrayList<>(
+                messageRepository.findByChatRoom_ChatRoomIdAndCreatedAtBefore(chatRoomId, beforeTime, pageRequest)
+                        .getContent()
+        );
 
         Collections.reverse(messages); // 오래된 순으로 보여주기 위해
 
