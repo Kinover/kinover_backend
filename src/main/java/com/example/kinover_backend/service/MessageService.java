@@ -126,8 +126,6 @@ public class MessageService {
                         .getContent()
         );
 
-        Collections.reverse(messages); // 오래된 순으로 보여주기 위해
-
         return messages.stream()
                 .map(MessageService::getMessageDTO)
                 .toList();
