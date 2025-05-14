@@ -15,12 +15,12 @@ public class UserChatRoom {
     @GeneratedValue
     private UUID userChatRoomId;
 
-    @ManyToOne(cascade = CascadeType.ALL)
+    @ManyToOne
     @JoinColumn(name = "userId", nullable = false)
     private User user;
 
 
-    @ManyToOne(cascade = CascadeType.ALL)
+    @ManyToOne
     @JoinColumn(name = "chatRoomId", nullable = false)
     private ChatRoom chatRoom;
 
