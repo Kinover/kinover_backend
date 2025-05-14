@@ -130,6 +130,25 @@ public class ChatRoomService {
     }
 
     @Transactional
+    public void renameChatRoom(UUID chatRoomId, String newRoomName, Long userId) {
+        ChatRoom chatRoom = chatRoomRepository.findByChatRoomId(chatRoomId);
+        if (chatRoom == null) {
+            throw new RuntimeException("채팅방을 찾을 수 없습니다: " + chatRoomId);
+        }
+
+        // 채팅방에 사용자가 포함되어 있는지 확인
+        boolean isParticipant = userChatRoomRepository.findByUserId(userId).stream()
+                .anyMatch(ucr -> ucr.getChatRoom().getChatRoomId().equals(chatRoomId));
+        if (!isParticipant) {
+            throw new RuntimeException("해당 유저는 이 채팅방에 속해 있지 않습니다.");
+        }
+
+        chatRoom.setRoomName(newRoomName);
+        chatRoomRepository.save(chatRoom);
+    }
+
+
+    @Transactional
     public void leaveChatRoom(UUID chatRoomId, Long userId) {
         // 1. 유저-채팅방 관계 삭제
         User user = userRepository.findById(userId)

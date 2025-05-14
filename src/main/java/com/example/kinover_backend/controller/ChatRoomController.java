@@ -109,6 +109,20 @@ public class ChatRoomController {
         return messageService.fetchMessagesBefore(chatRoomId, before, limit);
     }
 
+    @Operation(summary = "채팅방 이름 수정", description = "chatRoomId에 해당하는 채팅방의 이름을 수정합니다.")
+    @PatchMapping("/{chatRoomId}/rename")
+    public ResponseEntity<String> renameChatRoom(
+            @Parameter(description = "채팅방 ID", required = true) @PathVariable UUID chatRoomId,
+            @RequestParam("roomName") String newRoomName,
+            @RequestHeader("Authorization") String authorizationHeader) {
+
+        String token = authorizationHeader.replace("Bearer ", "");
+        Long userId = jwtUtil.getUserIdFromToken(token);
+
+        chatRoomService.renameChatRoom(chatRoomId, newRoomName, userId);
+        return ResponseEntity.ok("채팅방 이름이 수정되었습니다.");
+    }
+
 
     // 특정 채팅방의 다른 유저 정보 조회
     @Operation(summary = "채팅방 내 다른 유저 조회", description = "")
