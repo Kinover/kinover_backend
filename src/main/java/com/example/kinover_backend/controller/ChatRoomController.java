@@ -116,7 +116,7 @@ public class ChatRoomController {
 
         log.info("<< [FETCH MESSAGES RESPONSE] messageCount={}", messages.size());
         for (MessageDTO msg : messages) {
-            log.debug("   ↳ messageId={}, senderId={}, createdAt={}, content={}",
+            log.info("   ↳ messageId={}, senderId={}, createdAt={}, content={}",
                     msg.getMessageId(), msg.getSenderId(), msg.getCreatedAt(), summarize(msg.getContent()));
         }
 
