@@ -10,6 +10,7 @@ import com.example.kinover_backend.JwtUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +23,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Tag(name = "채팅방 Controller", description = "채팅방 관련 API를 제공합니다.")
 @RestController
 @CrossOrigin(origins = "*")
@@ -98,7 +100,6 @@ public class ChatRoomController {
         return chatRoomService.getAllChatRooms(userId); // familyId는 사용하지 않음
     }
 
-    // 채팅방의 모든 메시지 조회
     @Operation(summary = "메세지 불러오기", description = "채팅방의 모든 메세지를 가져옵니다.")
     @GetMapping("/{chatRoomId}/messages/fetch")
     public List<MessageDTO> fetchMessages(
@@ -106,7 +107,30 @@ public class ChatRoomController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime before,
             @RequestParam(defaultValue = "20") int limit,
             @RequestHeader("Authorization") String authorizationHeader) {
-        return messageService.fetchMessagesBefore(chatRoomId, before, limit);
+
+        String token = truncateToken(authorizationHeader);
+        log.info(">> [FETCH MESSAGES REQUEST] chatRoomId={}, before={}, limit={}, token={}",
+                chatRoomId, before, limit, token);
+
+        List<MessageDTO> messages = messageService.fetchMessagesBefore(chatRoomId, before, limit);
+
+        log.info("<< [FETCH MESSAGES RESPONSE] messageCount={}", messages.size());
+        for (MessageDTO msg : messages) {
+            log.debug("   ↳ messageId={}, senderId={}, createdAt={}, content={}",
+                    msg.getMessageId(), msg.getSenderId(), msg.getCreatedAt(), summarize(msg.getContent()));
+        }
+
+        return messages;
+    }
+
+    private String truncateToken(String token) {
+        if (token == null || token.length() <= 20) return token;
+        return token.substring(0, 10) + "..." + token.substring(token.length() - 10);
+    }
+
+    private String summarize(String content) {
+        if (content == null) return "null";
+        return content.length() > 30 ? content.substring(0, 30) + "..." : content;
     }
 
 
