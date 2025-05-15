@@ -2,7 +2,6 @@ package com.example.kinover_backend.controller;
 
 import com.example.kinover_backend.JwtUtil;
 import com.example.kinover_backend.dto.UserDTO;
-import com.example.kinover_backend.entity.User;
 import com.example.kinover_backend.service.UserService;
 import io.jsonwebtoken.Claims;
 import io.swagger.v3.oas.annotations.Operation;
@@ -44,7 +43,7 @@ public class UserController {
     }
 
     // 회원 탈퇴
-    @Operation(summary = "회원 탈퇴", description = "JWT 토큰 기반으로 본인만 탈퇴할 수 있습니다.")
+    @Operation(summary = "회원 탈퇴", description = "JWT 토큰 기반으로 본인만 탈퇴할 수 있습니다. 탈퇴 후 익명화 처리되며, userfamily 에서 제거됩니다.")
     @DeleteMapping("/delete")
     public ResponseEntity<?> deleteUser(@RequestHeader("Authorization") String authorizationHeader) {
         String jwt = authorizationHeader.replace("Bearer ", "");
