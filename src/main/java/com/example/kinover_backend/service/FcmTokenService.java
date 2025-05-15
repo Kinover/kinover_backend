@@ -32,13 +32,5 @@ public class FcmTokenService {
 
         fcmTokenRepository.save(fcmToken);
     }
-
-    public boolean isNotificationOn(User user, ChatRoom chatRoom) {
-        return chatRoomNotificationRepository
-                .findByUserAndChatRoom(user, chatRoom)
-                .map(ChatRoomNotificationSetting::isNotificationOn)
-                .orElse(true); // 설정 없으면 기본값은 ON
-    }
-
 }
 

@@ -3,6 +3,7 @@ package com.example.kinover_backend.redis;
 import com.example.kinover_backend.dto.MessageDTO;
 import com.example.kinover_backend.dto.UserDTO;
 import com.example.kinover_backend.service.ChatRoomService;
+import com.example.kinover_backend.service.FcmNotificationService;
 import com.example.kinover_backend.websocket.WebSocketMessageHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ public class ChatMessageSubscriber implements MessageListener {
     private final WebSocketMessageHandler webSocketMessageHandler;
     private final ChatRoomService chatRoomService;
     private final ObjectMapper objectMapper;
+    private final FcmNotificationService fcmNotificationService;
 
     @Override
     public void onMessage(Message message, byte[] pattern) {
@@ -42,6 +44,11 @@ public class ChatMessageSubscriber implements MessageListener {
                     if (session != null && session.isOpen()) {
                         session.sendMessage(new TextMessage(json));
                         System.out.println("[Redis → WebSocket 전송] to userId=" + userId + ", sessionId=" + session.getId());
+                    }else {
+                        // WebSocket 미연결 시 FCM 발송 조건 체크
+                        if (fcmNotificationService.isNotificationOn(userId, messageDTO.getChatRoomId())) {
+                            fcmNotificationService.sendChatNotification(userId, messageDTO);
+                        }
                     }
                 }
             }

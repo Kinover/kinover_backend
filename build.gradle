@@ -66,6 +66,7 @@ dependencies {
     implementation 'software.amazon.awssdk:s3'
 
     implementation 'io.github.cdimascio:dotenv-java:3.0.0'
+    implementation 'com.google.firebase:firebase-admin:9.2.0'
 }
 
 bootRun {
