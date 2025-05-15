@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "유저 Controller", description = "유저 관련 API를 제공합니다.")
@@ -32,37 +33,35 @@ public class UserController {
     @Operation(summary = "토큰으로 유저 조회", description = "JWT 토큰을 이용해 유저 정보를 조회합니다.")
     @ApiResponse(responseCode = "200", description = "유저 정보 조회 성공",
             content = @Content(schema = @Schema(implementation = UserDTO.class)))
-    @PostMapping("/userinfo")
-    public UserDTO getUserInfo(
-            @RequestHeader("Authorization") String authorizationHeader) { // 헤더에서 Authorization 받기
+    @GetMapping("/userinfo")
+    public UserDTO getUserInfo(@RequestHeader("Authorization") String authorizationHeader) {
+        String token = authorizationHeader.replace("Bearer ", "");
 
-        String token = authorizationHeader.replace("Bearer ", "");  // "Bearer " 접두어 제거
-
-        // 토큰에서 kakaoId 추출
         Claims claims = jwtUtil.parseToken(token);
-        Long kakaoId = Long.parseLong(claims.getSubject()); // 토큰의 subject(kakaoId) 가져오기
+        Long userId = Long.parseLong(claims.getSubject());
 
-
-        // kakaoId로 유저 정보 조회 후 반환
-        return userService.getUserById(kakaoId);
+        return userService.getUserById(userId);
     }
 
     // 회원 탈퇴
-    @Operation(summary = "회원 탈퇴",description = "유저 아이디를 통해 회원을 탈퇴합니다.")
-    @PostMapping("/delete/{userId}")
-    public void deleteUser(
-            @RequestHeader("Authorization") String authorizationHeader,
-            @PathVariable Long userId) { // 헤더에서 Authorization 받기
-        userService.deleteUser(userId);
+    @Operation(summary = "회원 탈퇴", description = "JWT 토큰 기반으로 본인만 탈퇴할 수 있습니다.")
+    @DeleteMapping("/delete")
+    public ResponseEntity<?> deleteUser(@RequestHeader("Authorization") String authorizationHeader) {
+        String jwt = authorizationHeader.replace("Bearer ", "");
+        Long userId = jwtUtil.getUserIdFromToken(jwt);
+
+        userService.deleteUserById(userId);
+        return ResponseEntity.ok().body("회원 탈퇴가 완료되었습니다.");
     }
 
     // 프로필 수정
-    @Operation(summary="프로필 변경",description = "유저의 프로필을 변경합니다.")
+    @Operation(summary = "유저 정보 수정", description = "userId를 포함한 DTO를 기반으로 유저 정보를 수정합니다.")
+    @ApiResponse(responseCode = "200", description = "수정된 유저 정보 반환",
+            content = @Content(schema = @Schema(implementation = UserDTO.class)))
     @PostMapping("/modify")
     public UserDTO modifyUser(
-            @RequestHeader("Authorization") String authorizationHeader,
-            @RequestBody User user) { // 헤더에서 Authorization 받기
-        System.out.println("프로필 수정 요청 수신");
-        return userService.modifyUser(user);
+            @RequestBody UserDTO userDTO) {
+
+        return userService.modifyUser(userDTO);
     }
 }
