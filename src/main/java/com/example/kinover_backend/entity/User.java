@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -32,7 +33,13 @@ public class User {
     private String pwd;
 
     @Column(columnDefinition = "VARCHAR(50)")
-    private String status;
+    private String emotion;  // 오늘의 감정 상태
+
+    @Column(nullable = false)
+    private Boolean isOnline = false;  // 현재 접속 상태 (true/false)
+
+    @Column(columnDefinition = "TIMESTAMP")
+    private LocalDateTime lastActiveAt;  // 마지막 활동 시간
 
     @Column(columnDefinition = "TEXT")
     private String image;

@@ -2,10 +2,12 @@ package com.example.kinover_backend.service;
 
 import com.example.kinover_backend.dto.KakaoUserDto;
 import com.example.kinover_backend.dto.UserDTO;
+import com.example.kinover_backend.dto.UserStatusDTO;
 import com.example.kinover_backend.entity.User;
 import com.example.kinover_backend.entity.UserFamily;
 import com.example.kinover_backend.repository.UserRepository;
 import com.example.kinover_backend.repository.UserFamilyRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.LockModeType;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -14,16 +16,19 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.stereotype.Service;
 import jakarta.persistence.EntityManager;
+import org.webjars.NotFoundException;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.Date;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +36,8 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final UserFamilyRepository userFamilyRepository;
+    private final ObjectMapper objectMapper;
+    private final StringRedisTemplate redisTemplate;
 
     @Autowired
     private EntityManager entityManager;
@@ -44,11 +51,9 @@ public class UserService {
     // 유저 아이디 통해서 유저 조회 (DTO 반환)
     @Transactional
     public UserDTO getUserById(Long userId) {
-        Optional<User> user = userRepository.findByUserId(userId);
-        if (user.isPresent()) {
-            return new UserDTO(user);
-        }
-        return new UserDTO(user);  // User 엔티티를 UserDTO로 변환해서 반환
+        User user = userRepository.findByUserId(userId)
+                .orElseThrow(() -> new NotFoundException("User not found with id: " + userId));
+        return new UserDTO(user);
     }
 
     public User createNewUserFromKakao(KakaoUserDto kakaoUserDto) {
@@ -164,4 +169,39 @@ public class UserService {
         User saved = userRepository.save(user);
         return new UserDTO(saved);
     }
+
+    public void updateUserOnlineStatus(Long userId, UUID familyId, boolean isOnline) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사용자입니다: " + userId));
+
+        user.setIsOnline(isOnline);
+        user.setLastActiveAt(LocalDateTime.now());
+        userRepository.save(user);
+
+        List<UserStatusDTO> statusList = getFamilyStatus(familyId);
+
+        try {
+            String json = objectMapper.writeValueAsString(statusList);
+            String redisTopic = "family:status:" + familyId.toString();
+            redisTemplate.convertAndSend(redisTopic, json);
+        } catch (Exception e) {
+            throw new RuntimeException("접속 상태 broadcast 실패", e);
+        }
+    }
+
+    public List<UserStatusDTO> getFamilyStatus(UUID familyId) {
+        List<User> familyMembers = userFamilyRepository.findUsersByFamilyId(familyId);
+
+        return familyMembers.stream()
+                .map(member -> new UserStatusDTO(
+                        member.getUserId(),
+                        Boolean.TRUE.equals(member.getIsOnline()),
+                        member.getLastActiveAt()
+                ))
+                .collect(Collectors.toList());
+    }
+
+
+
+
 }

@@ -1,6 +1,7 @@
 package com.example.kinover_backend.controller;
 
 import com.example.kinover_backend.dto.FamilyDTO;
+import com.example.kinover_backend.dto.UserStatusDTO;
 import com.example.kinover_backend.entity.Family;
 import com.example.kinover_backend.service.FamilyService;
 import com.example.kinover_backend.JwtUtil;
@@ -8,12 +9,17 @@ import com.example.kinover_backend.service.UserFamilyService;
 import com.example.kinover_backend.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @Tag(name = "가족 Controller", description = "가족 관련 API를 제공합니다.")
@@ -92,4 +98,15 @@ public class FamilyController {
             @Parameter(description = "탈퇴할 유저 아이디", required = true) @PathVariable Long userId) {
         userFamilyService.deleteUserByFamilyIdAndUserId(familyId, userId);
     }
+
+    @Operation(summary = "가족 접속 상태 조회", description = "familyId에 해당하는 가족 구성원의 현재 접속 상태 및 마지막 접속 시간을 반환합니다.")
+    @ApiResponse(responseCode = "200", description = "접속 상태 조회 성공",
+            content = @Content(array = @ArraySchema(schema = @Schema(implementation = UserStatusDTO.class))))
+    @GetMapping("/api/family-status")
+    public ResponseEntity<List<UserStatusDTO>> getFamilyStatus(
+            @RequestParam UUID familyId) {
+        List<UserStatusDTO> statusList = userService.getFamilyStatus(familyId);
+        return ResponseEntity.ok(statusList);
+    }
+
 }

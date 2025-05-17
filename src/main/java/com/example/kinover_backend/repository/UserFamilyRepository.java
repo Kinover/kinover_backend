@@ -1,5 +1,6 @@
 package com.example.kinover_backend.repository;
 
+import com.example.kinover_backend.entity.User;
 import com.example.kinover_backend.entity.UserFamily;
 import com.example.kinover_backend.entity.Family;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -9,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -37,4 +39,7 @@ public interface UserFamilyRepository extends JpaRepository<UserFamily, UUID> {
     boolean existsByUser_UserId(Long userId);
 
     List<UserFamily> findAllByUser_UserId(Long userId);
+
+    @Query("SELECT uf.user FROM UserFamily uf WHERE uf.family.familyId = :familyId")
+    List<User> findUsersByFamilyId(@Param("familyId") UUID familyId);
 }
