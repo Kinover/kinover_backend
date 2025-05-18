@@ -102,7 +102,7 @@ public class FamilyController {
     @Operation(summary = "가족 접속 상태 조회", description = "familyId에 해당하는 가족 구성원의 현재 접속 상태 및 마지막 접속 시간을 반환합니다.")
     @ApiResponse(responseCode = "200", description = "접속 상태 조회 성공",
             content = @Content(array = @ArraySchema(schema = @Schema(implementation = UserStatusDTO.class))))
-    @GetMapping("/api/family-status")
+    @GetMapping("/family-status")
     public ResponseEntity<List<UserStatusDTO>> getFamilyStatus(
             @RequestParam UUID familyId) {
         List<UserStatusDTO> statusList = userService.getFamilyStatus(familyId);
@@ -112,7 +112,7 @@ public class FamilyController {
     @Operation(summary = "가족 공지사항 조회")
     @ApiResponse(responseCode = "200", description = "공지사항 반환",
             content = @Content(schema = @Schema(implementation = String.class)))
-    @GetMapping("/api/family/{familyId}/notice")
+    @GetMapping("/notice/{familyId}")
     public ResponseEntity<String> getFamilyNotice(@PathVariable UUID familyId) {
         return ResponseEntity.ok(familyService.getNotice(familyId));
     }
@@ -120,7 +120,7 @@ public class FamilyController {
     @Operation(summary = "가족 공지사항 수정")
     @ApiResponse(responseCode = "200", description = "공지사항 수정 완료",
             content = @Content(schema = @Schema(implementation = String.class)))
-    @PutMapping("/api/family/{familyId}/notice")
+    @PutMapping("/notice/{familyId}")
     public ResponseEntity<Void> updateFamilyNotice(
             @PathVariable UUID familyId,
             @RequestBody String content) {
