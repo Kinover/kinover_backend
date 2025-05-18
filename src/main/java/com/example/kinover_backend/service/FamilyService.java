@@ -43,4 +43,17 @@ public class FamilyService {
     public FamilyDTO modifyFamily(Family family){
         return new FamilyDTO(familyRepository.save(family));
     }
+
+    public String getNotice(UUID familyId) {
+        return familyRepository.findById(familyId)
+                .map(Family::getNotice)
+                .orElse(""); // 공지가 없으면 빈 문자열
+    }
+
+    public void updateNotice(UUID familyId, String content) {
+        Family family = familyRepository.findById(familyId)
+                .orElseThrow(() -> new IllegalArgumentException("해당 가족이 존재하지 않습니다."));
+        family.setNotice(content);
+        familyRepository.save(family);
+    }
 }

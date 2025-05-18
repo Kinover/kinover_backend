@@ -79,13 +79,13 @@ public class FamilyController {
             @Parameter(description = "가족 아이디", required = true) @PathVariable UUID familyId,
             @Parameter(description = "추가할 유저 아이디", required = true) @PathVariable Long userId,
             @RequestHeader("Authorization") String authorizationHeader) {
-        String token = authorizationHeader.replace("Bearer ", "");
-        Long authenticatedUserId = jwtUtil.getUserIdFromToken(token);
+         String token = authorizationHeader.replace("Bearer ", "");
+         Long authenticatedUserId = jwtUtil.getUserIdFromToken(token);
 
-        // 요청자가 인증된 유저인지 확인 (선택적, 필요 시 제거 가능)
-        // if (!authenticatedUserId.equals(userId)) {
-        //     return ResponseEntity.status(HttpStatus.FORBIDDEN).body("자신만 가족에 추가할 수 있습니다");
-        // }
+         // 요청자가 인증된 유저인지 확인 (선택적, 필요 시 제거 가능)
+         if (!authenticatedUserId.equals(userId)) {
+             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("자신만 가족에 추가할 수 있습니다");
+         }
 
         userFamilyService.addUserByFamilyIdAndUserId(familyId, userId);
         return ResponseEntity.status(HttpStatus.CREATED).body("가족 구성원이 성공적으로 추가되었습니다");
@@ -108,5 +108,25 @@ public class FamilyController {
         List<UserStatusDTO> statusList = userService.getFamilyStatus(familyId);
         return ResponseEntity.ok(statusList);
     }
+
+    @Operation(summary = "가족 공지사항 조회")
+    @ApiResponse(responseCode = "200", description = "공지사항 반환",
+            content = @Content(schema = @Schema(implementation = String.class)))
+    @GetMapping("/api/family/{familyId}/notice")
+    public ResponseEntity<String> getFamilyNotice(@PathVariable UUID familyId) {
+        return ResponseEntity.ok(familyService.getNotice(familyId));
+    }
+
+    @Operation(summary = "가족 공지사항 수정")
+    @ApiResponse(responseCode = "200", description = "공지사항 수정 완료",
+            content = @Content(schema = @Schema(implementation = String.class)))
+    @PutMapping("/api/family/{familyId}/notice")
+    public ResponseEntity<Void> updateFamilyNotice(
+            @PathVariable UUID familyId,
+            @RequestBody String content) {
+        familyService.updateNotice(familyId, content);
+        return ResponseEntity.ok().build();
+    }
+
 
 }
