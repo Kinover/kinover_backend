@@ -5,15 +5,11 @@ import com.example.kinover_backend.entity.*;
 import com.example.kinover_backend.enums.PostType;
 import com.example.kinover_backend.repository.*;
 import lombok.RequiredArgsConstructor;
-import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import com.example.kinover_backend.service.S3Service;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -24,6 +20,7 @@ public class PostService {
     private final CategoryRepository categoryRepository;
     private final PostRepository postRepository;
     private final CommentRepository commentRepository;
+    private final PostImageRepository postImageRepository;
     private final S3Service s3Service;
 
     @Value("${cloudfront.domain}")
@@ -86,37 +83,57 @@ public class PostService {
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("이미지 없음"));
 
-        // S3에서 이미지 삭제
-        String fileName = imageUrl.substring(cloudFrontDomain.length());
-        s3Service.deleteImageFromS3(fileName);
+        // 1. S3에서 이미지 삭제
+        if (imageUrl.startsWith(cloudFrontDomain)) {
+            String s3Key = imageUrl.substring(cloudFrontDomain.length());
+            s3Service.deleteImageFromS3(s3Key);
+        }
 
-        // 이미지 리스트에서 제거
-        post.getImages().remove(imageToDelete);
+        // 2. 이미지 DB에서 삭제 (post.getImages().remove는 선택)
+        postImageRepository.delete(imageToDelete);
+        post.getImages().remove(imageToDelete); // optional: 유지 일관성
 
-        // 남은 이미지가 없으면 게시글 전체 삭제
+        // 3. 이미지가 모두 제거된 경우 → 게시글 삭제
         if (post.getImages().isEmpty()) {
+            commentRepository.deleteAllByPost(post);
             postRepository.delete(post);
         } else {
-            postRepository.save(post);
+            postRepository.save(post); // 이미지 수만 변경된 경우 업데이트
         }
     }
+
 
     public void deletePost(UUID postId) {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("게시글 없음"));
 
-        // S3에서 이미지 삭제
-        for (PostImage image : post.getImages()) {
-            String imageUrl = image.getImageUrl();
-            String fileName = imageUrl.substring(cloudFrontDomain.length());
-            s3Service.deleteImageFromS3(fileName);
-        }
+        // 1. S3 삭제용 key 추출
+        List<String> s3Keys = post.getImages().stream()
+                .map(PostImage::getImageUrl)
+                .filter(Objects::nonNull)
+                .map(imageUrl -> {
+                    if (imageUrl.startsWith(cloudFrontDomain)) {
+                        return imageUrl.substring(cloudFrontDomain.length());
+                    } else {
+                        return null;
+                    }
+                })
+                .filter(Objects::nonNull)
+                .toList();
 
-        // 댓글 삭제
+        // 2. 이미지 DB 삭제
+        postImageRepository.deleteAllByPost(post);
+
+        // 3. 댓글 삭제
         commentRepository.deleteAllByPost(post);
 
-        // 게시글 삭제
+        // 4. 게시글 삭제
         postRepository.delete(post);
+
+        // 5. S3 삭제
+        for (String s3Key : s3Keys) {
+            s3Service.deleteImageFromS3(s3Key);
+        }
     }
 
     public List<PostDTO> getPostsByFamilyAndCategory(Long userId, UUID familyId, UUID categoryId) {
