@@ -25,7 +25,6 @@ public class CategoryService {
                 .orElseThrow(() -> new RuntimeException("가족 없음"));
 
         Category category = new Category();
-        category.setCategoryId(UUID.randomUUID());
         category.setTitle(dto.getTitle());
         category.setFamily(family);
 
