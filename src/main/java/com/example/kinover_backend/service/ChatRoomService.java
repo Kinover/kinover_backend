@@ -4,14 +4,17 @@ import com.example.kinover_backend.dto.ChatRoomDTO;
 import com.example.kinover_backend.dto.ChatRoomMapper;
 import com.example.kinover_backend.dto.UserDTO;
 import com.example.kinover_backend.entity.ChatRoom;
+import com.example.kinover_backend.entity.Message;
 import com.example.kinover_backend.entity.User;
 import com.example.kinover_backend.entity.UserChatRoom;
+import com.example.kinover_backend.enums.MessageType;
 import com.example.kinover_backend.repository.ChatRoomRepository;
 import com.example.kinover_backend.repository.MessageRepository;
 import com.example.kinover_backend.repository.UserChatRoomRepository;
 import com.example.kinover_backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +29,10 @@ public class ChatRoomService {
     private final UserChatRoomRepository userChatRoomRepository;
     private final UserRepository userRepository;
     private final MessageRepository messageRepository;
+    private final S3Service s3Service;
+
+    @Value("${cloudfront.domain}")
+    private String cloudFrontDomain;
 
     @Autowired
     private ChatRoomMapper chatRoomMapper;
@@ -162,11 +169,38 @@ public class ChatRoomService {
         // 2. 남은 유저 수 확인
         int remainingUsers = userChatRoomRepository.countByChatRoom(chatRoom);
 
-        // 3. 마지막 사용자였다면, 메시지 + 채팅방 삭제
+        // 3. 마지막 사용자였다면 메시지와 채팅방 삭제
         if (remainingUsers == 0) {
-            messageRepository.deleteByChatRoom(chatRoom);
+            List<Message> messages = messageRepository.findAllByChatRoomId(chatRoomId);
+
+            List<String> s3KeysToDelete = new ArrayList<>();
+
+            for (Message message : messages) {
+                MessageType type = message.getMessageType();
+
+                if (type == MessageType.image || type == MessageType.video) {
+                    String content = message.getContent();
+                    if (content != null && !content.isBlank()) {
+                        List<String> s3Keys = Arrays.stream(content.split(","))
+                                .map(String::trim)
+                                .filter(url -> url.startsWith(cloudFrontDomain))
+                                .map(url -> url.substring(cloudFrontDomain.length()))
+                                .collect(Collectors.toList());
+                        s3KeysToDelete.addAll(s3Keys);
+                    }
+                }
+            }
+
+            // DB 삭제
+            messageRepository.deleteAll(messages);
             chatRoomRepository.delete(chatRoom);
+
+            // S3 삭제
+            for (String s3Key : s3KeysToDelete) {
+                s3Service.deleteImageFromS3(s3Key);
+            }
         }
     }
+
 
 }
