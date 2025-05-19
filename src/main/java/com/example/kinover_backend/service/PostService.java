@@ -87,7 +87,7 @@ public class PostService {
                 .orElseThrow(() -> new RuntimeException("이미지 없음"));
 
         // S3에서 이미지 삭제
-        String fileName = imageUrl.substring(imageUrl.indexOf("post/"));
+        String fileName = imageUrl.substring(cloudFrontDomain.length());
         s3Service.deleteImageFromS3(fileName);
 
         // 이미지 리스트에서 제거
@@ -108,7 +108,7 @@ public class PostService {
         // S3에서 이미지 삭제
         for (PostImage image : post.getImages()) {
             String imageUrl = image.getImageUrl();
-            String fileName = imageUrl.substring(imageUrl.indexOf("post/"));
+            String fileName = imageUrl.substring(cloudFrontDomain.length());
             s3Service.deleteImageFromS3(fileName);
         }
 
