@@ -37,6 +37,11 @@ public class PostController {
         String token = authorizationHeader.replace("Bearer ", "");
         Long authenticatedUserId = jwtUtil.getUserIdFromToken(token);
 
+        System.out.println("=== Incoming createPost request ===");
+        System.out.println("Authenticated userId: " + authenticatedUserId);
+        System.out.println("PostDTO: " + postDTO);
+        System.out.println("===================================");
+
         if (!authenticatedUserId.equals(postDTO.getAuthorId())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
