@@ -130,32 +130,11 @@ public class PostService {
 
         List<PostDTO> result = new ArrayList<>();
         for (Post post : posts) {
-            PostDTO dto = getPostDTO(post);
+            PostDTO dto = PostDTO.from(post);
             result.add(dto);
         }
 
         return result;
-    }
-
-    @NotNull
-    private static PostDTO getPostDTO(Post post) {
-        PostDTO dto = new PostDTO();
-        dto.setPostId(post.getPostId());
-        dto.setAuthorName(post.getAuthor().getName());
-        dto.setAuthorImage(post.getAuthor().getImage());
-        dto.setCreatedAt(post.getCreatedAt());
-        dto.setContent(post.getContent());
-        dto.setCommentCount(post.getCommentCount());
-
-        List<String> imageUrls = new ArrayList<>();
-        List<PostType> postTypes = new ArrayList<>();
-        for (PostImage img : post.getImages()) {
-            imageUrls.add(img.getImageUrl());
-            postTypes.add(img.getPostType());
-        }
-        dto.setImageUrls(imageUrls);
-        dto.setPostTypes(postTypes);
-        return dto;
     }
 
 }
