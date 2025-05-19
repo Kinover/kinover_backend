@@ -7,6 +7,7 @@ import com.example.kinover_backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -74,6 +75,7 @@ public class PostService {
         postRepository.save(post);
     }
 
+    @Transactional
     public void deleteImage(UUID postId, String imageUrl) {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("게시글 없음"));
@@ -102,7 +104,7 @@ public class PostService {
         }
     }
 
-
+    @Transactional
     public void deletePost(UUID postId) {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("게시글 없음"));
