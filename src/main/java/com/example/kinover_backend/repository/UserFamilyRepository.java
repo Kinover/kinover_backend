@@ -33,13 +33,14 @@ public interface UserFamilyRepository extends JpaRepository<UserFamily, UUID> {
         return save(userFamily);
     }
 
-    @Query("SELECT uf.family FROM UserFamily uf WHERE uf.user.userId = :userId")
-    Optional<Family> findFamilyByUserId(@Param("userId") Long userId);
-
     boolean existsByUser_UserId(Long userId);
 
     List<UserFamily> findAllByUser_UserId(Long userId);
 
     @Query("SELECT uf.user FROM UserFamily uf WHERE uf.family.familyId = :familyId")
     List<User> findUsersByFamilyId(@Param("familyId") UUID familyId);
+
+    // userId로 속한 모든 Family 조회
+    @Query("SELECT uf.family FROM UserFamily uf WHERE uf.user.userId = :userId")
+    List<Family> findFamiliesByUserId(@Param("userId") Long userId);
 }

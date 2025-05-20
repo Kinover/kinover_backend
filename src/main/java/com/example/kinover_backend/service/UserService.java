@@ -3,6 +3,7 @@ package com.example.kinover_backend.service;
 import com.example.kinover_backend.dto.KakaoUserDto;
 import com.example.kinover_backend.dto.UserDTO;
 import com.example.kinover_backend.dto.UserStatusDTO;
+import com.example.kinover_backend.entity.Family;
 import com.example.kinover_backend.entity.User;
 import com.example.kinover_backend.entity.UserFamily;
 import com.example.kinover_backend.repository.UserRepository;
@@ -170,7 +171,7 @@ public class UserService {
         return new UserDTO(saved);
     }
 
-    public void updateUserOnlineStatus(Long userId, UUID familyId, boolean isOnline) {
+    public void updateUserOnlineStatus(Long userId, boolean isOnline) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사용자입니다: " + userId));
 
@@ -178,16 +179,22 @@ public class UserService {
         user.setLastActiveAt(LocalDateTime.now());
         userRepository.save(user);
 
-        List<UserStatusDTO> statusList = getFamilyStatus(familyId);
+        // 유저가 속한 모든 가족 찾기
+        List<Family> families = userFamilyRepository.findFamiliesByUserId(userId);
 
-        try {
-            String json = objectMapper.writeValueAsString(statusList);
-            String redisTopic = "family:status:" + familyId.toString();
-            redisTemplate.convertAndSend(redisTopic, json);
-        } catch (Exception e) {
-            throw new RuntimeException("접속 상태 broadcast 실패", e);
+        for (Family family : families) {
+            List<UserStatusDTO> statusList = getFamilyStatus(family.getFamilyId());
+
+            try {
+                String json = objectMapper.writeValueAsString(statusList);
+                String redisTopic = "family:status:" + family.getFamilyId();
+                redisTemplate.convertAndSend(redisTopic, json);
+            } catch (Exception e) {
+                throw new RuntimeException("접속 상태 broadcast 실패", e);
+            }
         }
     }
+
 
     public List<UserStatusDTO> getFamilyStatus(UUID familyId) {
         List<User> familyMembers = userFamilyRepository.findUsersByFamilyId(familyId);
