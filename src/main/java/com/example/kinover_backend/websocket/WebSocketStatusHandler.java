@@ -28,7 +28,9 @@ public class WebSocketStatusHandler extends TextWebSocketHandler {
         URI uri = session.getUri();
         System.out.println("[WS /status] 연결 요청: " + uri);
 
-        Long userId = extractUserId(session);
+        String token = validateToken(session); // jwt 토큰 유효성 검사
+        Long userId = jwtUtil.getUserIdFromToken(token);
+
         System.out.println("[WS /status] userId 파싱 성공: " + userId);
 
         sessions.computeIfAbsent(userId, k -> new CopyOnWriteArraySet<>()).add(session);
@@ -39,7 +41,8 @@ public class WebSocketStatusHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
-        Long userId = extractUserId(session);
+        String token = getQueryParam(Objects.requireNonNull(session.getUri()), "token");
+        Long userId = jwtUtil.getUserIdFromToken(token);
 
         Set<WebSocketSession> userSessions = sessions.get(userId);
         if (userSessions != null) {
@@ -50,11 +53,16 @@ public class WebSocketStatusHandler extends TextWebSocketHandler {
         }
     }
 
-    private Long extractUserId(WebSocketSession session) {
+    private String validateToken(WebSocketSession session) {
         URI uri = session.getUri();
         String token = getQueryParam(uri, "token");
-        System.out.println("[WS /status] 받은 토큰: " + token);
-        return Long.parseLong(jwtUtil.parseToken(token).getSubject());
+        System.out.println("[WS] 받은 토큰: " + token);
+
+        if (token == null || !jwtUtil.isTokenValid(token)) {
+            throw new RuntimeException("Invalid or expired JWT token");
+        }
+
+        return token;
     }
 
     private String getQueryParam(URI uri, String key) {

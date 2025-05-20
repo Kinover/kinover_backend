@@ -17,6 +17,7 @@
 
     import java.net.URI;
     import java.util.Map;
+    import java.util.Objects;
     import java.util.Set;
     import java.util.concurrent.ConcurrentHashMap;
     import java.util.concurrent.CopyOnWriteArraySet;
@@ -38,7 +39,8 @@
 
         @Override
         public void afterConnectionEstablished(WebSocketSession session) {
-            Long userId = extractUserIdFromSession(session);
+            String token = validateToken(session);
+            Long userId = jwtUtil.getUserIdFromToken(token);
             if (userId != null) {
                 sessions.computeIfAbsent(userId, k -> new CopyOnWriteArraySet<>()).add(session);
                 System.out.println("[WebSocket 연결 성공] userId=" + userId + ", sessionId=" + session.getId());
@@ -52,7 +54,8 @@
 
         @Override
         protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
-            Long userId = extractUserIdFromSession(session);
+            String token = getQueryParam(Objects.requireNonNull(session.getUri()), "token");
+            Long userId = jwtUtil.getUserIdFromToken(token);
             if (userId == null) {
                 session.close(CloseStatus.BAD_DATA);
                 return;
@@ -104,7 +107,8 @@
 
         @Override
         public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
-            Long userId = extractUserIdFromSession(session);
+            String token = getQueryParam(Objects.requireNonNull(session.getUri()), "token");
+            Long userId = jwtUtil.getUserIdFromToken(token);
             if (userId != null) {
                 Set<WebSocketSession> userSessions = sessions.get(userId);
                 if (userSessions != null) {
@@ -121,20 +125,27 @@
             return sessions.getOrDefault(userId, Set.of());
         }
 
-        private Long extractUserIdFromSession(WebSocketSession session) {
-            try {
-                URI uri = session.getUri();
-                if (uri == null) return null;
-                String query = uri.getQuery();
-                if (query == null || !query.contains("token=")) return null;
+        private String validateToken(WebSocketSession session) {
+            URI uri = session.getUri();
+            String token = getQueryParam(uri, "token");
+            System.out.println("[WS] 받은 토큰: " + token);
 
-                String token = query.substring(query.indexOf("token=") + 6);
-                if (token.contains("&")) {
-                    token = token.substring(0, token.indexOf("&"));
-                }
-                return jwtUtil.getUserIdFromToken(token);
-            } catch (Exception e) {
-                return null;
+            if (token == null || !jwtUtil.isTokenValid(token)) {
+                throw new RuntimeException("Invalid or expired JWT token");
             }
+
+            return token;
+        }
+
+        private String getQueryParam(URI uri, String key) {
+            String query = uri.getQuery();
+            if (query == null) return null;
+            for (String param : query.split("&")) {
+                String[] pair = param.split("=");
+                if (pair.length == 2 && pair[0].equals(key)) {
+                    return pair[1];
+                }
+            }
+            return null;
         }
     }
