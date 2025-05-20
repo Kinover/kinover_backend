@@ -22,8 +22,15 @@ public class WebSocketFamilyStatusHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
+
+        URI uri = session.getUri();
+        System.out.println("[WS /family-status] 연결 요청 URI: " + uri);
+
         UUID familyId = extractFamilyId(session);
         familySessions.computeIfAbsent(familyId, f -> new CopyOnWriteArraySet<>()).add(session);
+
+        System.out.println("[WS /family-status] 연결 완료. familyId: " + familyId +
+                ", 현재 세션 수: " + familySessions.get(familyId).size());
     }
 
     @Override

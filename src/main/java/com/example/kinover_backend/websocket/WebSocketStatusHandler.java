@@ -24,10 +24,17 @@ public class WebSocketStatusHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
+
+        URI uri = session.getUri();
+        System.out.println("[WS /status] 연결 요청: " + uri);
+
         Long userId = extractUserId(session);
+        System.out.println("[WS /status] userId 파싱 성공: " + userId);
 
         sessions.computeIfAbsent(userId, k -> new CopyOnWriteArraySet<>()).add(session);
         userService.updateUserOnlineStatus(userId, true);  // ✅ 수정된 메서드 사용
+
+        System.out.println("[WS /status] 세션 등록 및 온라인 처리 완료");
     }
 
     @Override
@@ -46,6 +53,7 @@ public class WebSocketStatusHandler extends TextWebSocketHandler {
     private Long extractUserId(WebSocketSession session) {
         URI uri = session.getUri();
         String token = getQueryParam(uri, "token");
+        System.out.println("[WS /status] 받은 토큰: " + token);
         return Long.parseLong(jwtUtil.parseToken(token).getSubject());
     }
 
