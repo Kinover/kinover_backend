@@ -25,7 +25,7 @@ public class WebSocketConfig implements WebSocketConfigurer {
                 .setAllowedOrigins("*");  // 클라이언트의 출처 허용
         registry.addHandler(webSocketStatusHandler, "/status")
                 .setAllowedOrigins("*");
-        registry.addHandler(webSocketStatusHandler, "/family-status")
+        registry.addHandler(webSocketFamilyStatusHandler, "/family-status")
                 .setAllowedOrigins("*");
     }
 }
