@@ -1,4 +1,5 @@
-# Kinover 백엔드
+# <img src="https://avatars.githubusercontent.com/u/206313018?s=200&v=4" width="20"/>
+ Kinover 백엔드
 
 **Kinover**는 가족만을 위한 비공개 SNS 서비스입니다.  
 이 저장소는 Kinover 앱의 백엔드 서버 코드이며, Spring Boot 기반으로 구축되었습니다.
