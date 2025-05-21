@@ -29,7 +29,7 @@
 
 - Ubuntu 22.04 on Amazon EC2
 - Nginx를 통한 리버스 프록시 및 HTTPS 적용 (`kinover.shop`)
-- GitHub Actions를 통한 CI/CD 구성 예정
+- GitHub Actions를 통한 CI/CD, EC2 로컬 빌드 및 배포
 
 ## 실행 방법
 
