@@ -43,4 +43,4 @@
 
 ```bash
 ./gradlew build
-java -jar build/libs/kinover-backend.jar
+nohup java -Duser.timezone=Asia/Seoul -jar build/libs/kinover_backend-0.0.1-SNAPSHOT.jar > nohup.out 2>&1 &
