@@ -7,7 +7,7 @@
 
 ## 주요 기술 스택
 
-- **Spring Boot 3.x**
+- **Spring Boot 3.4.2v**
 - **MariaDB** (JPA/Hibernate)
 - **Redis** (실시간 메시지 처리용 Pub/Sub)
 - **WebSocket** (실시간 채팅)
