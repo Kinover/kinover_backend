@@ -2,6 +2,7 @@ package com.example.kinover_backend.service;
 
 import com.example.kinover_backend.dto.CommentDTO;
 import com.example.kinover_backend.entity.*;
+import com.example.kinover_backend.enums.NotificationType;
 import com.example.kinover_backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -18,6 +19,7 @@ public class CommentService {
     private final CommentRepository commentRepository;
     private final PostRepository postRepository;
     private final UserRepository userRepository;
+    private final NotificationRepository notificationRepository;
 
     public void createComment(CommentDTO dto) {
         Post post = postRepository.findById(dto.getPostId())
@@ -34,6 +36,16 @@ public class CommentService {
 
         post.setCommentCount(post.getCommentCount() + 1);
         postRepository.save(post);
+
+        // 알림 저장
+        Notification notification = Notification.builder()
+                .notificationType(NotificationType.COMMENT)
+                .postId(post.getPostId())
+                .commentId(comment.getCommentId())
+                .familyId(post.getFamily().getFamilyId())  // comment로부터는 familyId 직접 접근 어려움
+                .authorId(author.getUserId())
+                .build();
+        notificationRepository.save(notification);
     }
 
     public List<CommentDTO> getCommentsForPost(UUID postId) {

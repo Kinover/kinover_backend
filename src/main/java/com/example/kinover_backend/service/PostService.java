@@ -2,6 +2,7 @@ package com.example.kinover_backend.service;
 
 import com.example.kinover_backend.dto.PostDTO;
 import com.example.kinover_backend.entity.*;
+import com.example.kinover_backend.enums.NotificationType;
 import com.example.kinover_backend.enums.PostType;
 import com.example.kinover_backend.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ public class PostService {
     private final PostRepository postRepository;
     private final CommentRepository commentRepository;
     private final PostImageRepository postImageRepository;
+    private final NotificationRepository notificationRepository;
     private final S3Service s3Service;
 
     @Value("${cloudfront.domain}")
@@ -73,6 +75,16 @@ public class PostService {
         //6.저장
         post.setImages(imageEntities);
         postRepository.save(post);
+
+        // 7. 알림 저장
+        Notification notification = Notification.builder()
+                .notificationType(NotificationType.POST)
+                .postId(post.getPostId())  // post는 save 후에 ID가 할당됨
+                .commentId(null)
+                .familyId(post.getFamily().getFamilyId())
+                .authorId(post.getAuthor().getUserId())
+                .build();
+        notificationRepository.save(notification);
     }
 
     @Transactional

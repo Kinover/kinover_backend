@@ -41,6 +41,10 @@ public class User {
     @Column(columnDefinition = "TIMESTAMP")
     private LocalDateTime lastActiveAt;  // 마지막 활동 시간
 
+    @Column(columnDefinition = "TIMESTAMP")
+    private LocalDateTime lastNotificationCheckedAt;
+
+
     @Column(columnDefinition = "TEXT")
     private String image;
 

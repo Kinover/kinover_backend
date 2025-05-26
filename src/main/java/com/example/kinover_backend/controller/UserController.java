@@ -1,6 +1,7 @@
 package com.example.kinover_backend.controller;
 
 import com.example.kinover_backend.JwtUtil;
+import com.example.kinover_backend.dto.NotificationResponseDTO;
 import com.example.kinover_backend.dto.UserDTO;
 import com.example.kinover_backend.service.UserService;
 import io.jsonwebtoken.Claims;
@@ -12,6 +13,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @Tag(name = "유저 Controller", description = "유저 관련 API를 제공합니다.")
 @RestController
@@ -63,6 +66,12 @@ public class UserController {
 
         return userService.modifyUser(userDTO);
     }
+
+    @GetMapping("/notifications/{userId}")
+    public NotificationResponseDTO getUserNotifications(@PathVariable Long userId) {
+        return userService.getUserNotifications(userId);
+    }
+
 
 
 }

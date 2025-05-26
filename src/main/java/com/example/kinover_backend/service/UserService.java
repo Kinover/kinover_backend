@@ -1,11 +1,11 @@
 package com.example.kinover_backend.service;
 
-import com.example.kinover_backend.dto.KakaoUserDto;
-import com.example.kinover_backend.dto.UserDTO;
-import com.example.kinover_backend.dto.UserStatusDTO;
+import com.example.kinover_backend.dto.*;
 import com.example.kinover_backend.entity.Family;
+import com.example.kinover_backend.entity.Notification;
 import com.example.kinover_backend.entity.User;
 import com.example.kinover_backend.entity.UserFamily;
+import com.example.kinover_backend.repository.NotificationRepository;
 import com.example.kinover_backend.repository.UserRepository;
 import com.example.kinover_backend.repository.UserFamilyRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -37,6 +37,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final UserFamilyRepository userFamilyRepository;
+    private final NotificationRepository notificationRepository;
     private final ObjectMapper objectMapper;
     private final StringRedisTemplate redisTemplate;
 
@@ -208,6 +209,45 @@ public class UserService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional
+    public NotificationResponseDTO getUserNotifications(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("사용자 없음"));
+
+        LocalDateTime lastCheckedAt = user.getLastNotificationCheckedAt();
+
+        List<UUID> familyIds = userFamilyRepository.findFamiliesByUserId(userId).stream()
+                .map(Family::getFamilyId)
+                .collect(Collectors.toList());
+
+        List<Notification> notifications = notificationRepository.findByFamilyIdInOrderByCreatedAtDesc(familyIds);
+
+        List<NotificationDTO> dtoList = notifications.stream()
+                .filter(n -> !n.getAuthorId().equals(userId))  // 자기 알림 제외
+                .map(n -> {
+                    User author = userRepository.findById(n.getAuthorId())
+                            .orElseThrow(() -> new RuntimeException("작성자 정보 없음"));
+
+                    return NotificationDTO.builder()
+                            .notificationType(n.getNotificationType())
+                            .postId(n.getPostId())
+                            .commentId(n.getCommentId())
+                            .createdAt(n.getCreatedAt())
+                            .authorName(author.getName())
+                            .authorImage(author.getImage())
+                            .build();
+                })
+                .collect(Collectors.toList());
+
+        // 사용자 알림 확인 시간 갱신
+        user.setLastNotificationCheckedAt(LocalDateTime.now());
+        userRepository.save(user);
+
+        return NotificationResponseDTO.builder()
+                .lastCheckedAt(lastCheckedAt)
+                .notifications(dtoList)
+                .build();
+    }
 
 
 
