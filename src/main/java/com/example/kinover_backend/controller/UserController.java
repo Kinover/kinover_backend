@@ -68,6 +68,7 @@ public class UserController {
     }
 
     @GetMapping("/notifications/{userId}")
+    @Operation(summary = "사용자 알림 조회", description = "특정 사용자의 알림 목록을 반환합니다.")
     public NotificationResponseDTO getUserNotifications(@PathVariable Long userId) {
         return userService.getUserNotifications(userId);
     }
