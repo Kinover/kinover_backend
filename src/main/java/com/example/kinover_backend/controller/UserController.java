@@ -67,9 +67,13 @@ public class UserController {
         return userService.modifyUser(userDTO);
     }
 
-    @GetMapping("/notifications/{userId}")
+    @GetMapping("/notifications")
     @Operation(summary = "사용자 알림 조회", description = "특정 사용자의 알림 목록을 반환합니다.")
-    public NotificationResponseDTO getUserNotifications(@PathVariable Long userId) {
+    public NotificationResponseDTO getUserNotifications(@RequestHeader("Authorization") String authorizationHeader) {
+
+        String jwt = authorizationHeader.replace("Bearer ", "");
+        Long userId = jwtUtil.getUserIdFromToken(jwt);
+
         return userService.getUserNotifications(userId);
     }
 
