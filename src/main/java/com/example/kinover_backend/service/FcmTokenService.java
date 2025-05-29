@@ -18,7 +18,6 @@ public class FcmTokenService {
 
     private final UserRepository userRepository;
     private final FcmTokenRepository fcmTokenRepository;
-    private final ChatRoomNotificationRepository chatRoomNotificationRepository;
 
     public void saveToken(Long userId, String token) {
         User user = userRepository.findById(userId)

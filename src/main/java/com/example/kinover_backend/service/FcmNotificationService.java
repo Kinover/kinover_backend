@@ -1,16 +1,14 @@
 package com.example.kinover_backend.service;
 
+import com.example.kinover_backend.dto.CommentDTO;
 import com.example.kinover_backend.dto.MessageDTO;
-import com.example.kinover_backend.entity.ChatRoom;
-import com.example.kinover_backend.entity.ChatRoomNotificationSetting;
-import com.example.kinover_backend.entity.FcmToken;
-import com.example.kinover_backend.entity.User;
-import com.example.kinover_backend.repository.ChatRoomNotificationRepository;
-import com.example.kinover_backend.repository.ChatRoomRepository;
-import com.example.kinover_backend.repository.FcmTokenRepository;
-import com.example.kinover_backend.repository.UserRepository;
+import com.example.kinover_backend.dto.PostDTO;
+import com.example.kinover_backend.entity.*;
+import com.example.kinover_backend.repository.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.firebase.messaging.*;
+import com.google.firebase.messaging.Message;
+import com.google.firebase.messaging.Notification;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -23,14 +21,16 @@ public class FcmNotificationService {
 
     private final UserRepository userRepository;
     private final ChatRoomRepository chatRoomRepository;
-    private final ChatRoomNotificationRepository notificationRepository;
+    private final ChatRoomNotificationRepository chatRoomNotificationRepository;
     private final FcmTokenRepository fcmTokenRepository;
+    private final CategoryRepository categoryRepository;
+    private final PostRepository postRepository;
 
-    public boolean isNotificationOn(Long userId, UUID chatRoomId) {
+    public boolean isChatRoomNotificationOn(Long userId, UUID chatRoomId) {
         User user = userRepository.findById(userId).orElseThrow();
         ChatRoom chatRoom = chatRoomRepository.findById(chatRoomId).orElseThrow();
 
-        return notificationRepository.findByUserAndChatRoom(user, chatRoom)
+        return chatRoomNotificationRepository.findByUserAndChatRoom(user, chatRoom)
                 .map(ChatRoomNotificationSetting::isNotificationOn)
                 .orElse(true); // 설정 없으면 알림 ON
     }
@@ -92,4 +92,103 @@ public class FcmNotificationService {
             e.printStackTrace(); // TODO: 로깅 시스템으로 전환
         }
     }
+
+    public void sendPostNotification(Long userId, PostDTO postDTO) {
+        User receiver = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("알림 받을 사용자를 찾을 수 없습니다."));
+        User author = userRepository.findById(postDTO.getAuthorId())
+                .orElseThrow(() -> new RuntimeException("작성자를 찾을 수 없습니다."));
+        Category category = categoryRepository.findById(postDTO.getCategoryId())
+                .orElseThrow(() -> new RuntimeException("카테고리를 찾을 수 없습니다."));
+        Optional<FcmToken> fcmTokenOpt = fcmTokenRepository.findByUser(receiver);
+
+        if (fcmTokenOpt.isEmpty()) return;
+
+        String token = fcmTokenOpt.get().getToken();
+
+        // 이미지 첫 번째 (있으면)
+        String firstImageUrl = (postDTO.getImageUrls() != null && !postDTO.getImageUrls().isEmpty())
+                ? postDTO.getImageUrls().get(0)
+                : null;
+
+        String title = "새 게시물 알림";
+        String body = author.getName() + "님이 \"" + category.getTitle() + "\"에 \"" +
+                trimContent(postDTO.getContent()) + "\" 글을 작성했습니다.";
+
+        Message.Builder messageBuilder = Message.builder()
+                .setToken(token)
+                .setNotification(Notification.builder()
+                        .setTitle(title)
+                        .setBody(body)
+                        .build())
+                .putData("notificationType", "POST")
+                .putData("authorName", author.getName())
+                .putData("authorImage", author.getImage()) // nullable 가능성 있음
+                .putData("categoryTitle", category.getTitle())
+                .putData("contentPreview", trimContent(postDTO.getContent()));
+
+        if (firstImageUrl != null) {
+            messageBuilder.putData("firstImageUrl", firstImageUrl);
+        }
+
+        try {
+            FirebaseMessaging.getInstance().send(messageBuilder.build());
+        } catch (FirebaseMessagingException e) {
+            e.printStackTrace(); // TODO: 로깅 시스템 연동
+        }
+    }
+
+    public void sendCommentNotification(Long userId, CommentDTO commentDTO) {
+        User receiver = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("알림 받을 사용자를 찾을 수 없습니다."));
+        User author = userRepository.findById(commentDTO.getAuthorId())
+                .orElseThrow(() -> new RuntimeException("작성자를 찾을 수 없습니다."));
+        Post post = postRepository.findById(commentDTO.getPostId())
+                .orElseThrow(() -> new RuntimeException("게시물을 찾을 수 없습니다."));
+        Category category = post.getCategory();
+        Optional<FcmToken> fcmTokenOpt = fcmTokenRepository.findByUser(receiver);
+
+        if (fcmTokenOpt.isEmpty()) return;
+
+        String token = fcmTokenOpt.get().getToken();
+
+        String firstImageUrl = (post.getImages() != null && !post.getImages().isEmpty())
+                ? post.getImages().get(0).getImageUrl()
+                : null;
+
+        String title = "새 댓글 알림";
+        String body = author.getName() + "님이 \"" + category.getTitle() + "\"에 \"" +
+                trimContent(commentDTO.getContent()) + "\" 댓글을 작성했습니다.";
+
+        Message.Builder messageBuilder = Message.builder()
+                .setToken(token)
+                .setNotification(Notification.builder()
+                        .setTitle(title)
+                        .setBody(body)
+                        .build())
+                .putData("notificationType", "COMMENT")
+                .putData("authorName", author.getName())
+                .putData("authorImage", author.getImage())
+                .putData("categoryTitle", category.getTitle())
+                .putData("contentPreview", trimContent(commentDTO.getContent()));
+
+        if (firstImageUrl != null) {
+            messageBuilder.putData("firstImageUrl", firstImageUrl);
+        }
+
+        try {
+            FirebaseMessaging.getInstance().send(messageBuilder.build());
+        } catch (FirebaseMessagingException e) {
+            e.printStackTrace(); // TODO: 로깅 시스템 연동
+        }
+    }
+
+
+    private String trimContent(String content) {
+        if (content == null) return "";
+        return content.length() > 30 ? content.substring(0, 30) + "..." : content;
+    }
+
+
+
 }

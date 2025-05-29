@@ -24,6 +24,8 @@ public class PostService {
     private final CommentRepository commentRepository;
     private final PostImageRepository postImageRepository;
     private final NotificationRepository notificationRepository;
+    private final UserFamilyRepository userFamilyRepository;
+    private final FcmNotificationService fcmNotificationService;
     private final S3Service s3Service;
 
     @Value("${cloudfront.domain}")
@@ -85,6 +87,15 @@ public class PostService {
                 .authorId(post.getAuthor().getUserId())
                 .build();
         notificationRepository.save(notification);
+
+        // 8. FCM 알림 전송: 작성자를 제외한 가족 구성원 중 알림 ON인 사용자에게만 전송
+        List<User> familyMembers = userFamilyRepository.findUsersByFamilyId(postDTO.getFamilyId());
+
+        for (User member : familyMembers) {
+            if (!member.getUserId().equals(postDTO.getAuthorId()) && Boolean.TRUE.equals(member.getIsPostNotificationOn())) {
+                fcmNotificationService.sendPostNotification(member.getUserId(), postDTO);
+            }
+        }
     }
 
     @Transactional

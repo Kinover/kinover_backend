@@ -20,6 +20,8 @@ public class CommentService {
     private final PostRepository postRepository;
     private final UserRepository userRepository;
     private final NotificationRepository notificationRepository;
+    private final UserFamilyRepository userFamilyRepository;
+    private final FcmNotificationService fcmNotificationService;
 
     public void createComment(CommentDTO dto) {
         Post post = postRepository.findById(dto.getPostId())
@@ -46,6 +48,14 @@ public class CommentService {
                 .authorId(author.getUserId())
                 .build();
         notificationRepository.save(notification);
+
+        List<User> familyMembers = userFamilyRepository.findUsersByFamilyId(post.getFamily().getFamilyId());
+
+        for (User member : familyMembers) {
+            if (!member.getUserId().equals(dto.getAuthorId()) && Boolean.TRUE.equals(member.getIsCommentNotificationOn())) {
+                fcmNotificationService.sendCommentNotification(member.getUserId(), dto);
+            }
+        }
     }
 
     public List<CommentDTO> getCommentsForPost(UUID postId) {

@@ -68,4 +68,10 @@ public class User {
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
     private List<Schedule> scheduleList;
+
+    @Column(nullable = false)
+    private Boolean isPostNotificationOn = true;
+
+    @Column(nullable = false)
+    private Boolean isCommentNotificationOn = true;
 }

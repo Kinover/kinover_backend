@@ -46,7 +46,7 @@ public class ChatMessageSubscriber implements MessageListener {
                         System.out.println("[Redis → WebSocket 전송] to userId=" + userId + ", sessionId=" + session.getId());
                     }else {
                         // WebSocket 미연결 시 FCM 발송 조건 체크
-                        if (fcmNotificationService.isNotificationOn(userId, messageDTO.getChatRoomId())) {
+                        if (fcmNotificationService.isChatRoomNotificationOn(userId, messageDTO.getChatRoomId())) {
                             fcmNotificationService.sendChatNotification(userId, messageDTO);
                         }
                     }
