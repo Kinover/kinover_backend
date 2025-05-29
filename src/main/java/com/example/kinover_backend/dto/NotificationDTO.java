@@ -20,4 +20,5 @@ public class NotificationDTO {
     private String authorImage;
     private String categoryTitle;
     private String contentPreview;
+    private String firstImageUrl;
 }

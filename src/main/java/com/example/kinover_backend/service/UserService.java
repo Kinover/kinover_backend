@@ -235,6 +235,7 @@ public class UserService {
 
                     String categoryTitle = "";
                     String contentPreview = "";
+                    String firstImageUrl = "";
 
                     if (n.getNotificationType() == NotificationType.POST) {
                         Post post = postRepository.findById(n.getPostId())
@@ -243,6 +244,7 @@ public class UserService {
                         contentPreview = post.getContent() != null && post.getContent().length() > 30
                                 ? post.getContent().substring(0, 30) + "..."
                                 : post.getContent();
+                        firstImageUrl = post.getImages().isEmpty() ? null : post.getImages().get(0).getImageUrl();
                     } else if (n.getNotificationType() == NotificationType.COMMENT) {
                         Comment comment = commentRepository.findById(n.getCommentId())
                                 .orElseThrow(() -> new RuntimeException("댓글 없음"));
@@ -250,6 +252,8 @@ public class UserService {
                         contentPreview = comment.getContent() != null && comment.getContent().length() > 30
                                 ? comment.getContent().substring(0, 30) + "..."
                                 : comment.getContent();
+                        Post post = comment.getPost();
+                        firstImageUrl = post.getImages().isEmpty() ? null : post.getImages().get(0).getImageUrl();
                     }
 
                     return NotificationDTO.builder()
@@ -261,6 +265,7 @@ public class UserService {
                             .authorImage(author.getImage())
                             .categoryTitle(categoryTitle)
                             .contentPreview(contentPreview)
+                            .firstImageUrl(firstImageUrl)
                             .build();
                 })
                 .collect(Collectors.toList());
