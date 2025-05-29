@@ -141,9 +141,6 @@ public class ChatRoomService {
 
     }
 
-    public ChatRoom getChatRooms(UUID chatRoomId) {
-        return this.chatRoomRepository.findByChatRoomId(chatRoomId);
-    }
 
     public List<UserDTO> getUsersByChatRoom(UUID chatRoomId) {
         List<User> list = userChatRoomRepository.findUsersByChatRoomId(chatRoomId);

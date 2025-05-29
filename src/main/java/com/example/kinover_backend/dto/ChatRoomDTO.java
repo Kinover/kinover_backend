@@ -10,7 +10,6 @@ import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -33,4 +32,28 @@ public class ChatRoomDTO {
     private String latestMessageContent;
     private LocalDateTime latestMessageTime;
     private List<String> memberImages;
+
+    public ChatRoomDTO(
+            ChatRoom chatRoom,
+            String latestMessageContent,
+            LocalDateTime latestMessageTime,
+            List<String> memberImages,
+            List<UserChatRoomDTO> userChatRooms  // 필요 시
+    ) {
+        if (chatRoom.getChatRoomId() == null) {
+            chatRoom.setChatRoomId(UUID.randomUUID());
+        }
+        this.chatRoomId = chatRoom.getChatRoomId();
+        this.roomName = chatRoom.getRoomName();
+        this.isKino = chatRoom.isKino();
+        this.familyType = chatRoom.getFamilyType();
+        this.createdAt = chatRoom.getCreatedAt();
+        this.image = chatRoom.getImage();
+        this.family = chatRoom.getFamily() != null ? new FamilyDTO(chatRoom.getFamily()) : null;
+
+        this.latestMessageContent = latestMessageContent;
+        this.latestMessageTime = latestMessageTime;
+        this.memberImages = memberImages;
+        this.userChatRooms = userChatRooms;
+    }
 }
