@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -25,4 +26,5 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
 
     Page<Message> findByChatRoom_ChatRoomIdAndCreatedAtBefore(UUID chatRoomId, LocalDateTime before, Pageable pageable);
 
+    Optional<Message> findTopByChatRoom_ChatRoomIdOrderByCreatedAtDesc(UUID chatRoomId);
 }

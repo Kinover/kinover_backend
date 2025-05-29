@@ -112,9 +112,33 @@ public class ChatRoomService {
                 .map(ChatRoom::getChatRoomId)
                 .collect(Collectors.toSet());
         List<ChatRoom> chatRooms = chatRoomRepository.findByChatRoomIdIn(chatRoomIds);
-        return chatRooms.stream()
-                .map(chatRoomMapper::toDTO)
-                .collect(Collectors.toList());
+        return chatRooms.stream().map(chatRoom -> {
+            ChatRoomDTO dto = chatRoomMapper.toDTO(chatRoom);
+
+            // 최신 메시지 추출
+            messageRepository.findTopByChatRoom_ChatRoomIdOrderByCreatedAtDesc(chatRoom.getChatRoomId())
+                    .ifPresent(message -> {
+                        if (message.getMessageType() == MessageType.text) {
+                            dto.setLatestMessageContent(message.getContent());
+                        } else if (message.getMessageType() == MessageType.image) {
+                            int count = message.getContent().split(",").length;
+                            dto.setLatestMessageContent("사진을 " + count + "장 보냈습니다.");
+                        } else if (message.getMessageType() == MessageType.video) {
+                            dto.setLatestMessageContent("동영상을 보냈습니다.");
+                        }
+                        dto.setLatestMessageTime(message.getCreatedAt());
+                    });
+
+            // 채팅방 멤버 이미지 리스트
+            List<String> images = userChatRoomRepository.findUsersByChatRoomId(chatRoom.getChatRoomId()).stream()
+                    .map(User::getImage) // 유저 엔티티에 getImage() 메서드 있어야 함
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+            dto.setMemberImages(images);
+
+            return dto;
+        }).collect(Collectors.toList());
+
     }
 
     public ChatRoom getChatRooms(UUID chatRoomId) {
