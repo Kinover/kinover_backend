@@ -1,13 +1,9 @@
 package com.example.kinover_backend.service;
 
 import com.example.kinover_backend.dto.*;
-import com.example.kinover_backend.entity.Family;
-import com.example.kinover_backend.entity.Notification;
-import com.example.kinover_backend.entity.User;
-import com.example.kinover_backend.entity.UserFamily;
-import com.example.kinover_backend.repository.NotificationRepository;
-import com.example.kinover_backend.repository.UserRepository;
-import com.example.kinover_backend.repository.UserFamilyRepository;
+import com.example.kinover_backend.entity.*;
+import com.example.kinover_backend.enums.NotificationType;
+import com.example.kinover_backend.repository.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.LockModeType;
 import jakarta.transaction.Transactional;
@@ -38,6 +34,8 @@ public class UserService {
     private final UserRepository userRepository;
     private final UserFamilyRepository userFamilyRepository;
     private final NotificationRepository notificationRepository;
+    private final PostRepository postRepository;
+    private final CommentRepository commentRepository;
     private final ObjectMapper objectMapper;
     private final StringRedisTemplate redisTemplate;
 
@@ -220,13 +218,39 @@ public class UserService {
                 .map(Family::getFamilyId)
                 .collect(Collectors.toList());
 
+        if (familyIds.isEmpty()) {
+            return NotificationResponseDTO.builder()
+                    .lastCheckedAt(lastCheckedAt)
+                    .notifications(Collections.emptyList())
+                    .build();
+        }
+
         List<Notification> notifications = notificationRepository.findByFamilyIdInOrderByCreatedAtDesc(familyIds);
 
         List<NotificationDTO> dtoList = notifications.stream()
-                .filter(n -> !n.getAuthorId().equals(userId))  // 자기 알림 제외
+                .filter(n -> !n.getAuthorId().equals(userId)) // 자기 알림 제외
                 .map(n -> {
                     User author = userRepository.findById(n.getAuthorId())
                             .orElseThrow(() -> new RuntimeException("작성자 정보 없음"));
+
+                    String categoryTitle = "";
+                    String contentPreview = "";
+
+                    if (n.getNotificationType() == NotificationType.POST) {
+                        Post post = postRepository.findById(n.getPostId())
+                                .orElseThrow(() -> new RuntimeException("게시물 없음"));
+                        categoryTitle = post.getCategory().getTitle();
+                        contentPreview = post.getContent() != null && post.getContent().length() > 30
+                                ? post.getContent().substring(0, 30) + "..."
+                                : post.getContent();
+                    } else if (n.getNotificationType() == NotificationType.COMMENT) {
+                        Comment comment = commentRepository.findById(n.getCommentId())
+                                .orElseThrow(() -> new RuntimeException("댓글 없음"));
+                        categoryTitle = comment.getPost().getCategory().getTitle();
+                        contentPreview = comment.getContent() != null && comment.getContent().length() > 30
+                                ? comment.getContent().substring(0, 30) + "..."
+                                : comment.getContent();
+                    }
 
                     return NotificationDTO.builder()
                             .notificationType(n.getNotificationType())
@@ -235,11 +259,12 @@ public class UserService {
                             .createdAt(n.getCreatedAt())
                             .authorName(author.getName())
                             .authorImage(author.getImage())
+                            .categoryTitle(categoryTitle)
+                            .contentPreview(contentPreview)
                             .build();
                 })
                 .collect(Collectors.toList());
 
-        // 사용자 알림 확인 시간 갱신
         user.setLastNotificationCheckedAt(LocalDateTime.now());
         userRepository.save(user);
 

@@ -18,4 +18,6 @@ public class NotificationDTO {
     private LocalDateTime createdAt;
     private String authorName;
     private String authorImage;
+    private String categoryTitle;
+    private String contentPreview;
 }
