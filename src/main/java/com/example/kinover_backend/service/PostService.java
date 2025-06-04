@@ -31,6 +31,7 @@ public class PostService {
     @Value("${cloudfront.domain}")
     private String cloudFrontDomain;
 
+    @Transactional
     public void createPost(PostDTO postDTO) {
         // 1. 작성자 조회
         User author = userRepository.findById(postDTO.getAuthorId())
