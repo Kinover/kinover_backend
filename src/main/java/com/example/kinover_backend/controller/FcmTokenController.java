@@ -20,7 +20,7 @@ public class FcmTokenController {
     private final FcmTokenService fcmTokenService;
     private final JwtUtil jwtUtil;
 
-    @Operation(summary = "FCM 토큰 발급", description = "jwt 토큰으로 FCM 토큰을 발급합니다.")
+    @Operation(summary = "FCM 토큰 저장", description = "유저의 FCM 토큰을 서버에 저장합니다.")
     @PostMapping("/register")
     public ResponseEntity<Void> registerFcmToken(@RequestHeader("Authorization") String token,
                                                  @RequestBody Map<String, String> request) {

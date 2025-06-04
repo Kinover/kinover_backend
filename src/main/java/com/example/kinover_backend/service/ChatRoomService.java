@@ -38,6 +38,7 @@ public class ChatRoomService {
     private ChatRoomMapper chatRoomMapper;
 
     // 채팅방 생성 메서드
+    @Transactional
     public ChatRoomDTO createChatRoom(Long creatorId, String roomName, List<Long> userIds) {
         ChatRoom chatRoom = new ChatRoom();
         chatRoom.setChatRoomId(UUID.randomUUID());
