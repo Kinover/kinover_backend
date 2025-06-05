@@ -44,6 +44,8 @@ public class User {
     @Column(columnDefinition = "TIMESTAMP")
     private LocalDateTime lastNotificationCheckedAt;
 
+    @Column(columnDefinition = "TEXT")
+    private String trait;
 
     @Column(columnDefinition = "TEXT")
     private String image;

@@ -20,6 +20,7 @@ public class UserDTO {
     private String emotion;
     private String image;
     private String phoneNumber;
+    private String trait;
 
     // 엔티티 → DTO 변환
     public UserDTO(User user) {
@@ -33,5 +34,6 @@ public class UserDTO {
         this.emotion = user.getEmotion();
         this.image = user.getImage();
         this.phoneNumber = user.getPhoneNumber();
+        this.trait = user.getTrait();
     }
 }

@@ -134,6 +134,7 @@ public class UserService {
         user.setEmail(null);
         user.setPwd(null);
         user.setPhoneNumber(null);
+        user.setTrait(null);
 
         // 2. 유저-가족 관계 제거
         List<UserFamily> toRemove = userFamilyRepository.findAllByUser_UserId(userId);
@@ -164,6 +165,10 @@ public class UserService {
 
         if (userDTO.getImage() != null) {
             user.setImage(cloudFrontDomain + userDTO.getImage());
+        }
+
+        if (userDTO.getTrait() != null) {
+            user.setTrait(userDTO.getTrait());
         }
 
         User saved = userRepository.save(user);
