@@ -41,7 +41,6 @@ public class ChatRoomService {
     @Transactional
     public ChatRoomDTO createChatRoom(Long creatorId, String roomName, List<Long> userIds) {
         ChatRoom chatRoom = new ChatRoom();
-        chatRoom.setChatRoomId(UUID.randomUUID());
         chatRoom.setRoomName(roomName);
         chatRoom.setFamilyType(userIds.size() > 1 ? "family" : "personal");
         chatRoom.setFamily(null);
