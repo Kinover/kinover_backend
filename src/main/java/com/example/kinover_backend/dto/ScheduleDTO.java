@@ -8,6 +8,7 @@ import java.util.Date;
 import java.util.UUID;
 
 @Getter
+@NoArgsConstructor
 public class ScheduleDTO {
     private UUID scheduleId;
     private String title;
