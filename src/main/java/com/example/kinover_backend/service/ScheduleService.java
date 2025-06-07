@@ -2,10 +2,14 @@ package com.example.kinover_backend.service;
 
 import com.example.kinover_backend.dto.ScheduleDTO;
 import com.example.kinover_backend.dto.UserDTO;
+import com.example.kinover_backend.entity.Family;
 import com.example.kinover_backend.entity.Schedule;
 import com.example.kinover_backend.entity.User;
+import com.example.kinover_backend.repository.FamilyRepository;
 import com.example.kinover_backend.repository.ScheduleRepository;
 import com.example.kinover_backend.repository.UserRepository;
+import com.example.kinover_backend.repository.FamilyRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,17 +19,12 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class ScheduleService {
     private final ScheduleRepository scheduleRepository;
     private final UserRepository userRepository;
     private final UserFamilyService userFamilyService;
-
-    @Autowired
-    public ScheduleService(ScheduleRepository scheduleRepository, UserService userService, UserRepository userRepository, UserFamilyService userFamilyService) {
-        this.scheduleRepository = scheduleRepository;
-        this.userRepository = userRepository;
-        this.userFamilyService = userFamilyService;
-    }
+    private final FamilyRepository familyRepository;
 
     public Optional<List<ScheduleDTO>> getSchedulesForFamilyAndDate(UUID familyId, String date) {
         List<UserDTO> userFamilies = userFamilyService.getUsersByFamilyId(familyId);
@@ -75,7 +74,21 @@ public class ScheduleService {
     // 일정 추가
     @Transactional
     public void addSchedule(Schedule schedule) {
-        this.scheduleRepository.save(schedule);
+        UUID familyId = schedule.getFamily().getFamilyId();
+        Long userId = schedule.getUser() != null ? schedule.getUser().getUserId() : null;
+
+        Family family = familyRepository.findById(familyId)
+                .orElseThrow(() -> new RuntimeException("Family not found"));
+
+        User user = null;
+        if (userId != null) {
+            user = userRepository.findById(userId)
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+        }
+
+        schedule.setFamily(family);
+        schedule.setUser(user);
+        scheduleRepository.save(schedule);
     }
 
     // 일정 삭제
