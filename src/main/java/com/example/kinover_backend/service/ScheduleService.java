@@ -71,17 +71,16 @@ public class ScheduleService {
     }
 
 
-    // 일정 추가
     @Transactional
     public UUID addSchedule(ScheduleDTO dto) {
-        // 사용자 & 가족 정보 조회
+        // 필수 객체 조회
         User user = userRepository.findById(dto.getUserId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         Family family = familyRepository.findById(dto.getFamilyId())
                 .orElseThrow(() -> new RuntimeException("Family not found"));
 
-        // 엔티티 구성
+        // 엔티티 생성 및 필드 채움
         Schedule schedule = new Schedule();
         schedule.setScheduleId(UUID.randomUUID());
         schedule.setTitle(dto.getTitle());
