@@ -73,23 +73,28 @@ public class ScheduleService {
 
     // 일정 추가
     @Transactional
-    public void addSchedule(Schedule schedule) {
-        UUID familyId = schedule.getFamily().getFamilyId();
-        Long userId = schedule.getUser() != null ? schedule.getUser().getUserId() : null;
+    public UUID addSchedule(ScheduleDTO dto) {
+        // 사용자 & 가족 정보 조회
+        User user = userRepository.findById(dto.getUserId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
-        Family family = familyRepository.findById(familyId)
+        Family family = familyRepository.findById(dto.getFamilyId())
                 .orElseThrow(() -> new RuntimeException("Family not found"));
 
-        User user = null;
-        if (userId != null) {
-            user = userRepository.findById(userId)
-                    .orElseThrow(() -> new RuntimeException("User not found"));
-        }
-
-        schedule.setFamily(family);
+        // 엔티티 구성
+        Schedule schedule = new Schedule();
+        schedule.setScheduleId(UUID.randomUUID());
+        schedule.setTitle(dto.getTitle());
+        schedule.setMemo(dto.getMemo());
+        schedule.setPersonal(dto.isPersonal());
+        schedule.setDate(dto.getDate());
         schedule.setUser(user);
+        schedule.setFamily(family);
+
         scheduleRepository.save(schedule);
+        return schedule.getScheduleId();
     }
+
 
     // 일정 삭제
     @Transactional
@@ -97,10 +102,21 @@ public class ScheduleService {
         this.scheduleRepository.deleteById(scheduleId);
     }
 
-    // 일정 삭제
+    // 일정 수정
     @Transactional
-    public void modifySchedule(Schedule schedule) {
-        this.scheduleRepository.save(schedule);
+    public UUID modifySchedule(ScheduleDTO dto) {
+        // 기존 일정 조회
+        Schedule schedule = scheduleRepository.findById(dto.getScheduleId())
+                .orElseThrow(() -> new RuntimeException("Schedule not found"));
+
+        // 필드만 수정 (userId, familyId는 변경하지 않음)
+        schedule.setTitle(dto.getTitle());
+        schedule.setMemo(dto.getMemo());
+        schedule.setPersonal(dto.isPersonal());
+        schedule.setDate(dto.getDate());
+
+        scheduleRepository.save(schedule);
+        return schedule.getScheduleId();
     }
 
 }

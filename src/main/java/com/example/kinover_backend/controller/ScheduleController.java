@@ -77,13 +77,12 @@ public class ScheduleController {
             content = @Content(schema = @Schema(implementation = UUID.class)))
     @PostMapping("/add")
     public UUID addSchedule(
-            @RequestHeader("Authorization") String authorizationHeader, // 헤더에서 Authorization 받기
-            @RequestBody Schedule schedule) {
+            @RequestHeader("Authorization") String authorizationHeader,
+            @RequestBody ScheduleDTO scheduleDTO) {
 
-        schedule.setScheduleId(UUID.randomUUID()); // 랜덤 UUID로 세팅
-        scheduleService.addSchedule(schedule);
-        return schedule.getScheduleId();
+        return scheduleService.addSchedule(scheduleDTO);
     }
+
 
     @Operation(summary = "일정 삭제", description = "일정 할일을 삭제합니다.")
     @ApiResponse(responseCode = "200", description = "할일 삭제 성공")
@@ -95,15 +94,13 @@ public class ScheduleController {
     }
 
     @Operation(summary = "일정 수정", description = "일정을 수정하고 일정 아이디를 반환합니다.")
-    @ApiResponse(responseCode = "200", description = "할일 추가 성공",
+    @ApiResponse(responseCode = "200", description = "할일 수정 성공",
             content = @Content(schema = @Schema(implementation = UUID.class)))
     @PostMapping("/modify")
     public UUID modifySchedule(
-            @RequestHeader("Authorization") String authorizationHeader, // 헤더에서 Authorization 받기
-            @RequestBody Schedule schedule) {
+            @RequestHeader("Authorization") String authorizationHeader,
+            @RequestBody ScheduleDTO scheduleDTO) {
 
-        schedule.setScheduleId(UUID.randomUUID()); // 랜덤 UUID로 세팅
-        scheduleService.modifySchedule(schedule);
-        return schedule.getScheduleId();
+        return scheduleService.modifySchedule(scheduleDTO);
     }
 }
