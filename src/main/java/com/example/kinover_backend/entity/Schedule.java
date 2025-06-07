@@ -28,11 +28,11 @@ public class Schedule {
     @Column(columnDefinition = "DATE")
     private LocalDate date;
 
-    @ManyToOne(cascade = CascadeType.ALL)
+    @ManyToOne
     @JoinColumn(name = "userId", nullable = true)
     private User user;
 
-    @ManyToOne(cascade = CascadeType.ALL)
+    @ManyToOne
     @JoinColumn(name = "familyId", nullable = false)
     private Family family;
 
