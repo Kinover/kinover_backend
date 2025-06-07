@@ -2,6 +2,7 @@ package com.example.kinover_backend.dto;
 
 import com.example.kinover_backend.entity.Schedule;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 import java.util.Date;
