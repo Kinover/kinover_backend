@@ -8,6 +8,7 @@ import com.example.kinover_backend.repository.ScheduleRepository;
 import com.example.kinover_backend.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.*;
@@ -72,16 +73,19 @@ public class ScheduleService {
 
 
     // 일정 추가
+    @Transactional
     public void addSchedule(Schedule schedule) {
         this.scheduleRepository.save(schedule);
     }
 
     // 일정 삭제
+    @Transactional
     public void removeSchedule(UUID scheduleId) {
         this.scheduleRepository.deleteById(scheduleId);
     }
 
     // 일정 삭제
+    @Transactional
     public void modifySchedule(Schedule schedule) {
         this.scheduleRepository.save(schedule);
     }
