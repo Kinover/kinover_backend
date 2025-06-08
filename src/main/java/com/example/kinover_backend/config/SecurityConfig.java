@@ -54,6 +54,7 @@ public class SecurityConfig {
                 "http://localhost:8081",
                 "http://localhost:3000",
                 "http://localhost:3001",
+                "http://localhost:*",
                 "http://13.124.192.206:8081",
                 "http://13.124.192.206"
                 )); // 프론트 주소
