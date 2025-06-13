@@ -62,7 +62,7 @@ public class ScheduleService {
         schedule.setTitle(dto.getTitle());
         schedule.setMemo(dto.getMemo());
         schedule.setDate(dto.getDate());
-        schedule.setIsPersonal(dto.isPersonal());
+        schedule.setPersonal(dto.isPersonal());
         schedule.setUser(user);
         schedule.setFamily(family);
 
