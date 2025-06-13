@@ -53,6 +53,7 @@ public class ScheduleController {
     @PostMapping("/add")
     public UUID addSchedule(
             @RequestBody ScheduleDTO scheduleDTO) {
+                System.out.println(">>> [ScheduleDTO 수신]: " + scheduleDTO.toString()); // 또는 log.info()
 
         return scheduleService.addSchedule(scheduleDTO);
     }
