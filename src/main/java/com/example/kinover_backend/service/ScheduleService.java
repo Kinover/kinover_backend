@@ -1,21 +1,18 @@
 package com.example.kinover_backend.service;
 
 import com.example.kinover_backend.dto.ScheduleDTO;
-import com.example.kinover_backend.dto.UserDTO;
 import com.example.kinover_backend.entity.Family;
 import com.example.kinover_backend.entity.Schedule;
 import com.example.kinover_backend.entity.User;
 import com.example.kinover_backend.repository.FamilyRepository;
 import com.example.kinover_backend.repository.ScheduleRepository;
 import com.example.kinover_backend.repository.UserRepository;
-import com.example.kinover_backend.repository.FamilyRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
-import java.util.*;
+import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -25,52 +22,25 @@ public class ScheduleService {
     private final ScheduleRepository scheduleRepository;
     private final UserRepository userRepository;
     private final FamilyRepository familyRepository;
-    private final UserFamilyService userFamilyService;
 
     /**
-     * 가족 전체 일정 조회 (공용 + 개인 일정 포함)
+     * 가족 ID로 전체 일정 조회
      */
-    public Optional<List<ScheduleDTO>> getSchedulesForFamilyAndDate(UUID familyId, String date) {
-        LocalDate localDate = LocalDate.parse(date);
-        List<ScheduleDTO> scheduleDTOList = new ArrayList<>();
-
-        // 공용 일정
-        List<Schedule> familySchedules = scheduleRepository.findSchedulesByFamilyIdAndDate(familyId, localDate);
-        scheduleDTOList.addAll(familySchedules.stream()
+    public List<ScheduleDTO> getSchedulesByFamilyId(UUID familyId) {
+        List<Schedule> schedules = scheduleRepository.findByFamily_FamilyId(familyId);
+        return schedules.stream()
                 .map(ScheduleDTO::new)
-                .collect(Collectors.toList()));
-
-        // 개인 일정
-        List<UserDTO> userFamilies = userFamilyService.getUsersByFamilyId(familyId);
-        for (UserDTO user : userFamilies) {
-            List<Schedule> userSchedules = scheduleRepository.findSchedulesByFamilyIdAndUserIdOnly(
-                    familyId, user.getUserId(), localDate);
-            scheduleDTOList.addAll(userSchedules.stream()
-                    .map(ScheduleDTO::new)
-                    .collect(Collectors.toList()));
-        }
-
-        return Optional.of(scheduleDTOList);
+                .collect(Collectors.toList());
     }
 
     /**
-     * 사용자 개인 일정 조회
+     * 가족 ID + 사용자 ID로 개인 일정 조회
      */
-    public Optional<List<ScheduleDTO>> getSchedulesForUserAndDate(UUID familyId, Long userId, String date) {
-        LocalDate localDate = LocalDate.parse(date);
-
-        if (!userRepository.existsById(userId)) {
-            throw new RuntimeException("사용자를 찾을 수 없습니다.");
-        }
-
-        List<Schedule> schedules = scheduleRepository.findSchedulesByFamilyIdAndUserIdAndDate(
-                familyId, userId, localDate);
-
-        List<ScheduleDTO> dtoList = schedules.stream()
+    public List<ScheduleDTO> getSchedulesByFamilyIdAndUserId(UUID familyId, Long userId) {
+        List<Schedule> schedules = scheduleRepository.findByFamily_FamilyIdAndUser_UserId(familyId, userId);
+        return schedules.stream()
                 .map(ScheduleDTO::new)
                 .collect(Collectors.toList());
-
-        return Optional.of(dtoList);
     }
 
     /**
@@ -78,31 +48,26 @@ public class ScheduleService {
      */
     @Transactional
     public UUID addSchedule(ScheduleDTO dto) {
+        // 1. 사용자 조회
         User user = userRepository.findById(dto.getUserId())
-                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
+                .orElseThrow(() -> new RuntimeException("작성자(userId)를 찾을 수 없습니다."));
 
+        // 2. 가족 조회
         Family family = familyRepository.findById(dto.getFamilyId())
-                .orElseThrow(() -> new RuntimeException("가족 정보를 찾을 수 없습니다."));
+                .orElseThrow(() -> new RuntimeException("가족(familyId)를 찾을 수 없습니다."));
 
+        // 3. Schedule 엔티티 생성 및 매핑
         Schedule schedule = new Schedule();
         schedule.setScheduleId(UUID.randomUUID());
         schedule.setTitle(dto.getTitle());
         schedule.setMemo(dto.getMemo());
-        schedule.setPersonal(dto.isPersonal());
         schedule.setDate(dto.getDate());
         schedule.setUser(user);
         schedule.setFamily(family);
 
+        // 4. 저장 및 ID 반환
         scheduleRepository.save(schedule);
         return schedule.getScheduleId();
-    }
-
-    /**
-     * 일정 삭제
-     */
-    @Transactional
-    public void removeSchedule(UUID scheduleId) {
-        scheduleRepository.deleteById(scheduleId);
     }
 
     /**
@@ -115,10 +80,16 @@ public class ScheduleService {
 
         schedule.setTitle(dto.getTitle());
         schedule.setMemo(dto.getMemo());
-        schedule.setPersonal(dto.isPersonal());
         schedule.setDate(dto.getDate());
 
-        scheduleRepository.save(schedule);
         return schedule.getScheduleId();
+    }
+
+    /**
+     * 일정 삭제
+     */
+    @Transactional
+    public void removeSchedule(UUID scheduleId) {
+        scheduleRepository.deleteById(scheduleId);
     }
 }

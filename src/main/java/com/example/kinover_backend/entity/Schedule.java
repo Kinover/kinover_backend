@@ -17,29 +17,23 @@ public class Schedule {
     @GeneratedValue
     private UUID scheduleId;
 
-    @Column(columnDefinition = "VARCHAR(255)")
+    @Column(nullable = false, length = 255)
     private String title;
 
-    @Column(columnDefinition = "VARCHAR(1000)")
+    @Column(length = 1000)
     private String memo;
 
-    @Column(columnDefinition = "boolean")
-    private boolean isPersonal;
-
-    @Column(columnDefinition = "DATE")
+    @Column(nullable = false)
     private LocalDate date;
 
-    @ManyToOne
-    @JoinColumn(name = "userId", nullable = true)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @ManyToOne
-    @JoinColumn(name = "familyId", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "family_id", nullable = false)
     private Family family;
 
-    /**
-     * 낙관적 락을 위한 버전 필드
-     */
     @Version
     private Long version;
 }
