@@ -38,5 +38,6 @@ public class Schedule {
     private Family family;
 
     @Version
-    private Long version;
+    @Column(nullable = false)
+    private Long version = 0L;  // ← 이 줄을 추가
 }
