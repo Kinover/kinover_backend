@@ -12,6 +12,7 @@ import java.util.UUID;
 @Setter
 @Entity
 public class Schedule {
+
     @Id
     @GeneratedValue
     private UUID scheduleId;
@@ -36,6 +37,9 @@ public class Schedule {
     @JoinColumn(name = "familyId", nullable = false)
     private Family family;
 
-
-
+    /**
+     * 낙관적 락을 위한 버전 필드
+     */
+    @Version
+    private Long version;
 }
