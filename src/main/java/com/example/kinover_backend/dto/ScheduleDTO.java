@@ -19,6 +19,7 @@ public class ScheduleDTO {
     private String title;
     private String memo;
     private LocalDate date;
+    private boolean isPersonal;
     private Long userId;
     private UUID familyId;
 
@@ -28,6 +29,7 @@ public class ScheduleDTO {
         this.title = schedule.getTitle();
         this.memo = schedule.getMemo();
         this.date = schedule.getDate();
+        this.isPersonal = schedule.isPersonal();
 
         if (schedule.getUser() != null) {
             this.userId = schedule.getUser().getUserId();
