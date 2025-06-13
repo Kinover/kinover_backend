@@ -38,8 +38,5 @@ public class ScheduleDTO {
         if (schedule.getFamily() != null) {
             this.familyId = schedule.getFamily().getFamilyId();
         }
-        if (schedule.getVersion() == null) {
-            schedule.setVersion(0L);  // ← 수동 초기화
-        }
     }
 }

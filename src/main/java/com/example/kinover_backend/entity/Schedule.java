@@ -37,7 +37,4 @@ public class Schedule {
     @JoinColumn(name = "family_id", nullable = false)
     private Family family;
 
-    @Version
-    @Column(nullable = false)
-    private Long version = 0L;  // ← 이 줄을 추가
 }
