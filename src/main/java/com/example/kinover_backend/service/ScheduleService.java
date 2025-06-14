@@ -58,7 +58,6 @@ public class ScheduleService {
 
         // 3. Schedule 엔티티 생성 및 매핑
         Schedule schedule = new Schedule();
-        schedule.setScheduleId(UUID.randomUUID());
         schedule.setTitle(dto.getTitle());
         schedule.setMemo(dto.getMemo());
         schedule.setDate(dto.getDate());
