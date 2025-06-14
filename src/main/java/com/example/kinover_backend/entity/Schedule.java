@@ -27,7 +27,7 @@ public class Schedule {
     private LocalDate date;
 
     @Column(nullable = false)
-    private boolean isPersonal;
+    private boolean Personal;
 
     @ManyToOne(optional = true, fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", referencedColumnName = "userId")

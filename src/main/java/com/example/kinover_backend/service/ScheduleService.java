@@ -59,7 +59,9 @@ public class ScheduleService {
             if (dto.getUserId() == null) {
                 throw new IllegalArgumentException("Personal schedule must include a userId.");
             }
-            userRepository.findById(dto.getUserId()).ifPresent(schedule::setUser);
+            User user = userRepository.findById(dto.getUserId())
+                .orElseThrow(() -> new RuntimeException("작성자(userId)를 찾을 수 없습니다."));
+            schedule.setUser(user);
         } else {
             schedule.setUser(null); // 공동일정일 경우 user 없음
         }
