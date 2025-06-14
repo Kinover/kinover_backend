@@ -68,10 +68,12 @@ jobs:
             if lsof -i:9090 -t >/dev/null; then
               PID=$(lsof -i:9090 -t)
               echo "Killing process on port 9090: $PID"
-              kill $PID
+              kill -9 $PID
             else
               echo "No process on port 9090"
             fi
+
+            sleep 1
 
             echo "Starting application"
             JAR_NAME=$(ls | grep -v plain.jar | grep '.jar$' | head -n 1)

@@ -17,7 +17,7 @@ public interface ScheduleRepository extends JpaRepository<Schedule, UUID> {
     /**
      * 특정 가족 + 특정 사용자에 대한 일정 조회
      */
-    List<Schedule> findByFamily_FamilyIdAndUser_UserId(UUID familyId, Long userId);\
+    List<Schedule> findByFamily_FamilyIdAndUser_UserId(UUID familyId, Long userId);
 
     List<Schedule> findByFamily_FamilyIdAndDate(UUID familyId, LocalDate date);
 
