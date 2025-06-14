@@ -48,21 +48,26 @@ public class ScheduleService {
      */
     @Transactional
     public UUID addSchedule(ScheduleDTO dto) {
-        // 1. 사용자 조회
-        User user = userRepository.findById(dto.getUserId())
-                .orElseThrow(() -> new RuntimeException("작성자(userId)를 찾을 수 없습니다."));
 
-        // 2. 가족 조회
+        // 가족 조회
         Family family = familyRepository.findById(dto.getFamilyId())
                 .orElseThrow(() -> new RuntimeException("가족(familyId)를 찾을 수 없습니다."));
 
-        // 3. Schedule 엔티티 생성 및 매핑
+        // Schedule 엔티티 생성 및 매핑
         Schedule schedule = new Schedule();
+        if (dto.isPersonal()) {
+            if (dto.getUserId() == null) {
+                throw new IllegalArgumentException("Personal schedule must include a userId.");
+            }
+            userRepository.findById(dto.getUserId()).ifPresent(schedule::setUser);
+        } else {
+            schedule.setUser(null); // 공동일정일 경우 user 없음
+        }
+
         schedule.setTitle(dto.getTitle());
         schedule.setMemo(dto.getMemo());
         schedule.setDate(dto.getDate());
         schedule.setPersonal(dto.isPersonal());
-        schedule.setUser(user);
         schedule.setFamily(family);
 
         // 4. 저장 및 ID 반환
