@@ -10,6 +10,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -23,29 +25,14 @@ public class ScheduleController {
 
     private final ScheduleService scheduleService;
 
-    @Operation(summary = "가족 전체 일정 조회", description = "특정 가족의 모든 일정을 조회합니다.")
+    @Operation(summary = "일정 조회", description = "일정을 조회합니다.")
     @ApiResponse(responseCode = "200", description = "일정 목록 반환 성공",
             content = @Content(array = @ArraySchema(schema = @Schema(implementation = ScheduleDTO.class))))
-    @GetMapping("/get/{familyId}")
-    public List<ScheduleDTO> getSchedulesByFamilyId(
-            @Parameter(description = "가족 ID", required = true)
-            @PathVariable UUID familyId) {
-
-        return scheduleService.getSchedulesByFamilyId(familyId);
-    }
-
-    @Operation(summary = "개인 일정 조회", description = "가족 ID와 사용자 ID로 특정 사용자의 일정을 조회합니다.")
-    @ApiResponse(responseCode = "200", description = "일정 목록 반환 성공",
-            content = @Content(array = @ArraySchema(schema = @Schema(implementation = ScheduleDTO.class))))
-    @GetMapping("/get/{familyId}/{userId}")
-    public List<ScheduleDTO> getSchedulesByUserId(
-            @Parameter(description = "가족 ID", required = true)
-            @PathVariable UUID familyId,
-            @Parameter(description = "사용자 ID", required = true)
-            @PathVariable Long userId) {
-
-        return scheduleService.getSchedulesByFamilyIdAndUserId(familyId, userId);
-    }
+    @PostMapping("/get")
+        public ResponseEntity<List<ScheduleDTO>> getSchedules(@RequestBody ScheduleDTO requestDTO) {
+        List<ScheduleDTO> schedules = scheduleService.getSchedulesByFilter(requestDTO);
+        return ResponseEntity.ok(schedules);
+        }
 
     @Operation(summary = "일정 추가", description = "새로운 일정을 추가합니다.")
     @ApiResponse(responseCode = "200", description = "일정 생성 성공",

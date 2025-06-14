@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.time.LocalDate;
 
 @Service
 @RequiredArgsConstructor
@@ -23,24 +24,21 @@ public class ScheduleService {
     private final UserRepository userRepository;
     private final FamilyRepository familyRepository;
 
-    /**
-     * 가족 ID로 전체 일정 조회
-     */
-    public List<ScheduleDTO> getSchedulesByFamilyId(UUID familyId) {
-        List<Schedule> schedules = scheduleRepository.findByFamily_FamilyId(familyId);
-        return schedules.stream()
-                .map(ScheduleDTO::new)
-                .collect(Collectors.toList());
-    }
+    @Transactional(readOnly = true)
+    public List<ScheduleDTO> getSchedulesByFilter(ScheduleDTO dto) {
+        UUID familyId = dto.getFamilyId();
+        LocalDate date = dto.getDate();
+        Long userId = dto.getUserId();
 
-    /**
-     * 가족 ID + 사용자 ID로 개인 일정 조회
-     */
-    public List<ScheduleDTO> getSchedulesByFamilyIdAndUserId(UUID familyId, Long userId) {
-        List<Schedule> schedules = scheduleRepository.findByFamily_FamilyIdAndUser_UserId(familyId, userId);
-        return schedules.stream()
-                .map(ScheduleDTO::new)
-                .collect(Collectors.toList());
+        List<Schedule> schedules;
+
+        if (userId != null) {
+            schedules = scheduleRepository.findByFamily_FamilyIdAndUser_UserIdAndDate(familyId, userId, date);
+        } else {
+            schedules = scheduleRepository.findByFamily_FamilyIdAndDate(familyId, date);
+        }
+
+        return schedules.stream().map(ScheduleDTO::new).toList();
     }
 
     /**
