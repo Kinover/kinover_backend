@@ -131,10 +131,25 @@ public class ChatRoomService {
                     });
 
             // 채팅방 멤버 이미지 리스트
-            List<String> images = userChatRoomRepository.findUsersByChatRoomId(chatRoom.getChatRoomId()).stream()
-                    .map(User::getImage) // 유저 엔티티에 getImage() 메서드 있어야 함
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.toList());
+            List<String> images;
+            if (isKinoRoom(chatRoom.getChatRoomId())) {
+                String suffix;
+                ChatBotPersonality personality = chatRoom.getPersonality();
+                if (personality == ChatBotPersonality.SERENE) {
+                    suffix = "blueKino";
+                } else if (personality == ChatBotPersonality.SNUGGLE) {
+                    suffix = "pinkKino";
+                } else {
+                    suffix = "yellowKino"; // 기본값 SUNNY or null
+                }
+                String kinoImageUrl = cloudFrontDomain + suffix;
+                images = List.of(kinoImageUrl);
+            } else {
+                images = userChatRoomRepository.findUsersByChatRoomId(chatRoom.getChatRoomId()).stream()
+                        .map(User::getImage)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toList());
+            }
             dto.setMemberImages(images);
 
             return dto;
@@ -231,6 +246,8 @@ public class ChatRoomService {
 
         ChatRoom chatRoom = optionalChatRoom.get();
         if (isKinoRoom(chatRoom.getChatRoomId())) return false;
+
+        messageRepository.deleteByChatRoom(chatRoom);
 
         chatRoom.setPersonality(personality);
         chatRoomRepository.save(chatRoom);
