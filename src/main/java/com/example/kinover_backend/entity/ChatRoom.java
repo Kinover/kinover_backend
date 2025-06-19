@@ -1,5 +1,6 @@
 package com.example.kinover_backend.entity;
 
+import com.example.kinover_backend.enums.ChatBotPersonality;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -23,6 +24,10 @@ public class ChatRoom {
     @Column(columnDefinition = "BOOLEAN DEFAULT FALSE")
     private boolean isKino; // RoomType 대신 kino 여부만 체크
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = true)
+    private ChatBotPersonality personality;
+
     @Column(columnDefinition = "VARCHAR(55)")
     private String familyType;
 
@@ -41,4 +46,5 @@ public class ChatRoom {
 
     @OneToMany(mappedBy = "chatRoom", cascade = CascadeType.ALL)
     private List<Message> messages = new ArrayList<>();
+
 }

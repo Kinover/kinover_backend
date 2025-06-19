@@ -23,6 +23,7 @@ public class ScheduleDTO {
     private LocalDate date;
     private boolean Personal;
     private Long userId;
+    private String userName;
     private UUID familyId;
 
     // 엔티티 → DTO 변환용 생성자
@@ -35,6 +36,7 @@ public class ScheduleDTO {
 
         if (schedule.getUser() != null) {
             this.userId = schedule.getUser().getUserId();
+            this.userName = schedule.getUser().getName();
         }
 
         if (schedule.getFamily() != null) {

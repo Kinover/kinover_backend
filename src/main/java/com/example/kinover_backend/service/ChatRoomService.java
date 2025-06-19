@@ -7,6 +7,7 @@ import com.example.kinover_backend.entity.ChatRoom;
 import com.example.kinover_backend.entity.Message;
 import com.example.kinover_backend.entity.User;
 import com.example.kinover_backend.entity.UserChatRoom;
+import com.example.kinover_backend.enums.ChatBotPersonality;
 import com.example.kinover_backend.enums.MessageType;
 import com.example.kinover_backend.repository.ChatRoomRepository;
 import com.example.kinover_backend.repository.MessageRepository;
@@ -223,5 +224,17 @@ public class ChatRoomService {
         }
     }
 
+    @Transactional
+    public boolean updateChatBotPersonality(UUID chatRoomId, ChatBotPersonality personality) {
+        Optional<ChatRoom> optionalChatRoom = chatRoomRepository.findById(chatRoomId);
+        if (optionalChatRoom.isEmpty()) return false;
+
+        ChatRoom chatRoom = optionalChatRoom.get();
+        if (isKinoRoom(chatRoom.getChatRoomId())) return false;
+
+        chatRoom.setPersonality(personality);
+        chatRoomRepository.save(chatRoom);
+        return true;
+    }
 
 }

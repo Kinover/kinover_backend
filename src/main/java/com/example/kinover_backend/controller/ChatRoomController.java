@@ -2,6 +2,7 @@ package com.example.kinover_backend.controller;
 
 import com.example.kinover_backend.dto.ChatRoomDTO;
 import com.example.kinover_backend.dto.MessageDTO;
+import com.example.kinover_backend.dto.UpdatePersonalityRequestDTO;
 import com.example.kinover_backend.dto.UserDTO;
 import com.example.kinover_backend.entity.Message;
 import com.example.kinover_backend.service.ChatRoomService;
@@ -147,5 +148,18 @@ public class ChatRoomController {
 
         chatRoomService.leaveChatRoom(chatRoomId, userId);
         return ResponseEntity.ok().build();
+    }
+
+    @PatchMapping("/{chatRoomId}/personality")
+    public ResponseEntity<String> updateChatBotPersonality(
+            @PathVariable UUID chatRoomId,
+            @RequestBody UpdatePersonalityRequestDTO requestDTO
+    ) {
+        boolean success = chatRoomService.updateChatBotPersonality(chatRoomId, requestDTO.getPersonality());
+        if (success) {
+            return ResponseEntity.ok("ChatBot personality updated successfully.");
+        } else {
+            return ResponseEntity.badRequest().body("Failed to update personality. Check if it's a Kino room.");
+        }
     }
 }
