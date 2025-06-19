@@ -136,11 +136,11 @@ public class ChatRoomService {
                 String suffix;
                 ChatBotPersonality personality = chatRoom.getPersonality();
                 if (personality == ChatBotPersonality.SERENE) {
-                    suffix = "blueKino";
+                    suffix = "blueKino.png";
                 } else if (personality == ChatBotPersonality.SNUGGLE) {
-                    suffix = "pinkKino";
+                    suffix = "pinkKino.png";
                 } else {
-                    suffix = "yellowKino"; // 기본값 SUNNY or null
+                    suffix = "yellowKino.png"; // 기본값 SUNNY or null
                 }
                 String kinoImageUrl = cloudFrontDomain + suffix;
                 images = List.of(kinoImageUrl);
