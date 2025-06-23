@@ -100,28 +100,17 @@ public class ScheduleService {
         scheduleRepository.deleteById(scheduleId);
     }
 
-    public Map<Integer, Integer> getScheduleCountByDate(UUID familyId, int year, int month, Long userId) {
+    public Map<Integer, Long> getScheduleCountPerDay(UUID familyId, int year, int month) {
         LocalDate startDate = LocalDate.of(year, month, 1);
         LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
 
-        List<Schedule> schedules;
-        if (userId != null) {
-            schedules = scheduleRepository.findByFamilyAndUserAndDateBetween(familyId, userId, startDate, endDate);
-        } else {
-            schedules = scheduleRepository.findByFamilyAndDateBetween(familyId, startDate, endDate);
-        }
+        List<Schedule> schedules = scheduleRepository.findByFamily_FamilyIdAndDateBetween(familyId, startDate, endDate);
 
-        // 날짜별 집계
-        Map<Integer, Integer> countByDay = new HashMap<>();
-        for (int day = 1; day <= endDate.getDayOfMonth(); day++) {
-            countByDay.put(day, 0);
-        }
-        for (Schedule schedule : schedules) {
-            int day = schedule.getDate().getDayOfMonth();
-            countByDay.put(day, countByDay.get(day) + 1);
-        }
-
-        return countByDay;
+        return schedules.stream()
+            .collect(Collectors.groupingBy(
+                schedule -> schedule.getDate().getDayOfMonth(),
+                Collectors.counting()
+            ));
     }
 
 }
