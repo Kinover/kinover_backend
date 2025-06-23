@@ -100,7 +100,7 @@ public class ScheduleService {
         scheduleRepository.deleteById(scheduleId);
     }
 
-    public Map<Integer, Long> getScheduleCountPerDay(UUID familyId, int year, int month) {
+    public Map<LocalDate, Long> getScheduleCountPerDay(UUID familyId, int year, int month) {
         LocalDate startDate = LocalDate.of(year, month, 1);
         LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
 
@@ -108,9 +108,10 @@ public class ScheduleService {
 
         return schedules.stream()
             .collect(Collectors.groupingBy(
-                schedule -> schedule.getDate().getDayOfMonth(),
+                Schedule::getDate,         // 날짜 전체를 key로 사용
                 Collectors.counting()
             ));
     }
+
 
 }
