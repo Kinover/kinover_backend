@@ -23,4 +23,8 @@ public interface ScheduleRepository extends JpaRepository<Schedule, UUID> {
 
     List<Schedule> findByFamily_FamilyIdAndUser_UserIdAndDate(UUID familyId, Long userId, LocalDate date);
 
+    List<Schedule> findByFamilyAndDateBetween(UUID familyId, LocalDate start, LocalDate end);
+
+    List<Schedule> findByFamilyAndUserAndDateBetween(UUID familyId, Long userId, LocalDate start, LocalDate end);
+
 }

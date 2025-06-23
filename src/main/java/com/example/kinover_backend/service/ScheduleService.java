@@ -11,7 +11,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.time.LocalDate;
@@ -97,4 +99,29 @@ public class ScheduleService {
     public void removeSchedule(UUID scheduleId) {
         scheduleRepository.deleteById(scheduleId);
     }
+
+    public Map<Integer, Integer> getScheduleCountByDate(UUID familyId, int year, int month, Long userId) {
+        LocalDate startDate = LocalDate.of(year, month, 1);
+        LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
+
+        List<Schedule> schedules;
+        if (userId != null) {
+            schedules = scheduleRepository.findByFamilyAndUserAndDateBetween(familyId, userId, startDate, endDate);
+        } else {
+            schedules = scheduleRepository.findByFamilyAndDateBetween(familyId, startDate, endDate);
+        }
+
+        // 날짜별 집계
+        Map<Integer, Integer> countByDay = new HashMap<>();
+        for (int day = 1; day <= endDate.getDayOfMonth(); day++) {
+            countByDay.put(day, 0);
+        }
+        for (Schedule schedule : schedules) {
+            int day = schedule.getDate().getDayOfMonth();
+            countByDay.put(day, countByDay.get(day) + 1);
+        }
+
+        return countByDay;
+    }
+
 }

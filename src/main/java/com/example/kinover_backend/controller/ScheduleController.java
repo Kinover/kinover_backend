@@ -15,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Tag(name = "일정 API", description = "일정 관련 API를 제공합니다.")
@@ -64,4 +65,34 @@ public class ScheduleController {
 
         scheduleService.removeSchedule(scheduleId);
     }
+
+    @Operation(
+        summary = "특정 월의 날짜별 일정 개수 조회",
+        description = "가족 ID와 연도, 월을 기준으로 해당 월의 날짜별 일정 개수를 반환합니다. userId를 전달하면 해당 사용자 일정만 집계합니다.",
+        responses = {
+            @ApiResponse(
+                responseCode = "200",
+                description = "날짜별 일정 개수 조회 성공",
+                content = @Content(schema = @Schema(implementation = Map.class))
+            )
+        }
+    )
+    @GetMapping("/countByDate")
+    public ResponseEntity<Map<Integer, Integer>> getScheduleCountByDate(
+            @Parameter(description = "가족 ID", required = true)
+            @RequestParam UUID familyId,
+
+            @Parameter(description = "연도 (예: 2025)", required = true)
+            @RequestParam int year,
+
+            @Parameter(description = "월 (1~12)", required = true)
+            @RequestParam int month,
+
+            @Parameter(description = "사용자 ID (선택)", required = false)
+            @RequestParam(required = false) Long userId
+    ) {
+        Map<Integer, Integer> result = scheduleService.getScheduleCountByDate(familyId, year, month, userId);
+        return ResponseEntity.ok(result);
+    }
+
 }
