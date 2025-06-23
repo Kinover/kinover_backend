@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -66,16 +67,19 @@ public class ScheduleController {
         scheduleService.removeSchedule(scheduleId);
     }
 
-    @Operation(summary = "Get monthly schedule count",
-               description = "가족 ID와 연도, 월을 기반으로 해당 월의 각 날짜별 일정 개수를 반환합니다.")
+    @Operation(
+        summary = "Get monthly schedule count",
+        description = "가족 ID와 연도, 월을 기반으로 해당 월의 각 날짜(LocalDate 형식)의 일정 개수를 반환합니다."
+    )
     @GetMapping("/count-per-day")
-    public ResponseEntity<Map<Integer, Long>> getScheduleCountPerDay(
+    public ResponseEntity<Map<LocalDate, Long>> getScheduleCountPerDay(
             @RequestParam UUID familyId,
             @RequestParam int year,
             @RequestParam int month) {
 
-        Map<Integer, Long> countPerDay = scheduleService.getScheduleCountPerDay(familyId, year, month);
+        Map<LocalDate, Long> countPerDay = scheduleService.getScheduleCountPerDay(familyId, year, month);
         return ResponseEntity.ok(countPerDay);
     }
+
 
 }
