@@ -240,18 +240,27 @@ public class ChatRoomService {
     }
 
     @Transactional
-    public boolean updateChatBotPersonality(UUID chatRoomId, ChatBotPersonality personality) {
-        Optional<ChatRoom> optionalChatRoom = chatRoomRepository.findById(chatRoomId);
-        if (optionalChatRoom.isEmpty()) return false;
-
-        ChatRoom chatRoom = optionalChatRoom.get();
-        if (isKinoRoom(chatRoom.getChatRoomId())) return false;
-
-        messageRepository.deleteByChatRoom(chatRoom);
-
-        chatRoom.setPersonality(personality);
-        chatRoomRepository.save(chatRoom);
-        return true;
+public boolean updateChatBotPersonality(UUID chatRoomId, ChatBotPersonality personality) {
+    Optional<ChatRoom> optionalChatRoom = chatRoomRepository.findById(chatRoomId);
+    if (optionalChatRoom.isEmpty()) {
+        System.out.println("[updateChatBotPersonality] ChatRoom not found: " + chatRoomId);
+        return false;
     }
+
+    ChatRoom chatRoom = optionalChatRoom.get();
+    if (!Boolean.TRUE.equals(chatRoom.getIsKino())) {
+        System.out.println("[updateChatBotPersonality] Not a Kino room: " + chatRoomId);
+        return false;
+    }
+
+    System.out.println("[updateChatBotPersonality] Deleting messages for chatRoomId: " + chatRoomId);
+    messageRepository.deleteByChatRoom(chatRoom);
+
+    chatRoom.setPersonality(personality);
+    chatRoomRepository.save(chatRoom);
+    System.out.println("[updateChatBotPersonality] Personality updated to: " + personality);
+
+    return true;
+}
 
 }
