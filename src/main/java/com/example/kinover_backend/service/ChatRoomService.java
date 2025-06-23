@@ -248,7 +248,7 @@ public boolean updateChatBotPersonality(UUID chatRoomId, ChatBotPersonality pers
     }
 
     ChatRoom chatRoom = optionalChatRoom.get();
-    if (!Boolean.TRUE.equals(chatRoom.getIsKino())) {
+    if (!Boolean.TRUE.equals(chatRoom.isKino())) {
         System.out.println("[updateChatBotPersonality] Not a Kino room: " + chatRoomId);
         return false;
     }
