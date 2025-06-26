@@ -3,6 +3,7 @@ package com.example.kinover_backend.controller;
 import com.example.kinover_backend.dto.PostDTO;
 import com.example.kinover_backend.service.PostService;
 import com.example.kinover_backend.JwtUtil;
+import com.example.kinover_backend.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,6 +23,7 @@ import java.util.Map;
 public class PostController {
 
     private final PostService postService;
+    private final UserService userService;
     private final JwtUtil jwtUtil;
 
     @Operation(
@@ -89,6 +91,17 @@ public class PostController {
 
         List<PostDTO> posts = postService.getPostsByFamilyAndCategory(userId, familyId, categoryId);
         return ResponseEntity.ok(posts);
+    }
+
+    @PatchMapping("/notification/post")
+    @Operation(summary = "게시글 알림 ON/OFF", description = "userId와 상태(true/false)를 전달하여 게시글 알림을 켜거나 끕니다.")
+    public ResponseEntity<String> updatePostNotificationSetting(
+            @RequestParam Long userId,
+            @RequestParam boolean isOn
+    ) {
+        boolean success = userService.updatePostNotificationSetting(userId, isOn);
+        if (success) return ResponseEntity.ok("Post notification setting updated.");
+        else return ResponseEntity.badRequest().body("Invalid userId");
     }
 
 }

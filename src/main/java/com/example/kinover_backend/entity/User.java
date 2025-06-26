@@ -76,4 +76,7 @@ public class User {
 
     @Column(nullable = false)
     private Boolean isCommentNotificationOn = true;
+
+    @Column(nullable = false)
+    private Boolean isChatNotificationOn = true;
 }

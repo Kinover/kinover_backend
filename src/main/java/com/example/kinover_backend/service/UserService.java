@@ -284,6 +284,37 @@ public class UserService {
                 .build();
     }
 
+    @Transactional
+    public boolean updatePostNotificationSetting(Long userId, boolean isOn) {
+        Optional<User> optionalUser = userRepository.findById(userId);
+        if (optionalUser.isEmpty()) return false;
 
+        User user = optionalUser.get();
+        user.setIsPostNotificationOn(isOn);
+        userRepository.save(user);
+        return true;
+    }
+
+    @Transactional
+    public boolean updateCommentNotificationSetting(Long userId, boolean isOn) {
+        Optional<User> optionalUser = userRepository.findById(userId);
+        if (optionalUser.isEmpty()) return false;
+
+        User user = optionalUser.get();
+        user.setIsCommentNotificationOn(isOn);
+        userRepository.save(user);
+        return true;
+    }
+
+    @Transactional
+    public boolean updateChatNotificationSetting(Long userId, boolean isOn) {
+        Optional<User> optionalUser = userRepository.findById(userId);
+        if (optionalUser.isEmpty()) return false;
+
+        User user = optionalUser.get();
+        user.setIsChatNotificationOn(isOn);
+        userRepository.save(user);
+        return true;
+    }
 
 }

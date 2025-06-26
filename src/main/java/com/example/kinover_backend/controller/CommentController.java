@@ -2,6 +2,8 @@ package com.example.kinover_backend.controller;
 
 import com.example.kinover_backend.dto.CommentDTO;
 import com.example.kinover_backend.service.CommentService;
+import com.example.kinover_backend.service.UserService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -19,6 +21,7 @@ import java.util.UUID;
 public class CommentController {
 
     private final CommentService commentService;
+    private final UserService userService;
     private final JwtUtil jwtUtil;
 
     @PostMapping
@@ -46,5 +49,16 @@ public class CommentController {
     public ResponseEntity<Void> deleteComment(@PathVariable UUID commentId) {
         commentService.deleteComment(commentId);
         return ResponseEntity.ok().build();
+    }
+
+    @PatchMapping("/notification/comment")
+    @Operation(summary = "댓글 알림 ON/OFF", description = "userId와 상태(true/false)를 전달하여 댓글 알림을 켜거나 끕니다.")
+    public ResponseEntity<String> updateCommentNotificationSetting(
+            @RequestParam Long userId,
+            @RequestParam boolean isOn
+    ) {
+        boolean success = userService.updateCommentNotificationSetting(userId, isOn);
+        if (success) return ResponseEntity.ok("Comment notification setting updated.");
+        else return ResponseEntity.badRequest().body("Invalid userId");
     }
 }

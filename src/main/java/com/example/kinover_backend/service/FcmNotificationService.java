@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.firebase.messaging.*;
 import com.google.firebase.messaging.Message;
 import com.google.firebase.messaging.Notification;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -28,12 +29,19 @@ public class FcmNotificationService {
 
     public boolean isChatRoomNotificationOn(Long userId, UUID chatRoomId) {
         User user = userRepository.findById(userId).orElseThrow();
+
+        // 유저 전체 채팅 알림 설정이 꺼져있으면 바로 false 반환
+        if (!Boolean.TRUE.equals(user.getIsChatNotificationOn())) {
+            return false;
+        }
+
         ChatRoom chatRoom = chatRoomRepository.findById(chatRoomId).orElseThrow();
 
         return chatRoomNotificationRepository.findByUserAndChatRoom(user, chatRoom)
                 .map(ChatRoomNotificationSetting::isNotificationOn)
                 .orElse(true); // 설정 없으면 알림 ON
     }
+
 
     public void sendChatNotification(Long userId, MessageDTO messageDTO) {
         User user = userRepository.findById(userId)
@@ -189,6 +197,27 @@ public class FcmNotificationService {
         return content.length() > 30 ? content.substring(0, 30) + "..." : content;
     }
 
+    @Transactional
+    public boolean updateChatRoomNotificationSetting(Long userId, UUID chatRoomId, boolean isOn) {
+        Optional<User> userOpt = userRepository.findById(userId);
+        Optional<ChatRoom> chatRoomOpt = chatRoomRepository.findById(chatRoomId);
+
+        if (userOpt.isEmpty() || chatRoomOpt.isEmpty()) return false;
+
+        User user = userOpt.get();
+        ChatRoom chatRoom = chatRoomOpt.get();
+
+        Optional<ChatRoomNotificationSetting> settingOpt =
+                chatRoomNotificationRepository.findByUserAndChatRoom(user, chatRoom);
+
+        if (settingOpt.isEmpty()) return false;
+
+        ChatRoomNotificationSetting setting = settingOpt.get();
+        setting.setNotificationOn(isOn);
+        chatRoomNotificationRepository.save(setting);
+
+        return true;
+    }
 
 
 }

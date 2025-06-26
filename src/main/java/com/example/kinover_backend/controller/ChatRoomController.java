@@ -8,6 +8,7 @@ import com.example.kinover_backend.entity.Message;
 import com.example.kinover_backend.service.ChatRoomService;
 import com.example.kinover_backend.service.MessageService;
 import com.example.kinover_backend.JwtUtil;
+import com.example.kinover_backend.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -31,11 +32,13 @@ public class ChatRoomController {
 
     private final ChatRoomService chatRoomService;
     private final MessageService messageService;
+    private final UserService userService;
     private final JwtUtil jwtUtil;
 
-    public ChatRoomController(ChatRoomService chatRoomService, MessageService messageService, JwtUtil jwtUtil) {
+    public ChatRoomController(ChatRoomService chatRoomService, MessageService messageService, UserService userService, JwtUtil jwtUtil) {
         this.chatRoomService = chatRoomService;
         this.messageService = messageService;
+        this.userService = userService;
         this.jwtUtil = jwtUtil;
     }
 
@@ -162,4 +165,16 @@ public class ChatRoomController {
             return ResponseEntity.badRequest().body("Failed to update personality. Check if it's a Kino room.");
         }
     }
+
+    @PatchMapping("/notification/chat")
+    @Operation(summary = "전체 채팅 알림 ON/OFF", description = "userId와 상태(true/false)를 전달하여 모든 채팅방의 알림을 일괄 설정합니다.")
+    public ResponseEntity<String> updateUserChatNotificationSetting(
+            @RequestParam Long userId,
+            @RequestParam boolean isOn
+    ) {
+        boolean success = userService.updateChatNotificationSetting(userId, isOn);
+        if (success) return ResponseEntity.ok("User-level chat notification setting updated.");
+        else return ResponseEntity.badRequest().body("Invalid userId");
+    }
+
 }
