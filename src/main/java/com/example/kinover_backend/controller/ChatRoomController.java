@@ -166,15 +166,41 @@ public class ChatRoomController {
         }
     }
 
-    @PatchMapping("/notification/chat")
-    @Operation(summary = "전체 채팅 알림 ON/OFF", description = "userId와 상태(true/false)를 전달하여 모든 채팅방의 알림을 일괄 설정합니다.")
+    // 유저 전체 알림 설정 (UserService 사용)
+    @PatchMapping("/notification/user")
+    @Operation(
+            summary = "유저 전체 채팅 알림 ON/OFF",
+            description = "유저 ID와 알림 상태(boolean)를 받아서, 해당 유저의 모든 채팅방에 대한 알림을 일괄적으로 설정합니다. " +
+                    "이 설정이 false일 경우, 채팅방 개별 설정과 무관하게 모든 알림이 전송되지 않습니다."
+    )
     public ResponseEntity<String> updateUserChatNotificationSetting(
             @RequestParam Long userId,
             @RequestParam boolean isOn
     ) {
         boolean success = userService.updateChatNotificationSetting(userId, isOn);
-        if (success) return ResponseEntity.ok("User-level chat notification setting updated.");
-        else return ResponseEntity.badRequest().body("Invalid userId");
+        return success
+                ? ResponseEntity.ok("User-wide chat notification setting updated.")
+                : ResponseEntity.badRequest().body("Invalid userId");
     }
+
+    // 특정 채팅방 알림 설정 (ChatRoomService 사용)
+    @PatchMapping("/notification/chatroom")
+    @Operation(
+            summary = "특정 채팅방 알림 ON/OFF",
+            description = "userId, chatRoomId, 알림 상태를 입력받아 해당 유저의 특정 채팅방 알림을 ON 또는 OFF로 설정합니다. " +
+                    "이 설정은 유저 전체 알림 설정이 true인 경우에만 유효합니다."
+    )
+    public ResponseEntity<String> updateChatRoomNotificationSetting(
+            @RequestParam Long userId,
+            @RequestParam UUID chatRoomId,
+            @RequestParam boolean isOn
+    ) {
+        boolean success = chatRoomService.updateChatRoomNotificationSetting(userId, chatRoomId, isOn);
+        return success
+                ? ResponseEntity.ok("Chat room-specific notification setting updated.")
+                : ResponseEntity.badRequest().body("Invalid userId or chatRoomId");
+    }
+
+
 
 }

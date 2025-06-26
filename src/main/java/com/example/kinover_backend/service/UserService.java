@@ -308,13 +308,14 @@ public class UserService {
 
     @Transactional
     public boolean updateChatNotificationSetting(Long userId, boolean isOn) {
-        Optional<User> optionalUser = userRepository.findById(userId);
-        if (optionalUser.isEmpty()) return false;
+        Optional<User> userOpt = userRepository.findById(userId);
+        if (userOpt.isEmpty()) return false;
 
-        User user = optionalUser.get();
+        User user = userOpt.get();
         user.setIsChatNotificationOn(isOn);
         userRepository.save(user);
         return true;
     }
+
 
 }

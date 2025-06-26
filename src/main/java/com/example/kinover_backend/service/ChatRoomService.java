@@ -3,16 +3,10 @@ package com.example.kinover_backend.service;
 import com.example.kinover_backend.dto.ChatRoomDTO;
 import com.example.kinover_backend.dto.ChatRoomMapper;
 import com.example.kinover_backend.dto.UserDTO;
-import com.example.kinover_backend.entity.ChatRoom;
-import com.example.kinover_backend.entity.Message;
-import com.example.kinover_backend.entity.User;
-import com.example.kinover_backend.entity.UserChatRoom;
+import com.example.kinover_backend.entity.*;
 import com.example.kinover_backend.enums.ChatBotPersonality;
 import com.example.kinover_backend.enums.MessageType;
-import com.example.kinover_backend.repository.ChatRoomRepository;
-import com.example.kinover_backend.repository.MessageRepository;
-import com.example.kinover_backend.repository.UserChatRoomRepository;
-import com.example.kinover_backend.repository.UserRepository;
+import com.example.kinover_backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,6 +22,7 @@ public class ChatRoomService {
 
     private final ChatRoomRepository chatRoomRepository;
     private final UserChatRoomRepository userChatRoomRepository;
+    private final ChatRoomNotificationRepository chatRoomNotificationRepository;
     private final UserRepository userRepository;
     private final MessageRepository messageRepository;
     private final S3Service s3Service;
@@ -262,5 +257,27 @@ public boolean updateChatBotPersonality(UUID chatRoomId, ChatBotPersonality pers
 
     return true;
 }
+
+    @Transactional
+    public boolean updateChatRoomNotificationSetting(Long userId, UUID chatRoomId, boolean isOn) {
+        Optional<User> userOpt = userRepository.findById(userId);
+        Optional<ChatRoom> chatRoomOpt = chatRoomRepository.findById(chatRoomId);
+
+        if (userOpt.isEmpty() || chatRoomOpt.isEmpty()) return false;
+
+        User user = userOpt.get();
+        ChatRoom chatRoom = chatRoomOpt.get();
+
+        Optional<ChatRoomNotificationSetting> settingOpt =
+                chatRoomNotificationRepository.findByUserAndChatRoom(user, chatRoom);
+
+        if (settingOpt.isEmpty()) return false;
+
+        ChatRoomNotificationSetting setting = settingOpt.get();
+        setting.setNotificationOn(isOn);
+        chatRoomNotificationRepository.save(setting);
+        return true;
+    }
+
 
 }
