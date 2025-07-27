@@ -171,6 +171,13 @@ public class UserService {
             user.setTrait(userDTO.getTrait());
         }
 
+        if (userDTO.getEmotion() != null) {
+        if (user.getEmotion() == null || !user.getEmotion().equals(userDTO.getEmotion())) {
+            user.setEmotion(userDTO.getEmotion());
+            user.setEmotionUpdatedAt(LocalDateTime.now());
+        }
+    }
+
         User saved = userRepository.save(user);
         return new UserDTO(saved);
     }

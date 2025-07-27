@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
+import com.example.kinover_backend.enums.UserEmotion;
+
 @Getter
 @Setter
 @Entity
@@ -32,8 +34,10 @@ public class User {
     @Column(columnDefinition = "VARCHAR(255)")
     private String pwd;
 
-    @Column(columnDefinition = "VARCHAR(50)")
-    private String emotion;  // 오늘의 감정 상태
+    // 기존 String emotion 제거하고 아래로 교체
+    @Enumerated(EnumType.STRING)
+    @Column(length = 50)
+    private UserEmotion emotion;  // 오늘의 감정 상태
 
     @Column(nullable = false)
     private Boolean isOnline = false;  // 현재 접속 상태 (true/false)
@@ -79,4 +83,7 @@ public class User {
 
     @Column(nullable = false)
     private Boolean isChatNotificationOn = true;
+
+    @Column(columnDefinition = "TIMESTAMP")
+    private LocalDateTime emotionUpdatedAt;  // 감정을 마지막으로 수정한 시간
 }

@@ -1,11 +1,14 @@
 package com.example.kinover_backend.dto;
 
 import com.example.kinover_backend.entity.User;
+import com.example.kinover_backend.enums.UserEmotion;
+
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.webjars.NotFoundException;
 
+import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.Optional;
 
@@ -17,7 +20,8 @@ public class UserDTO {
     private String name;
     private Date birth;
     private String email;
-    private String emotion;
+    private UserEmotion emotion;
+    private LocalDateTime emotionUpdatedAt;
     private String image;
     private String phoneNumber;
     private String trait;
@@ -35,5 +39,6 @@ public class UserDTO {
         this.image = user.getImage();
         this.phoneNumber = user.getPhoneNumber();
         this.trait = user.getTrait();
+        this.emotionUpdatedAt = user.getEmotionUpdatedAt();
     }
 }
