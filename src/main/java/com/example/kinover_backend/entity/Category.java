@@ -14,7 +14,7 @@ import java.util.UUID;
 public class Category {
 
     @Id
-    @GeneratedValue(generator = "UUID")
+    //@GeneratedValue(generator = "UUID")
     private UUID categoryId;
 
     @ManyToOne
