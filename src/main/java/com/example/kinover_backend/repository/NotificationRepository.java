@@ -12,4 +12,9 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
 
     List<Notification> findByFamilyIdInOrderByCreatedAtDesc(List<UUID> familyIds);
 
+    void deleteByPost_PostId(UUID postId);
+    void deleteByComment_CommentId(UUID commentId);
+
+
+
 }
