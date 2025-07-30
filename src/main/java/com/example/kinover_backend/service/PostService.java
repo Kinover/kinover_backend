@@ -133,7 +133,7 @@ public class PostService {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("게시글 없음"));
 
-        notificationRepository.deleteByPost_PostId(postId);
+        notificationRepository.deleteByPostId(postId);
 
         // 1. S3 삭제용 key 추출
         List<String> s3Keys = post.getImages().stream()

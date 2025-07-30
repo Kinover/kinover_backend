@@ -82,7 +82,7 @@ public class CommentService {
 
         Post post = comment.getPost();
 
-        notificationRepository.deleteByComment_CommentId(commentId);
+        notificationRepository.deleteByCommentId(commentId);
 
         // 댓글 삭제
         commentRepository.delete(comment);
