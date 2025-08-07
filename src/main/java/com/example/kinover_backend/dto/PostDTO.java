@@ -32,6 +32,8 @@ public class PostDTO {
     private Date createdAt;
     private int commentCount;
 
+    private String categoryTitle; // 존재하지 않는 categoryId일 경우 사용할 title
+
     public static PostDTO from(Post post) {
         return PostDTO.builder()
                 .postId(post.getPostId())
