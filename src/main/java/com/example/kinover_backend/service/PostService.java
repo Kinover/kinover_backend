@@ -33,25 +33,36 @@ public class PostService {
 
     @Transactional
     public void createPost(PostDTO postDTO) {
-        // 1. 작성자 조회
+        if (postDTO == null) throw new IllegalArgumentException("postDTO is null");
+
+        // 1) 작성자/가족 조회
         User author = userRepository.findById(postDTO.getAuthorId())
                 .orElseThrow(() -> new RuntimeException("작성자 정보 없음"));
 
-        // 2. 가족 조회
         Family family = familyRepository.findFamilyById(postDTO.getFamilyId())
                 .orElseThrow(() -> new RuntimeException("가족 정보 없음"));
 
-        // 3. 카테고리 조회 (nullable)
-        Category category = categoryRepository.findById(postDTO.getCategoryId()).orElse(null);
-        if (category == null) {
-            category = new Category();
-            category.setCategoryId(postDTO.getCategoryId());
-            category.setTitle(postDTO.getCategoryTitle());  // ← 새 카테고리 이름 사용
-            category.setFamily(family);
-            categoryRepository.save(category);
+        // 2) 카테고리 해석: (ID 우선) 없고 title 있으면 생성, 둘 다 없으면 null
+        Category category = null;
+        UUID categoryId = postDTO.getCategoryId();
+        String categoryTitle = postDTO.getCategoryTitle();
+
+        if (categoryId != null) {
+            category = categoryRepository.findById(categoryId)
+                    .orElseThrow(() -> new RuntimeException("존재하지 않는 카테고리: " + categoryId));
+        } else if (categoryTitle != null && !categoryTitle.isBlank()) {
+            Category c = new Category();
+            // c.setCategoryId(...) 절대 금지 (@GeneratedValue 사용)
+            c.setTitle(categoryTitle);
+            c.setFamily(family);
+            category = categoryRepository.save(c);   // ← save 반환 객체는 즉시 managed
+
+            postDTO.setCategoryId(category.getCategoryId());
+        } else {
+            category = null; // 무카테고리 허용 정책
         }
 
-        // 4. Post 생성
+        // 3) Post 조립
         Post post = new Post();
         post.setAuthor(author);
         post.setFamily(family);
@@ -59,7 +70,7 @@ public class PostService {
         post.setContent(postDTO.getContent());
         post.setCommentCount(0);
 
-        // 5. 이미지 URL → CloudFront URL 변환
+        // 4) 이미지 조립
         List<PostImage> imageEntities = new ArrayList<>();
         List<String> s3ObjectKeys = postDTO.getImageUrls();
         List<PostType> types = postDTO.getPostTypes();
@@ -77,29 +88,29 @@ public class PostService {
                 img.setImageUrl(cloudFrontUrl);
                 img.setPostType(types.get(i));
                 img.setImageOrder(i);
-                imageEntities.add(img); 
+                imageEntities.add(img);
             }
         }
-
-        //6.저장
         post.setImages(imageEntities);
+
+        // 5) Post 저장 (쓰기 경로 끝)
         postRepository.save(post);
 
-        // 7. 알림 저장
+        // 6) 알림 저장
         Notification notification = Notification.builder()
                 .notificationType(NotificationType.POST)
-                .postId(post.getPostId())  // post는 save 후에 ID가 할당됨
+                .postId(post.getPostId())
                 .commentId(null)
                 .familyId(post.getFamily().getFamilyId())
                 .authorId(post.getAuthor().getUserId())
                 .build();
         notificationRepository.save(notification);
 
-        // 8. FCM 알림 전송: 작성자를 제외한 가족 구성원 중 알림 ON인 사용자에게만 전송
+        // 7) FCM 전송 (읽기/외부 I/O는 여기서)
         List<User> familyMembers = userFamilyRepository.findUsersByFamilyId(postDTO.getFamilyId());
-
         for (User member : familyMembers) {
-            if (!member.getUserId().equals(postDTO.getAuthorId()) && Boolean.TRUE.equals(member.getIsPostNotificationOn())) {
+            if (!member.getUserId().equals(postDTO.getAuthorId())
+                    && Boolean.TRUE.equals(member.getIsPostNotificationOn())) {
                 fcmNotificationService.sendPostNotification(member.getUserId(), postDTO);
             }
         }
