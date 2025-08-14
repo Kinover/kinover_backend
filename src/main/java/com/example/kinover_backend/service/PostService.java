@@ -77,7 +77,7 @@ public class PostService {
                 img.setImageUrl(cloudFrontUrl);
                 img.setPostType(types.get(i));
                 img.setImageOrder(i);
-                imageEntities.add(img);
+                imageEntities.add(img); 
             }
         }
 
