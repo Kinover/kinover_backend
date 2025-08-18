@@ -6,6 +6,7 @@ import com.example.kinover_backend.enums.NotificationType;
 import com.example.kinover_backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
 import java.util.List;
@@ -23,6 +24,7 @@ public class CommentService {
     private final UserFamilyRepository userFamilyRepository;
     private final FcmNotificationService fcmNotificationService;
 
+    @Transactional
     public void createComment(CommentDTO dto) {
         Post post = postRepository.findById(dto.getPostId())
                 .orElseThrow(() -> new RuntimeException("게시물 없음"));
@@ -76,6 +78,7 @@ public class CommentService {
                 }).collect(Collectors.toList());
     }
 
+    @Transactional
     public void deleteComment(UUID commentId) {
         Comment comment = commentRepository.findById(commentId)
                 .orElseThrow(() -> new RuntimeException("댓글 없음"));
