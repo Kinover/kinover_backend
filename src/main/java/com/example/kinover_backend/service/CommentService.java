@@ -65,7 +65,7 @@ public class CommentService {
         return commentRepository.findByPostOrderByCreatedAtAsc(post)
                 .stream().map(comment -> {
                     CommentDTO dto = new CommentDTO();
-                    dto.setCommentId(UUID.randomUUID());
+                    dto.setCommentId(comment.getCommentId());
                     dto.setPostId(postId);
                     dto.setContent(comment.getContent());
                     dto.setAuthorId(comment.getAuthor().getUserId());
