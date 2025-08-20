@@ -101,94 +101,73 @@ public class FcmNotificationService {
         }
     }
 
-    public void sendPostNotification(Long userId, PostDTO postDTO) {
+    
+@Transactional
+public void sendPostNotification(Long userId, PostDTO postDTO) {
     User receiver = userRepository.findById(userId)
-            .orElseThrow(() -> new RuntimeException("알림 받을 사용자를 찾을 수 없습니다."));
+        .orElseThrow(() -> new RuntimeException("알림 받을 사용자를 찾을 수 없습니다."));
     User author = userRepository.findById(postDTO.getAuthorId())
-            .orElseThrow(() -> new RuntimeException("작성자를 찾을 수 없습니다."));
+        .orElseThrow(() -> new RuntimeException("작성자를 찾을 수 없습니다."));
     Category category = categoryRepository.findById(postDTO.getCategoryId())
-            .orElseThrow(() -> new RuntimeException("카테고리를 찾을 수 없습니다."));
+        .orElseThrow(() -> new RuntimeException("카테고리를 찾을 수 없습니다."));
+
     Optional<FcmToken> fcmTokenOpt = fcmTokenRepository.findByUser(receiver);
     if (fcmTokenOpt.isEmpty()) return;
 
     String token = fcmTokenOpt.get().getToken();
 
-    // 이미지 첫 번째 (있으면)
+    // 첫 이미지(있으면)
     String firstImageUrl = (postDTO.getImageUrls() != null && !postDTO.getImageUrls().isEmpty())
-            ? postDTO.getImageUrls().get(0)
-            : null;
+        ? postDTO.getImageUrls().get(0)
+        : null;
 
     String title = "새 게시물 알림";
-    String contentPreview = trimContent(postDTO.getContent());
-    String body = safe(author.getName()) + "님이 \"" + safe(category.getTitle()) + "\"에 \"" +
-            safe(contentPreview) + "\" 글을 작성했습니다.";
+    String body  = author.getName() + "님이 \"" + category.getTitle() + "\"에 \""
+        + trimContent(postDTO.getContent()) + "\" 글을 작성했습니다.";
 
-    // 데이터 페이로드용 안전 문자열
-    String authorName = safe(author.getName());
-    String authorImage = safe(author.getImage()); // null → ""
-    String categoryTitle = safe(category.getTitle());
-    String preview = safe(contentPreview);
-
-    Message.Builder messageBuilder = Message.builder()
-            .setToken(token)
-            // 보이는 알림 (양 플랫폼 공통)
-            .setNotification(Notification.builder()
-                    .setTitle(title)
-                    .setBody(body)
-                    .build())
-            // 앱 라우팅/딥링크 등에 쓰는 데이터 페이로드
-            .putData("notificationType", "POST")
-            .putData("authorName", authorName)
-            .putData("authorImage", authorImage)
-            .putData("categoryTitle", categoryTitle)
-            .putData("contentPreview", preview);
-
-    if (firstImageUrl != null) {
-        messageBuilder.putData("firstImageUrl", firstImageUrl);
-    }
-    // (선택) 포스트 딥링크/식별자 전달
-    if (postDTO.getPostId() != null) {
-        messageBuilder.putData("postId", postDTO.getPostId().toString());
-        messageBuilder.putData("deeplink", "/posts/" + postDTO.getPostId()); // 앱에서 해석
-    }
-
-    // ---------- iOS (APNs) ----------
+    // ===== iOS 표시 안정화: APNs 헤더/APS 세팅 =====
     ApnsConfig apnsConfig = ApnsConfig.builder()
-            .putHeader("apns-push-type", "alert")   // iOS 13+ 필수
-            .putHeader("apns-priority", "10")       // 즉시 표시
-            // .putHeader("apns-topic", "com.your.bundleid") // 보통 FCM이 설정하지만 필요시 수동 지정
-            .setAps(Aps.builder()
-                    .setAlert(ApsAlert.builder()
-                            .setTitle(title)
-                            .setBody(body)
-                            .build())
-                    .setSound("default")
-                    .setContentAvailable(true)      // 백그라운드 fetch 허용
-                    // .setMutableContent(true)     // 리치 알림(이미지 변환/확장) 필요 시
-                    .build())
-            .build();
-    messageBuilder.setApnsConfig(apnsConfig);
+        .putHeader("apns-push-type", "alert") // iOS13+ 필수: alert/silent 구분
+        .putHeader("apns-priority", "10")     // 즉시 표시(배터리 소모↑)
+        // .putHeader("apns-topic", "<YOUR_IOS_BUNDLE_ID>") // 문제시 명시 (보통 자동)
+        .setAps(Aps.builder()
+            .setSound("default")              // 무음 방지: 시스템 배너+사운드
+            // 리치 푸시(이미지 첨부) 원하면 여기에 .setMutableContent(true) + iOS Service Extension 필요
+            .build())
+        .build();
 
-    // ---------- Android ----------
-    AndroidConfig androidConfig = AndroidConfig.builder()
-            .setPriority(AndroidConfig.Priority.HIGH) // 백그라운드 지연 최소화
-            .setNotification(AndroidNotification.builder()
-                    .setChannelId("default_post_channel") // 앱에서 채널 사전 생성 필요
-                    // .setClickAction("OPEN_POST")       // 인텐트 액션 사용 시
-                    // .setImage(firstImageUrl)           // 필요 시 시스템 알림에 썸네일
-                    .build())
-            // .setCollapseKey("post-" + postDTO.getPostId()) // 중복 알림 병합 필요 시
-            .build();
-    messageBuilder.setAndroidConfig(androidConfig);
+    Message.Builder mb = Message.builder()
+        .setToken(token)
+        // 시스템 배너용 타이틀/본문(플랫폼 공통)
+        .setNotification(
+            Notification.builder()
+                .setTitle(title)
+                .setBody(body)
+                .build()
+        )
+        // iOS 전용 튜닝(안드로이드는 무시)
+        .setApnsConfig(apnsConfig)
+        // 라우팅/딥링크/클라이언트 렌더링용 데이터(널 방어 필수)
+        .putData("notificationType", "POST")
+        .putData("authorName", nvl(author.getName()))
+        .putData("authorImage", nvl(author.getImage()))        // null 안전
+        .putData("categoryTitle", nvl(category.getTitle()))
+        .putData("contentPreview", nvl(trimContent(postDTO.getContent())));
+
+    if (firstImageUrl != null && !firstImageUrl.isBlank()) {
+        mb.putData("firstImageUrl", firstImageUrl);
+    }
 
     try {
-        FirebaseMessaging.getInstance().send(messageBuilder.build());
+        FirebaseMessaging.getInstance().send(mb.build());
     } catch (FirebaseMessagingException e) {
-        e.printStackTrace(); // TODO: 로깅 시스템 연동
+        // TODO: 구조화 로깅 + 재시도 큐(예: DLQ/Redis Stream) 권장
+        e.printStackTrace();
     }
 }
 
-    private static String safe(String v) { return v == null ? "" : v; }
+// null -> "" 로 치환
+private static String nvl(String s) { return s == null ? "" : s; }
 
     public void sendCommentNotification(Long userId, CommentDTO commentDTO) {
         User receiver = userRepository.findById(userId)
