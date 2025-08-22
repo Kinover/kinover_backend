@@ -26,6 +26,7 @@ public class FcmNotificationService {
     private final FcmTokenRepository fcmTokenRepository;
     private final CategoryRepository categoryRepository;
     private final PostRepository postRepository;
+    private final NotificationRepository notificationRepository;
 
     public boolean isChatRoomNotificationOn(Long userId, UUID chatRoomId) {
         User user = userRepository.findById(userId).orElseThrow();
@@ -116,55 +117,65 @@ public void sendPostNotification(Long userId, PostDTO postDTO) {
 
     String token = fcmTokenOpt.get().getToken();
 
-    // 첫 이미지(있으면)
     String firstImageUrl = (postDTO.getImageUrls() != null && !postDTO.getImageUrls().isEmpty())
-        ? postDTO.getImageUrls().get(0)
-        : null;
+            ? postDTO.getImageUrls().get(0) : null;
 
     String title = "새 게시물 알림";
     String body  = author.getName() + "님이 \"" + category.getTitle() + "\"에 \""
-        + trimContent(postDTO.getContent()) + "\" 글을 작성했습니다.";
+            + trimContent(postDTO.getContent()) + "\" 글을 작성했습니다.";
 
-    // ===== iOS 표시 안정화: APNs 헤더/APS 세팅 =====
-    ApnsConfig apnsConfig = ApnsConfig.builder()
-        .putHeader("apns-push-type", "alert") // iOS13+ 필수: alert/silent 구분
-        .putHeader("apns-priority", "10")     // 즉시 표시(배터리 소모↑)
-        // .putHeader("apns-topic", "<YOUR_IOS_BUNDLE_ID>") // 문제시 명시 (보통 자동)
-        .setAps(Aps.builder()
-            .setSound("default")              // 무음 방지: 시스템 배너+사운드
-            // 리치 푸시(이미지 첨부) 원하면 여기에 .setMutableContent(true) + iOS Service Extension 필요
-            .build())
-        .build();
+    // --- iOS APS payload ---
+    // If you want to show a badge, compute it server-side (e.g., unread count).
+    int badge = computeUnreadCount(receiver.getUserId()); // or 0 if you don’t use badges
+
+    Aps aps = Aps.builder()
+            .setSound("default")
+            .setBadge(badge)
+            .setThreadId("chat_" + postDTO.getFamilyId()) // or roomId; groups notifications
+            // .setMutableContent(true) // needed only if you implement a Notification Service Extension for rich media
+            .build();
+
+    ApnsConfig apns = ApnsConfig.builder()
+            .putHeader("apns-push-type", "alert") // iOS 13+
+            .putHeader("apns-priority", "10")     // 10 = immediate; 5 = background
+            // .putHeader("apns-topic", "com.yourco.app") // set explicitly if auto-detection fails
+            .setAps(aps)
+            .build();
 
     Message.Builder mb = Message.builder()
-        .setToken(token)
-        // 시스템 배너용 타이틀/본문(플랫폼 공통)
-        .setNotification(
-            Notification.builder()
-                .setTitle(title)
-                .setBody(body)
-                .build()
-        )
-        // iOS 전용 튜닝(안드로이드는 무시)
-        .setApnsConfig(apnsConfig)
-        // 라우팅/딥링크/클라이언트 렌더링용 데이터(널 방어 필수)
-        .putData("notificationType", "POST")
-        .putData("authorName", nvl(author.getName()))
-        .putData("authorImage", nvl(author.getImage()))        // null 안전
-        .putData("categoryTitle", nvl(category.getTitle()))
-        .putData("contentPreview", nvl(trimContent(postDTO.getContent())));
+            .setToken(token)
+            // Using Notification ensures aps.alert is present → banner eligible
+            .setNotification(
+                    Notification.builder()
+                            .setTitle(title)
+                            .setBody(body)
+                            .build()
+            )
+            .setApnsConfig(apns)
+            // App routing / deep-link data
+            .putData("notificationType", "POST")
+            .putData("postId", String.valueOf(postDTO.getPostId()))
+            .putData("familyId", String.valueOf(postDTO.getFamilyId()))
+            .putData("authorName", nvl(author.getName()))
+            .putData("authorImage", nvl(author.getImage()))
+            .putData("categoryTitle", nvl(category.getTitle()))
+            .putData("contentPreview", nvl(trimContent(postDTO.getContent())));
 
     if (firstImageUrl != null && !firstImageUrl.isBlank()) {
         mb.putData("firstImageUrl", firstImageUrl);
+        // If you later add a Notification Service Extension, keep this key and set aps.mutable-content=1
     }
 
     try {
-        FirebaseMessaging.getInstance().send(mb.build());
+        String messageId = FirebaseMessaging.getInstance().send(mb.build());
     } catch (FirebaseMessagingException e) {
-        // TODO: 구조화 로깅 + 재시도 큐(예: DLQ/Redis Stream) 권장
-        e.printStackTrace();
     }
 }
+
+private int computeUnreadCount(Long userId) {
+    return notificationRepository.countByReceiver_UserIdAndIsReadFalse(userId);
+}
+
 
 // null -> "" 로 치환
 private static String nvl(String s) { return s == null ? "" : s; }
