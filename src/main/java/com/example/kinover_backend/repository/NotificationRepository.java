@@ -14,7 +14,6 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
 
     void deleteByPostId(UUID postId);
     void deleteByCommentId(UUID commentId);
-    int countByReceiver_UserIdAndIsReadFalse(Long userId);
 
 
 
