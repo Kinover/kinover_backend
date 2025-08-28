@@ -25,23 +25,20 @@ public class UserStatusSubscriber implements MessageListener {
     @Override
     public void onMessage(Message message, byte[] pattern) {
         try {
-            System.out.println("onMessage 호출됨");
-
             String json = new String(message.getBody());
-            System.out.println("Redis 메시지 body: " + json);
+            String channel = new String(message.getChannel()); // 실제 발행된 채널명
+            System.out.println("Redis channel: " + channel);
+            System.out.println("Subscribed pattern: " + new String(pattern)); // 항상 family:status:*
 
             List<UserStatusDTO> statusList = objectMapper.readValue(
                     json, new TypeReference<List<UserStatusDTO>>() {});
-            System.out.println("statusList size: " + statusList.size());
-
             if (statusList.isEmpty()) {
                 System.out.println("statusList 비어있음 → return");
                 return;
             }
 
-            UUID familyId = extractFamilyIdFromChannel(pattern);
+            UUID familyId = extractFamilyIdFromChannel(channel);
             System.out.println("추출된 familyId: " + familyId);
-
             if (familyId == null) {
                 System.out.println("familyId == null → return");
                 return;
@@ -49,7 +46,6 @@ public class UserStatusSubscriber implements MessageListener {
 
             Set<WebSocketSession> sessions = webSocketFamilyStatusHandler.getSessionsByFamilyId(familyId);
             System.out.println("세션 개수: " + sessions.size());
-
             if (sessions.isEmpty()) {
                 System.out.println("세션 없음 → return");
                 return;
@@ -66,7 +62,6 @@ public class UserStatusSubscriber implements MessageListener {
             }
 
             System.out.println("onMessage 정상 종료");
-
         } catch (Exception e) {
             System.err.println("UserStatusSubscriber failed: " + e.getMessage());
             e.printStackTrace();
@@ -74,19 +69,20 @@ public class UserStatusSubscriber implements MessageListener {
     }
 
 
-    private UUID extractFamilyIdFromChannel(byte[] pattern) {
-    try {
-        String channel = new String(pattern); // e.g., family:status:UUID
-        System.out.println("채널 패턴: " + channel);
 
-        String[] parts = channel.split(":");
-        if (parts.length == 3) {
-            return UUID.fromString(parts[2]);
+    private UUID extractFamilyIdFromChannel(String channel) {
+        try {
+            // channel 예: "family:status:<uuid>"
+            String[] parts = channel.split(":");
+            if (parts.length == 3) {
+                return UUID.fromString(parts[2]);
+            }
+            System.err.println("Invalid channel format: " + channel);
+        } catch (Exception e) {
+            System.err.println("Invalid channel format: " + channel + " / " + e.getMessage());
         }
-    } catch (Exception e) {
-        System.err.println("Invalid channel format: " + e.getMessage());
+        return null;
     }
-    return null;
-}
+
 
 }
