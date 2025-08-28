@@ -75,15 +75,18 @@ public class UserStatusSubscriber implements MessageListener {
 
 
     private UUID extractFamilyIdFromChannel(byte[] pattern) {
-        try {
-            String channel = new String(pattern); // e.g., family:status:UUID
-            String[] parts = channel.split(":");
-            if (parts.length == 3) {
-                return UUID.fromString(parts[2]);
-            }
-        } catch (Exception e) {
-            System.err.println("Invalid channel format");
+    try {
+        String channel = new String(pattern); // e.g., family:status:UUID
+        System.out.println("채널 패턴: " + channel);
+
+        String[] parts = channel.split(":");
+        if (parts.length == 3) {
+            return UUID.fromString(parts[2]);
         }
-        return null;
+    } catch (Exception e) {
+        System.err.println("Invalid channel format: " + e.getMessage());
     }
+    return null;
+}
+
 }
