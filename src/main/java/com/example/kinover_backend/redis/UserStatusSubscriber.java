@@ -25,30 +25,54 @@ public class UserStatusSubscriber implements MessageListener {
     @Override
     public void onMessage(Message message, byte[] pattern) {
         try {
+            System.out.println("onMessage 호출됨");
+
             String json = new String(message.getBody());
+            System.out.println("Redis 메시지 body: " + json);
+
             List<UserStatusDTO> statusList = objectMapper.readValue(
                     json, new TypeReference<List<UserStatusDTO>>() {});
+            System.out.println("statusList size: " + statusList.size());
 
-            if (statusList.isEmpty()) return;
+            if (statusList.isEmpty()) {
+                System.out.println("statusList 비어있음 → return");
+                return;
+            }
 
             UUID familyId = extractFamilyIdFromChannel(pattern);
-            if (familyId == null) return;
+            System.out.println("추출된 familyId: " + familyId);
 
-            // 화면에 접속해 있는 유저 세션만 가져옴
+            if (familyId == null) {
+                System.out.println("familyId == null → return");
+                return;
+            }
+
             Set<WebSocketSession> sessions = webSocketFamilyStatusHandler.getSessionsByFamilyId(familyId);
-            if (sessions.isEmpty()) return;
+            System.out.println("세션 개수: " + sessions.size());
+
+            if (sessions.isEmpty()) {
+                System.out.println("세션 없음 → return");
+                return;
+            }
 
             TextMessage messageToSend = new TextMessage(json);
             for (WebSocketSession session : sessions) {
                 if (session.isOpen()) {
+                    System.out.println("세션에 메시지 전송: " + session.getId());
                     session.sendMessage(messageToSend);
+                } else {
+                    System.out.println("세션 닫힘: " + session.getId());
                 }
             }
 
+            System.out.println("onMessage 정상 종료");
+
         } catch (Exception e) {
             System.err.println("UserStatusSubscriber failed: " + e.getMessage());
+            e.printStackTrace();
         }
     }
+
 
     private UUID extractFamilyIdFromChannel(byte[] pattern) {
         try {
