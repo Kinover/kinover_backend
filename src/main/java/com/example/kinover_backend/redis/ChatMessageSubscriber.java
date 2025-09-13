@@ -41,17 +41,14 @@ public class ChatMessageSubscriber implements MessageListener {
                 Long userId = user.getUserId();
                 Set<WebSocketSession> sessions = webSocketMessageHandler.getSessionsByUserId(userId);
 
-                if (sessions.isEmpty()) {
-                    // WebSocket 세션이 아예 없는 경우
-                    System.out.println("[WebSocket 세션 없음] userId=" + userId);
-                }
-
                 for (WebSocketSession session : sessions) {
                     if (session != null && session.isOpen()) {
                         session.sendMessage(new TextMessage(json));
                         System.out.println("[Redis → WebSocket 전송] to userId=" + userId
                                 + ", sessionId=" + session.getId());
-                    } else {
+                    }
+                }
+                if (sessions.isEmpty()) {
                         // WebSocket 미연결 시 FCM 발송 조건 체크
                         System.out.println("[WebSocket 닫힘 → FCM 후보] userId=" + userId);
                         if (fcmNotificationService.isChatRoomNotificationOn(userId, messageDTO.getChatRoomId())) {
@@ -61,7 +58,6 @@ public class ChatMessageSubscriber implements MessageListener {
                             System.out.println("[FCM 전송 안 함 - 알림 OFF] userId=" + userId);
                         }
                     }
-                }
             }
         } catch (Exception e) {
             System.out.println("[ChatMessageSubscriber 오류] " + e.getMessage());
