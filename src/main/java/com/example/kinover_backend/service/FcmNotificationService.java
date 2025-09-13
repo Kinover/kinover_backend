@@ -6,12 +6,23 @@ import com.example.kinover_backend.dto.PostDTO;
 import com.example.kinover_backend.entity.*;
 import com.example.kinover_backend.repository.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.auth.oauth2.GoogleCredentials;
+import com.google.auth.oauth2.ServiceAccountCredentials;
+import com.google.firebase.FirebaseApp;
+import com.google.firebase.FirebaseOptions;
 import com.google.firebase.messaging.*;
 import com.google.firebase.messaging.Message;
 import com.google.firebase.messaging.Notification;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+
+import com.google.auth.Credentials;
+import com.google.auth.oauth2.AccessToken;
+
+import java.io.IOException;
+import java.util.Date;
+import java.util.TimeZone;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -27,6 +38,7 @@ public class FcmNotificationService {
     private final CategoryRepository categoryRepository;
     private final PostRepository postRepository;
     private final NotificationRepository notificationRepository;
+    private static GoogleCredentials firebaseCreds;
 
     public boolean isChatRoomNotificationOn(Long userId, UUID chatRoomId) {
         User user = userRepository.findById(userId).orElseThrow();
@@ -299,11 +311,61 @@ public class FcmNotificationService {
         }
 
         try {
-            FirebaseMessaging.getInstance().send(messageBuilder.build());
+            String messageId = FirebaseMessaging.getInstance().send(messageBuilder.build());
+            System.out.println("[FCM OK] messageId=" + messageId);
         } catch (FirebaseMessagingException e) {
-            e.printStackTrace(); // TODO: 로깅 시스템 연동
+            System.out.println("[FCM ERROR] msg=" + e.getMessage());
+            try {
+                var mec = e.getMessagingErrorCode();
+                System.out.println("[FCM ERROR] code=" + mec);
+            } catch (Throwable ignore) {}
+
+            Throwable cause = e.getCause();
+            if (cause instanceof com.google.api.client.http.HttpResponseException hre) {
+                System.out.println("[FCM HTTP] status=" + hre.getStatusCode()
+                        + ", statusMsg=" + hre.getStatusMessage());
+                String content = hre.getContent();
+                if (content != null) System.out.println("[FCM HTTP body] " + content);
+            }
+
+            diagnoseFirebaseAuth(); // 아래 함수
+            throw new RuntimeException(e); // 필요 없으면 제거
         }
     }
+    
+    private void diagnoseFirebaseAuth() {
+    try {
+        FirebaseApp app = FirebaseApp.getInstance();
+        FirebaseOptions opts = app.getOptions();
+
+        System.out.println("[FCM DIAG] projectId(opt)=" + opts.getProjectId());
+
+        if (firebaseCreds == null) {
+            System.out.println("[FCM DIAG] firebaseCreds is null (init not done?)");
+            return;
+        }
+
+        System.out.println("[FCM DIAG] credsClass=" + firebaseCreds.getClass().getName());
+        if (firebaseCreds instanceof ServiceAccountCredentials sac) {
+            System.out.println("[FCM DIAG] saEmail=" + sac.getClientEmail()
+                    + ", saProjectId=" + sac.getProjectId());
+        }
+
+        try {
+            AccessToken t = firebaseCreds.refreshAccessToken();
+            System.out.println("[FCM DIAG] accessToken exp=" + t.getExpirationTime());
+        } catch (IOException tokEx) {
+            System.out.println("[FCM DIAG] token refresh failed: " + tokEx);
+        }
+
+        System.out.println("[FCM DIAG] $GOOGLE_APPLICATION_CREDENTIALS="
+                + System.getenv("GOOGLE_APPLICATION_CREDENTIALS"));
+        System.out.println("[FCM DIAG] systemNow=" + new java.util.Date()
+                + ", tz=" + java.util.TimeZone.getDefault().getID());
+    } catch (Throwable diagEx) {
+        System.out.println("[FCM DIAG] failed: " + diagEx);
+    }
+}
 
 
 
