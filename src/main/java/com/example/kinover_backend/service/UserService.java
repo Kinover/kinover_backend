@@ -190,22 +190,23 @@ public class UserService {
         if(isMyself) user.setLastActiveAt(LocalDateTime.now());
         userRepository.save(user);
 
-        /*
-        // 유저가 속한 모든 가족 찾기
-        List<Family> families = userFamilyRepository.findFamiliesByUserId(userId);
         
-        for (Family family : families) {
-            List<UserStatusDTO> statusList = getFamilyStatus(family.getFamilyId());
+        // 유저가 속한 모든 가족 찾기
+        if(isMyself){
+            List<Family> families = userFamilyRepository.findFamiliesByUserId(userId);
+            
+            for (Family family : families) {
+                List<UserStatusDTO> statusList = getFamilyStatus(family.getFamilyId());
 
-            try {
-                String json = objectMapper.writeValueAsString(statusList);
-                String redisTopic = "family:status:" + family.getFamilyId();
-                redisTemplate.convertAndSend(redisTopic, json);
-            } catch (Exception e) {
-                throw new RuntimeException("접속 상태 broadcast 실패", e);
+                try {
+                    String json = objectMapper.writeValueAsString(statusList);
+                    String redisTopic = "family:status:" + family.getFamilyId();
+                    redisTemplate.convertAndSend(redisTopic, json);
+                } catch (Exception e) {
+                    throw new RuntimeException("접속 상태 broadcast 실패", e);
+                }
             }
-        }
-        */
+        }   
     }
 
 
