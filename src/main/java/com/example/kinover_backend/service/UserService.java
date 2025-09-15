@@ -182,17 +182,18 @@ public class UserService {
         return new UserDTO(saved);
     }
 
-    public void updateUserOnlineStatus(Long userId, boolean isOnline) {
+    public void updateUserOnlineStatus(Long userId, boolean isOnline, boolean isMyself) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사용자입니다: " + userId));
 
         user.setIsOnline(isOnline);
-        user.setLastActiveAt(LocalDateTime.now());
+        if(isMyself) user.setLastActiveAt(LocalDateTime.now());
         userRepository.save(user);
 
+        /*
         // 유저가 속한 모든 가족 찾기
         List<Family> families = userFamilyRepository.findFamiliesByUserId(userId);
-
+        
         for (Family family : families) {
             List<UserStatusDTO> statusList = getFamilyStatus(family.getFamilyId());
 
@@ -204,6 +205,7 @@ public class UserService {
                 throw new RuntimeException("접속 상태 broadcast 실패", e);
             }
         }
+        */
     }
 
 

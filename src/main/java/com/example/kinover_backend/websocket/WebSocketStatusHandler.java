@@ -38,7 +38,7 @@ public class WebSocketStatusHandler extends TextWebSocketHandler {
         System.out.println("[WS /status] userId 파싱 성공: " + userId);
 
         sessions.computeIfAbsent(userId, k -> new CopyOnWriteArraySet<>()).add(session);
-        userService.updateUserOnlineStatus(userId, true);  // ✅ 수정된 메서드 사용
+        userService.updateUserOnlineStatus(userId, true, true);  // ✅ 수정된 메서드 사용
 
         // 2) 가족 구성원 온라인 상태 동기화 (연결이 없는 사람은 OFF)
         syncFamilyOnlineStates(userId);
@@ -55,7 +55,7 @@ public class WebSocketStatusHandler extends TextWebSocketHandler {
         if (userSessions != null) {
             userSessions.remove(session);
             if (userSessions.isEmpty()) {
-                userService.updateUserOnlineStatus(userId, false); // ✅ 수정된 메서드 사용
+                userService.updateUserOnlineStatus(userId, false, true); // ✅ 수정된 메서드 사용
             }
         }
     }
@@ -77,7 +77,7 @@ public class WebSocketStatusHandler extends TextWebSocketHandler {
 
                 if (!isUserConnected(memberId)) {
                     // 연결 세션이 하나도 없으면 OFF
-                    userService.updateUserOnlineStatus(memberId, false);
+                    userService.updateUserOnlineStatus(memberId, false, false);
                     System.out.println("[WS /status] 가족 동기화: memberId=" + memberId + " → offline");
                 } else {
                     // (선택) 연결이 있으면 ON으로 재보정하고 싶다면 아래 주석 해제
