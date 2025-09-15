@@ -38,10 +38,11 @@ public class WebSocketStatusHandler extends TextWebSocketHandler {
         System.out.println("[WS /status] userId 파싱 성공: " + userId);
 
         sessions.computeIfAbsent(userId, k -> new CopyOnWriteArraySet<>()).add(session);
-        userService.updateUserOnlineStatus(userId, true, true);  // ✅ 수정된 메서드 사용
 
         // 2) 가족 구성원 온라인 상태 동기화 (연결이 없는 사람은 OFF)
         syncFamilyOnlineStates(userId);
+
+        userService.updateUserOnlineStatus(userId, true, true);  // ✅ 수정된 메서드 사용
 
         System.out.println("[WS /status] 세션 등록 및 온라인 처리 완료");
     }
