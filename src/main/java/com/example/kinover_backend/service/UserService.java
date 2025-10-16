@@ -196,18 +196,37 @@ public class UserService {
 
 
     public List<UserStatusDTO> getFamilyStatus(UUID familyId) {
-        List<User> familyMembers = userFamilyRepository.findUsersByFamilyId(familyId);
-        
-        WebSocketStatusHandler handler = statusHandlerProvider.getObject();
+    System.out.println("\n[FamilyStatus] === getFamilyStatus() called ===");
+    System.out.println("[FamilyStatus] familyId = " + familyId);
 
-        return familyMembers.stream()
-        .map(member -> new UserStatusDTO(
-            member.getUserId(),
-            !handler.getSessionsByUserId(member.getUserId()).isEmpty(), // ★ 세션 존재 = online
-            member.getLastActiveAt()
-        ))
+    List<User> familyMembers = userFamilyRepository.findUsersByFamilyId(familyId);
+    System.out.println("[FamilyStatus] found " + familyMembers.size() + " members in DB");
+
+    WebSocketStatusHandler handler = statusHandlerProvider.getObject();
+
+    // 각 멤버별 상태 출력
+    List<UserStatusDTO> result = familyMembers.stream()
+        .map(member -> {
+            Long memberId = member.getUserId();
+            boolean online = !handler.getSessionsByUserId(memberId).isEmpty();
+            System.out.println("[FamilyStatus] memberId=" + memberId 
+                    + " | online=" + online 
+                    + " | lastActiveAt=" + member.getLastActiveAt());
+            return new UserStatusDTO(memberId, online, member.getLastActiveAt());
+        })
         .collect(Collectors.toList());
+
+    // 전체 결과 출력
+    System.out.println("[FamilyStatus] returning " + result.size() + " DTOs:");
+    for (UserStatusDTO dto : result) {
+        System.out.println("  → userId=" + dto.getUserId() 
+                + ", online=" + dto.isOnline() 
+                + ", lastActiveAt=" + dto.getLastActiveAt());
     }
+    System.out.println("[FamilyStatus] === getFamilyStatus() end ===\n");
+
+    return result;
+}
 
     @Transactional
     public NotificationResponseDTO getUserNotifications(Long userId) {
