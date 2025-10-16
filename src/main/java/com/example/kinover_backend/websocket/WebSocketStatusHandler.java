@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.*;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
+import org.springframework.context.annotation.Lazy;
 
 import java.net.URI;
 import java.util.*;
@@ -20,6 +21,7 @@ import java.util.concurrent.CopyOnWriteArraySet;
 public class WebSocketStatusHandler extends TextWebSocketHandler {
 
     private final JwtUtil jwtUtil;
+    @Lazy
     private final UserService userService;
     private final UserFamilyRepository userFamilyRepository;
 
