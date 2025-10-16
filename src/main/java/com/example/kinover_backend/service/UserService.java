@@ -18,6 +18,7 @@ import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.stereotype.Service;
 import jakarta.persistence.EntityManager;
 import org.webjars.NotFoundException;
+import com.example.kinover_backend.websocket.WebSocketMessageHandler;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -38,6 +39,7 @@ public class UserService {
     private final CommentRepository commentRepository;
     private final ObjectMapper objectMapper;
     private final StringRedisTemplate redisTemplate;
+    private final WebSocketMessageHandler webSocketMessageHandler;
 
     @Autowired
     private EntityManager entityManager;
@@ -186,9 +188,10 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사용자입니다: " + userId));
 
-        user.setIsOnline(isOnline);
-        if(isMyself) user.setLastActiveAt(LocalDateTime.now());
-        userRepository.save(user);
+        if (isMyself) {
+            user.setLastActiveAt(LocalDateTime.now());
+            userRepository.save(user);
+        }
 
         
         // 유저가 속한 모든 가족 찾기
@@ -214,12 +217,12 @@ public class UserService {
         List<User> familyMembers = userFamilyRepository.findUsersByFamilyId(familyId);
 
         return familyMembers.stream()
-                .map(member -> new UserStatusDTO(
-                        member.getUserId(),
-                        Boolean.TRUE.equals(member.getIsOnline()),
-                        member.getLastActiveAt()
-                ))
-                .collect(Collectors.toList());
+        .map(member -> new UserStatusDTO(
+            member.getUserId(),
+            !webSocketMessageHandler.getSessionsByUserId(member.getUserId()).isEmpty(), // ★ 세션 존재 = online
+            member.getLastActiveAt()
+        ))
+        .collect(Collectors.toList());
     }
 
     @Transactional
