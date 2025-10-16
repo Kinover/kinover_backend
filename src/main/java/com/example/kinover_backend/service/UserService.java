@@ -18,7 +18,7 @@ import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.stereotype.Service;
 import jakarta.persistence.EntityManager;
 import org.webjars.NotFoundException;
-import com.example.kinover_backend.websocket.WebSocketMessageHandler;
+import com.example.kinover_backend.websocket.WebSocketStatusHandler;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -39,7 +39,7 @@ public class UserService {
     private final CommentRepository commentRepository;
     private final ObjectMapper objectMapper;
     private final StringRedisTemplate redisTemplate;
-    private final WebSocketMessageHandler webSocketMessageHandler;
+    private final WebSocketStatusHandler webSocketStatusHandler;
 
     @Autowired
     private EntityManager entityManager;
@@ -219,7 +219,7 @@ public class UserService {
         return familyMembers.stream()
         .map(member -> new UserStatusDTO(
             member.getUserId(),
-            !webSocketMessageHandler.getSessionsByUserId(member.getUserId()).isEmpty(), // ★ 세션 존재 = online
+            !webSocketStatusHandler.getSessionsByUserId(member.getUserId()).isEmpty(), // ★ 세션 존재 = online
             member.getLastActiveAt()
         ))
         .collect(Collectors.toList());

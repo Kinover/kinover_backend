@@ -119,4 +119,8 @@ public class WebSocketStatusHandler extends TextWebSocketHandler {
         }
         return null;
     }
+
+    public Set<WebSocketSession> getSessionsByUserId(Long userId) {
+        return sessions.getOrDefault(userId, Set.of());
+    }
 }
