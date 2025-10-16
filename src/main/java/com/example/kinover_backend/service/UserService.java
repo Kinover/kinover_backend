@@ -186,12 +186,31 @@ public class UserService {
     }
 
     public void updateUserOnlineStatus(Long userId, boolean isOnline, boolean isMyself) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사용자입니다: " + userId));
+
         if (isMyself) {
-            userRepository.findById(userId).ifPresent(user -> {
-                user.setLastActiveAt(LocalDateTime.now());
-                userRepository.save(user);
-            });
+            user.setLastActiveAt(LocalDateTime.now());
+            userRepository.save(user);
         }
+
+        
+        // 유저가 속한 모든 가족 찾기
+        if(isMyself){
+            List<Family> families = userFamilyRepository.findFamiliesByUserId(userId);
+            
+            for (Family family : families) {
+                List<UserStatusDTO> statusList = getFamilyStatus(family.getFamilyId());
+
+                try {
+                    String json = objectMapper.writeValueAsString(statusList);
+                    String redisTopic = "family:status:" + family.getFamilyId();
+                    redisTemplate.convertAndSend(redisTopic, json);
+                } catch (Exception e) {
+                    throw new RuntimeException("접속 상태 broadcast 실패", e);
+                }
+            }
+        }   
     }
 
 
