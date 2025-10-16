@@ -10,6 +10,7 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -39,7 +40,7 @@ public class UserService {
     private final CommentRepository commentRepository;
     private final ObjectMapper objectMapper;
     private final StringRedisTemplate redisTemplate;
-    private final WebSocketStatusHandler webSocketStatusHandler;
+    private final ObjectProvider<WebSocketStatusHandler> statusHandlerProvider;
 
     @Autowired
     private EntityManager entityManager;
@@ -185,41 +186,24 @@ public class UserService {
     }
 
     public void updateUserOnlineStatus(Long userId, boolean isOnline, boolean isMyself) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사용자입니다: " + userId));
-
         if (isMyself) {
-            user.setLastActiveAt(LocalDateTime.now());
-            userRepository.save(user);
+            userRepository.findById(userId).ifPresent(user -> {
+                user.setLastActiveAt(LocalDateTime.now());
+                userRepository.save(user);
+            });
         }
-
-        
-        // 유저가 속한 모든 가족 찾기
-        if(isMyself){
-            List<Family> families = userFamilyRepository.findFamiliesByUserId(userId);
-            
-            for (Family family : families) {
-                List<UserStatusDTO> statusList = getFamilyStatus(family.getFamilyId());
-
-                try {
-                    String json = objectMapper.writeValueAsString(statusList);
-                    String redisTopic = "family:status:" + family.getFamilyId();
-                    redisTemplate.convertAndSend(redisTopic, json);
-                } catch (Exception e) {
-                    throw new RuntimeException("접속 상태 broadcast 실패", e);
-                }
-            }
-        }   
     }
 
 
     public List<UserStatusDTO> getFamilyStatus(UUID familyId) {
         List<User> familyMembers = userFamilyRepository.findUsersByFamilyId(familyId);
+        
+        WebSocketStatusHandler handler = statusHandlerProvider.getObject();
 
         return familyMembers.stream()
         .map(member -> new UserStatusDTO(
             member.getUserId(),
-            !webSocketStatusHandler.getSessionsByUserId(member.getUserId()).isEmpty(), // ★ 세션 존재 = online
+            !handler.getSessionsByUserId(member.getUserId()).isEmpty(), // ★ 세션 존재 = online
             member.getLastActiveAt()
         ))
         .collect(Collectors.toList());
