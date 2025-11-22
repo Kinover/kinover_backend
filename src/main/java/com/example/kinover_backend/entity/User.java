@@ -86,4 +86,25 @@ public class User {
 
     @Column(columnDefinition = "TIMESTAMP")
     private LocalDateTime emotionUpdatedAt;  // 감정을 마지막으로 수정한 시간
+
+    @Column(name = "terms_agreed")
+    private Boolean termsAgreed;
+
+    @Column(name = "privacy_agreed")
+    private Boolean privacyAgreed;
+
+    @Column(name = "marketing_agreed")
+    private Boolean marketingAgreed;
+
+    @Column(name = "terms_version")
+    private String termsVersion;
+
+    @Column(name = "privacy_version")
+    private String privacyVersion;
+
+    @Column(name = "agreed_at")
+    private Date agreedAt;
+
+    @Column(name = "marketing_agreed_at")
+    private Date marketingAgreedAt;
 }

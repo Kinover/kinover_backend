@@ -78,16 +78,22 @@ public class UserController {
         return userService.getUserNotifications(userId);
     }
     
+    @Operation(
+            summary = "전체 프로필 업데이트",
+            description = "JWT 기반으로 사용자 프로필(이름, 생년월일, 약관동의여부 등)을 업데이트합니다."
+    )
     @PatchMapping("/profile")
-    public ResponseEntity<UserDTO> updateProfile(
-            @RequestBody UpdateProfileRequest request,
-            @RequestHeader("Authorization") String token) {
+    public ResponseEntity<?> updateUserProfile(
+            @RequestHeader("Authorization") String authorizationHeader,
+            @RequestBody UpdateProfileRequest request
+    ) {
+        String jwt = authorizationHeader.replace("Bearer ", "");
+        Long userId = jwtUtil.getUserIdFromToken(jwt);
 
-        Long userId = jwtUtil.getUserIdFromToken(token);
-        UserDTO updated = userService.updateUserProfile(userId, request.getName(), request.getBirth());
-        return ResponseEntity.ok(updated);
+        userService.updateUserProfile(userId, request);
+
+        return ResponseEntity.ok().body("프로필 업데이트가 완료되었습니다.");
     }
-
 
 
 }

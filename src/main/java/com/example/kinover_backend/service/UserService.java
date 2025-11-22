@@ -370,39 +370,82 @@ public class UserService {
         return true;
     }
 
-    public UserDTO updateUserProfile(Long userId, String name, String birthString) {
+    private Date parseDate(String dateStr) {
+        try {
+            return new SimpleDateFormat("yyyy-MM-dd").parse(dateStr);
+        } catch (Exception e) {
+            throw new RuntimeException("Invalid date: " + dateStr);
+        }
+    }
+
+    private Date parseDateTime(String birth) {
+        if (birth == null || birth.isEmpty()) {
+            return null;
+        }
+
+        // "YYYY-MM-DD" 기준 파싱
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+        try {
+            LocalDate localDate = LocalDate.parse(birth, formatter);
+            // LocalDate → Date 변환
+            return Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException("Invalid date format. Expected yyyy-MM-dd");
+        }
+    }
+
+
+
+    public UserDTO updateUserProfile(Long userId, UpdateProfileRequest req) {
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // 이름 업데이트
-        if (name != null && !name.isBlank()) {
-            user.setName(name);
+        // 이름
+        if (req.getName() != null && !req.getName().isBlank()) {
+            user.setName(req.getName());
         }
 
-        // 생년월일 업데이트 (Date 타입)
-        if (birthString != null && !birthString.isBlank()) {
-            try {
-                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
-                sdf.setLenient(false); // 날짜 유효성 체크
-                Date birthDate = sdf.parse(birthString);
-                user.setBirth(birthDate);
-            } catch (ParseException e) {
-                throw new RuntimeException("Invalid birth date format. Expected yyyy-MM-dd");
-            }
+        // 생년월일
+        if (req.getBirth() != null && !req.getBirth().isBlank()) {
+            user.setBirth(parseDate(req.getBirth()));
+        }
+
+        // 필수 약관 동의
+        if (req.getTermsAgreed() != null) {
+            user.setTermsAgreed(req.getTermsAgreed());
+        }
+
+        if (req.getPrivacyAgreed() != null) {
+            user.setPrivacyAgreed(req.getPrivacyAgreed());
+        }
+
+        if (req.getMarketingAgreed() != null) {
+            user.setMarketingAgreed(req.getMarketingAgreed());
+        }
+
+        if (req.getTermsVersion() != null) {
+            user.setTermsVersion(req.getTermsVersion());
+        }
+
+        if (req.getPrivacyVersion() != null) {
+            user.setPrivacyVersion(req.getPrivacyVersion());
+        }
+
+        if (req.getAgreedAt() != null) {
+            user.setAgreedAt(parseDateTime(req.getAgreedAt()));
+        }
+
+        if (req.getMarketingAgreedAt() != null) {
+            user.setMarketingAgreedAt(parseDateTime(req.getMarketingAgreedAt()));
         }
 
         userRepository.save(user);
 
-        // DTO 생성 및 familyId 주입 (1번에서 구현한 방식)
-        UserDTO dto = new UserDTO(user);
-
-        List<UserFamily> list = userFamilyRepository.findAllByUser_UserId(userId);
-        if (!list.isEmpty()) {
-            dto.setFamilyId(list.get(0).getFamily().getFamilyId());
-        }
-
-        return dto;
+        return new UserDTO(user);
     }
+
 
 
 
