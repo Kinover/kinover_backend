@@ -2,6 +2,7 @@ package com.example.kinover_backend.controller;
 
 import com.example.kinover_backend.JwtUtil;
 import com.example.kinover_backend.dto.NotificationResponseDTO;
+import com.example.kinover_backend.dto.UpdateProfileRequest;
 import com.example.kinover_backend.dto.UserDTO;
 import com.example.kinover_backend.service.UserService;
 import io.jsonwebtoken.Claims;
@@ -75,6 +76,16 @@ public class UserController {
         Long userId = jwtUtil.getUserIdFromToken(jwt);
 
         return userService.getUserNotifications(userId);
+    }
+    
+    @PatchMapping("/profile")
+    public ResponseEntity<UserDTO> updateProfile(
+            @RequestBody UpdateProfileRequest request,
+            @RequestHeader("Authorization") String token) {
+
+        Long userId = jwtUtil.getUserIdFromToken(token);
+        UserDTO updated = userService.updateUserProfile(userId, request.getName(), request.getBirth());
+        return ResponseEntity.ok(updated);
     }
 
 

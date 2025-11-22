@@ -11,6 +11,7 @@ import org.webjars.NotFoundException;
 import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.Optional;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -25,6 +26,8 @@ public class UserDTO {
     private String image;
     private String phoneNumber;
     private String trait;
+    private UUID familyId;
+
 
     // 엔티티 → DTO 변환
     public UserDTO(User user) {

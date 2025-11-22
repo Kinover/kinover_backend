@@ -21,6 +21,8 @@ import jakarta.persistence.EntityManager;
 import org.webjars.NotFoundException;
 import com.example.kinover_backend.websocket.WebSocketStatusHandler;
 
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -56,7 +58,15 @@ public class UserService {
     public UserDTO getUserById(Long userId) {
         User user = userRepository.findByUserId(userId)
                 .orElseThrow(() -> new NotFoundException("User not found with id: " + userId));
-        return new UserDTO(user);
+
+        UserDTO dto = new UserDTO(user);
+
+        List<UserFamily> list = userFamilyRepository.findAllByUser_UserId(user.getUserId());
+        if (!list.isEmpty()) {
+            dto.setFamilyId(list.get(0).getFamily().getFamilyId());  // 보통 1인 1가족 구조
+        }
+
+        return dto;
     }
 
     public User createNewUserFromKakao(KakaoUserDto kakaoUserDto) {
@@ -182,7 +192,15 @@ public class UserService {
     }
 
         User saved = userRepository.save(user);
-        return new UserDTO(saved);
+
+        UserDTO dto = new UserDTO(saved);
+
+        List<UserFamily> list = userFamilyRepository.findAllByUser_UserId(user.getUserId());
+        if (!list.isEmpty()) {
+            dto.setFamilyId(list.get(0).getFamily().getFamilyId());
+        }
+
+        return dto;
     }
 
     public void updateUserOnlineStatus(Long userId, boolean isOnline, boolean isMyself) {
@@ -351,6 +369,42 @@ public class UserService {
         userRepository.save(user);
         return true;
     }
+
+    public UserDTO updateUserProfile(Long userId, String name, String birthString) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // 이름 업데이트
+        if (name != null && !name.isBlank()) {
+            user.setName(name);
+        }
+
+        // 생년월일 업데이트 (Date 타입)
+        if (birthString != null && !birthString.isBlank()) {
+            try {
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+                sdf.setLenient(false); // 날짜 유효성 체크
+                Date birthDate = sdf.parse(birthString);
+                user.setBirth(birthDate);
+            } catch (ParseException e) {
+                throw new RuntimeException("Invalid birth date format. Expected yyyy-MM-dd");
+            }
+        }
+
+        userRepository.save(user);
+
+        // DTO 생성 및 familyId 주입 (1번에서 구현한 방식)
+        UserDTO dto = new UserDTO(user);
+
+        List<UserFamily> list = userFamilyRepository.findAllByUser_UserId(userId);
+        if (!list.isEmpty()) {
+            dto.setFamilyId(list.get(0).getFamily().getFamilyId());
+        }
+
+        return dto;
+    }
+
+
 
 
 }
