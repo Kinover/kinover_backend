@@ -43,4 +43,7 @@ public interface UserFamilyRepository extends JpaRepository<UserFamily, UUID> {
     // userId로 속한 모든 Family 조회
     @Query("SELECT uf.family FROM UserFamily uf WHERE uf.user.userId = :userId")
     List<Family> findFamiliesByUserId(@Param("userId") Long userId);
+
+    Optional<UserFamily> findByUser_UserIdAndFamily_FamilyId(Long userId, UUID familyId);
+
 }

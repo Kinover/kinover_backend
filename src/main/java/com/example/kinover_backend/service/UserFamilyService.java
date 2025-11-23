@@ -11,9 +11,13 @@ import com.example.kinover_backend.repository.FamilyRepository;
 import com.example.kinover_backend.repository.UserChatRoomRepository;
 import com.example.kinover_backend.repository.UserFamilyRepository;
 import com.example.kinover_backend.repository.UserRepository;
+
+import jakarta.transaction.Transactional;
+
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -51,41 +55,57 @@ public class UserFamilyService {
         userFamilyRepository.deleteUserByFamilyIdAndUserId(familyId, userId);
     }
 
+    @Transactional
     public void addUserByFamilyIdAndUserId(UUID familyId, Long userId) {
+
+        // 1. User 조회
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("유저를 찾을 수 없습니다: " + userId));
 
+        // 2. Family 조회
         Family family = familyRepository.findFamilyById(familyId)
                 .orElseThrow(() -> new RuntimeException("가족 정보 없음"));
 
+        // 3. 기존 UserFamily 존재 여부 확인 (중복 생성 방지)
+        Optional<UserFamily> existing = userFamilyRepository.findByUser_UserIdAndFamily_FamilyId(userId, familyId);
+
+        if (existing.isPresent()) {
+            // 이미 존재하면 아무 작업도 하지 않음 (중복 생성을 방지함)
+            return;
+        }
+
+        // 4. 새 UserFamily 생성
         UserFamily userFamily = new UserFamily();
         userFamily.setUserFamilyId(UUID.randomUUID());
         userFamily.setRole("member");
         userFamily.setFamily(family);
         userFamily.setUser(user);
+
         userFamilyRepository.save(userFamily);
 
-        // Kino 채팅방 생성 및 연결
+        // 5. Kino 관련 채팅방 생성
         User kino = userRepository.findById(9999999999L)
                 .orElseThrow(() -> new RuntimeException("Kino 유저를 찾을 수 없습니다"));
 
         ChatRoom kinoChatRoom = new ChatRoom();
         kinoChatRoom.setChatRoomId(UUID.randomUUID());
         kinoChatRoom.setRoomName("챗봇 키노");
-        kinoChatRoom.setKino(true); // setIsKino -> setKino로 수정
+        kinoChatRoom.setKino(true);
         kinoChatRoom.setFamilyType("personal");
         kinoChatRoom.setImage(kino.getImage());
         kinoChatRoom.setFamily(null);
+
         chatRoomRepository.save(kinoChatRoom);
 
+        // 6. User ↔ Kino ChatRoom 연결
         UserChatRoom userChatRoom = new UserChatRoom();
         userChatRoom.setUser(user);
         userChatRoom.setChatRoom(kinoChatRoom);
         userChatRoomRepository.save(userChatRoom);
-
         UserChatRoom kinoChatRoomLink = new UserChatRoom();
         kinoChatRoomLink.setUser(kino);
         kinoChatRoomLink.setChatRoom(kinoChatRoom);
         userChatRoomRepository.save(kinoChatRoomLink);
     }
+
 }
