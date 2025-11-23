@@ -76,7 +76,6 @@ public class UserFamilyService {
 
         // 4. 새 UserFamily 생성
         UserFamily userFamily = new UserFamily();
-        userFamily.setUserFamilyId(UUID.randomUUID());
         userFamily.setRole("member");
         userFamily.setFamily(family);
         userFamily.setUser(user);
