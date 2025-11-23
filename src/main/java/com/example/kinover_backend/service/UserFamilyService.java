@@ -87,7 +87,6 @@ public class UserFamilyService {
                 .orElseThrow(() -> new RuntimeException("Kino 유저를 찾을 수 없습니다"));
 
         ChatRoom kinoChatRoom = new ChatRoom();
-        kinoChatRoom.setChatRoomId(UUID.randomUUID());
         kinoChatRoom.setRoomName("챗봇 키노");
         kinoChatRoom.setKino(true);
         kinoChatRoom.setFamilyType("personal");
