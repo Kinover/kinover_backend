@@ -108,6 +108,7 @@ public class ChatRoomService {
                 .map(ChatRoom::getChatRoomId)
                 .collect(Collectors.toSet());
         List<ChatRoom> chatRooms = chatRoomRepository.findByChatRoomIdIn(chatRoomIds);
+        
         return chatRooms.stream().map(chatRoom -> {
             ChatRoomDTO dto = chatRoomMapper.toDTO(chatRoom);
 
@@ -147,11 +148,19 @@ public class ChatRoomService {
             }
             dto.setMemberImages(images);
 
+            // [추가됨] 알림 설정 여부 조회
+            // DB에 설정값이 없으면 기본적으로 알림이 켜져있다고(true) 가정
+            boolean isNotificationOn = chatRoomNotificationRepository
+                    .findByUser_UserIdAndChatRoom_ChatRoomId(userId, chatRoom.getChatRoomId())
+                    .map(ChatRoomNotificationSetting::isNotificationOn)
+                    .orElse(true);
+            
+            dto.setNotificationOn(isNotificationOn);
+
             return dto;
         }).collect(Collectors.toList());
 
     }
-
 
     public List<UserDTO> getUsersByChatRoom(UUID chatRoomId) {
         List<User> list = userChatRoomRepository.findUsersByChatRoomId(chatRoomId);

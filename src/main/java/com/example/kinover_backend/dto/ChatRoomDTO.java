@@ -32,6 +32,7 @@ public class ChatRoomDTO {
     private String latestMessageContent;
     private LocalDateTime latestMessageTime;
     private List<String> memberImages;
+    private boolean isNotificationOn;
 
     public ChatRoomDTO(
             ChatRoom chatRoom,
