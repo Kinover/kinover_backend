@@ -62,7 +62,7 @@ public class MessageService {
             }
 
             List<String> imageUrls = fileNames.stream()
-                    .map(fileName -> cloudFrontDomain + fileName)
+                    .map(fileName -> fileName.startsWith("http") ? fileName : cloudFrontDomain + fileName)
                     .collect(Collectors.toList());
 
             String content = String.join(",", imageUrls); // ,로 이어붙이기

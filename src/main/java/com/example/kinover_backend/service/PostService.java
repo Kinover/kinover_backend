@@ -81,7 +81,7 @@ public class PostService {
             }
             for (int i = 0; i < s3ObjectKeys.size(); i++) {
                 String s3Key = s3ObjectKeys.get(i);
-                String cloudFrontUrl = cloudFrontDomain + s3Key;
+                String cloudFrontUrl = s3Key.startsWith("http") ? s3Key : cloudFrontDomain + s3Key;
 
                 PostImage img = new PostImage();
                 img.setPost(post);

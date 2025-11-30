@@ -177,7 +177,8 @@ public class UserService {
         }
 
         if (userDTO.getImage() != null) {
-            user.setImage(cloudFrontDomain + userDTO.getImage());
+            String imagePath = userDTO.getImage();
+            user.setImage(imagePath.startsWith("http") ? imagePath : cloudFrontDomain + imagePath);
         }
 
         if (userDTO.getTrait() != null) {
