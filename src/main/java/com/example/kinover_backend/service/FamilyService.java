@@ -25,6 +25,24 @@ public class FamilyService {
         return new FamilyDTO(savedFamily); // 저장된 Family 엔티티를 FamilyDTO로 변환하여 반환
     }
 
+    public FamilyDTO createFamily() {
+        Family family = new Family();
+
+        // 1. UUID: Entity의 @GeneratedValue 전략에 의해 DB 저장 시 자동 생성됨
+        // 2. Name: 요구하신 대로 대충 넣어줍니다 (기본값 설정)
+        family.setName("내 가족"); 
+
+        // 3. Relationship, Notice: 요구하신 대로 Null (설정 안 하면 null)
+        family.setRelationship(null);
+        family.setNotice(null);
+
+        // 4. 저장 (이 시점에 UUID가 생성됨)
+        Family savedFamily = familyRepository.save(family);
+
+        // 5. DTO 변환 및 반환
+        return new FamilyDTO(savedFamily);
+    }
+
     // [R] 가족 조회 (DTO 반환)
     public FamilyDTO getFamilyById(UUID familyId) {
 

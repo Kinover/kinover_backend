@@ -49,12 +49,11 @@ public class FamilyController {
         return familyService.getFamilyById(familyId);
     }
 
-    @Operation(summary = "가족 추가", description = "새로운 가족을 추가합니다.")
+    @Operation(summary = "가족 추가", description = "입력값 없이 호출하면 새로운 가족 그룹을 생성하고 ID를 반환합니다.")
     @PostMapping("/add")
-    public FamilyDTO addFamily(
-            @RequestBody Family family,
-            @RequestHeader("Authorization") String authorizationHeader) {
-        return familyService.addFamily(family);
+    public FamilyDTO addFamily(@RequestHeader("Authorization") String authorizationHeader) {
+        // Body를 받지 않고 서비스 호출
+        return familyService.createFamily();
     }
 
     @Operation(summary = "가족 삭제", description = "특정 가족을 삭제합니다.")
