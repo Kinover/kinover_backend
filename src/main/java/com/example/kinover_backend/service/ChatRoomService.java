@@ -21,6 +21,7 @@ import java.util.stream.Collectors;
 public class ChatRoomService {
 
     private final ChatRoomRepository chatRoomRepository;
+    private final FamilyRepository familyRepository;
     private final UserChatRoomRepository userChatRoomRepository;
     private final ChatRoomNotificationRepository chatRoomNotificationRepository;
     private final UserRepository userRepository;
@@ -35,11 +36,14 @@ public class ChatRoomService {
 
     // 채팅방 생성 메서드
     @Transactional
-    public ChatRoomDTO createChatRoom(Long creatorId, String roomName, List<Long> userIds) {
+    public ChatRoomDTO createChatRoom(UUID familyId, Long creatorId, String roomName, List<Long> userIds) {
         ChatRoom chatRoom = new ChatRoom();
         chatRoom.setRoomName(roomName);
         chatRoom.setFamilyType(userIds.size() > 1 ? "family" : "personal");
-        chatRoom.setFamily(null);
+       
+        Family family = familyRepository.findById(familyId)
+                .orElseThrow(() -> new RuntimeException("Family not found"));
+        chatRoom.setFamily(family);
 
         chatRoomRepository.save(chatRoom);
 
@@ -108,7 +112,7 @@ public class ChatRoomService {
                 .map(ChatRoom::getChatRoomId)
                 .collect(Collectors.toSet());
         List<ChatRoom> chatRooms = chatRoomRepository.findByChatRoomIdIn(chatRoomIds);
-        
+
         return chatRooms.stream().map(chatRoom -> {
             ChatRoomDTO dto = chatRoomMapper.toDTO(chatRoom);
 
@@ -154,7 +158,7 @@ public class ChatRoomService {
                     .findByUser_UserIdAndChatRoom_ChatRoomId(userId, chatRoom.getChatRoomId())
                     .map(ChatRoomNotificationSetting::isNotificationOn)
                     .orElse(true);
-            
+
             dto.setNotificationOn(isNotificationOn);
 
             return dto;
@@ -174,7 +178,7 @@ public class ChatRoomService {
     public boolean isKinoRoom(UUID chatRoomId) {
         return chatRoomRepository.findById(chatRoomId)
                 .map(ChatRoom::isKino)
-                .orElse(false);  // 없으면 false 처리
+                .orElse(false); // 없으면 false 처리
     }
 
     @Transactional
@@ -194,7 +198,6 @@ public class ChatRoomService {
         chatRoom.setRoomName(newRoomName);
         chatRoomRepository.save(chatRoom);
     }
-
 
     @Transactional
     public void leaveChatRoom(UUID chatRoomId, Long userId) {
@@ -244,49 +247,50 @@ public class ChatRoomService {
     }
 
     @Transactional
-public boolean updateChatBotPersonality(UUID chatRoomId, ChatBotPersonality personality) {
-    Optional<ChatRoom> optionalChatRoom = chatRoomRepository.findById(chatRoomId);
-    if (optionalChatRoom.isEmpty()) {
-        System.out.println("[updateChatBotPersonality] ChatRoom not found: " + chatRoomId);
-        return false;
+    public boolean updateChatBotPersonality(UUID chatRoomId, ChatBotPersonality personality) {
+        Optional<ChatRoom> optionalChatRoom = chatRoomRepository.findById(chatRoomId);
+        if (optionalChatRoom.isEmpty()) {
+            System.out.println("[updateChatBotPersonality] ChatRoom not found: " + chatRoomId);
+            return false;
+        }
+
+        ChatRoom chatRoom = optionalChatRoom.get();
+        if (!Boolean.TRUE.equals(chatRoom.isKino())) {
+            System.out.println("[updateChatBotPersonality] Not a Kino room: " + chatRoomId);
+            return false;
+        }
+
+        System.out.println("[updateChatBotPersonality] Deleting messages for chatRoomId: " + chatRoomId);
+        messageRepository.deleteByChatRoom(chatRoom);
+
+        chatRoom.setPersonality(personality);
+        chatRoomRepository.save(chatRoom);
+        System.out.println("[updateChatBotPersonality] Personality updated to: " + personality);
+
+        return true;
     }
-
-    ChatRoom chatRoom = optionalChatRoom.get();
-    if (!Boolean.TRUE.equals(chatRoom.isKino())) {
-        System.out.println("[updateChatBotPersonality] Not a Kino room: " + chatRoomId);
-        return false;
-    }
-
-    System.out.println("[updateChatBotPersonality] Deleting messages for chatRoomId: " + chatRoomId);
-    messageRepository.deleteByChatRoom(chatRoom);
-
-    chatRoom.setPersonality(personality);
-    chatRoomRepository.save(chatRoom);
-    System.out.println("[updateChatBotPersonality] Personality updated to: " + personality);
-
-    return true;
-}
 
     @Transactional
     public boolean updateChatRoomNotificationSetting(Long userId, UUID chatRoomId, boolean isOn) {
         Optional<User> userOpt = userRepository.findById(userId);
         Optional<ChatRoom> chatRoomOpt = chatRoomRepository.findById(chatRoomId);
 
-        if (userOpt.isEmpty() || chatRoomOpt.isEmpty()) return false;
+        if (userOpt.isEmpty() || chatRoomOpt.isEmpty())
+            return false;
 
         User user = userOpt.get();
         ChatRoom chatRoom = chatRoomOpt.get();
 
-        Optional<ChatRoomNotificationSetting> settingOpt =
-                chatRoomNotificationRepository.findByUserAndChatRoom(user, chatRoom);
+        Optional<ChatRoomNotificationSetting> settingOpt = chatRoomNotificationRepository.findByUserAndChatRoom(user,
+                chatRoom);
 
-        if (settingOpt.isEmpty()) return false;
+        if (settingOpt.isEmpty())
+            return false;
 
         ChatRoomNotificationSetting setting = settingOpt.get();
         setting.setNotificationOn(isOn);
         chatRoomNotificationRepository.save(setting);
         return true;
     }
-
 
 }

@@ -6,6 +6,7 @@ import com.example.kinover_backend.dto.UpdatePersonalityRequestDTO;
 import com.example.kinover_backend.dto.UserDTO;
 import com.example.kinover_backend.entity.Message;
 import com.example.kinover_backend.service.ChatRoomService;
+import com.example.kinover_backend.service.FamilyService;
 import com.example.kinover_backend.service.MessageService;
 import com.example.kinover_backend.JwtUtil;
 import com.example.kinover_backend.service.UserService;
@@ -35,7 +36,8 @@ public class ChatRoomController {
     private final UserService userService;
     private final JwtUtil jwtUtil;
 
-    public ChatRoomController(ChatRoomService chatRoomService, MessageService messageService, UserService userService, JwtUtil jwtUtil) {
+    public ChatRoomController(ChatRoomService chatRoomService, MessageService messageService, UserService userService,
+            JwtUtil jwtUtil) {
         this.chatRoomService = chatRoomService;
         this.messageService = messageService;
         this.userService = userService;
@@ -44,10 +46,12 @@ public class ChatRoomController {
 
     // 채팅방 생성
     @Operation(summary = "채팅방 생성", description = "새로운 채팅방을 생성합니다. userIds는 쉼표로 구분된 문자열로 전달 (예: 1,2,3)")
-    @PostMapping("/create/{roomName}/{userIds}")
+    @PostMapping("/create/{roomName}/{userIds}/{familyId}")
     public ResponseEntity<ChatRoomDTO> createChatRoom(
             @Parameter(description = "채팅방 이름", required = true) @PathVariable String roomName,
             @Parameter(description = "참여 유저 ID 리스트 (쉼표로 구분)", required = true) @PathVariable String userIds,
+            @Parameter(description = "채팅방 소속된 가족", required = true) @PathVariable UUID familyId,
+
             @RequestHeader("Authorization") String authorizationHeader) {
         String token = authorizationHeader.replace("Bearer ", "");
         Long authenticatedUserId = jwtUtil.getUserIdFromToken(token);
@@ -56,7 +60,8 @@ public class ChatRoomController {
                 .map(Long::parseLong)
                 .collect(Collectors.toList());
 
-        ChatRoomDTO createdChatRoom = chatRoomService.createChatRoom(authenticatedUserId, roomName, userIdList);
+        ChatRoomDTO createdChatRoom = chatRoomService.createChatRoom(familyId, authenticatedUserId, roomName,
+                userIdList);
         return new ResponseEntity<>(createdChatRoom, HttpStatus.CREATED);
     }
 
@@ -127,7 +132,6 @@ public class ChatRoomController {
         return ResponseEntity.ok("채팅방 이름이 수정되었습니다.");
     }
 
-
     // 특정 채팅방의 다른 유저 정보 조회
     @Operation(summary = "채팅방 내 다른 유저 조회", description = "")
     @PostMapping("/{chatRoomId}/users/get")
@@ -137,15 +141,11 @@ public class ChatRoomController {
         return chatRoomService.getUsersByChatRoom(chatRoomId);
     }
 
-    @Operation(
-            summary = "채팅방 나가기",
-            description = "사용자가 채팅방을 나갑니다. 채팅방에 마지막 사용자가 나갈 경우, 해당 채팅방과 메시지들이 함께 삭제됩니다."
-    )
+    @Operation(summary = "채팅방 나가기", description = "사용자가 채팅방을 나갑니다. 채팅방에 마지막 사용자가 나갈 경우, 해당 채팅방과 메시지들이 함께 삭제됩니다.")
     @DeleteMapping("/{chatRoomId}/leave")
     public ResponseEntity<Void> leaveChatRoom(
             @RequestHeader("Authorization") String authorizationHeader,
-            @PathVariable UUID chatRoomId
-    ) {
+            @PathVariable UUID chatRoomId) {
         String token = authorizationHeader.replace("Bearer ", "");
         Long userId = jwtUtil.getUserIdFromToken(token);
 
@@ -156,8 +156,7 @@ public class ChatRoomController {
     @PatchMapping("/{chatRoomId}/personality")
     public ResponseEntity<String> updateChatBotPersonality(
             @PathVariable UUID chatRoomId,
-            @RequestBody UpdatePersonalityRequestDTO requestDTO
-    ) {
+            @RequestBody UpdatePersonalityRequestDTO requestDTO) {
         boolean success = chatRoomService.updateChatBotPersonality(chatRoomId, requestDTO.getPersonality());
         if (success) {
             return ResponseEntity.ok("ChatBot personality updated successfully.");
@@ -168,15 +167,12 @@ public class ChatRoomController {
 
     // 유저 전체 알림 설정 (UserService 사용)
     @PatchMapping("/notification/user")
-    @Operation(
-            summary = "유저 전체 채팅 알림 ON/OFF",
-            description = "유저 ID와 알림 상태(boolean)를 받아서, 해당 유저의 모든 채팅방에 대한 알림을 일괄적으로 설정합니다. " +
-                    "이 설정이 false일 경우, 채팅방 개별 설정과 무관하게 모든 알림이 전송되지 않습니다."
-    )
+    @Operation(summary = "유저 전체 채팅 알림 ON/OFF", description = "유저 ID와 알림 상태(boolean)를 받아서, 해당 유저의 모든 채팅방에 대한 알림을 일괄적으로 설정합니다. "
+            +
+            "이 설정이 false일 경우, 채팅방 개별 설정과 무관하게 모든 알림이 전송되지 않습니다.")
     public ResponseEntity<String> updateUserChatNotificationSetting(
             @RequestParam Long userId,
-            @RequestParam boolean isOn
-    ) {
+            @RequestParam boolean isOn) {
         boolean success = userService.updateChatNotificationSetting(userId, isOn);
         return success
                 ? ResponseEntity.ok("User-wide chat notification setting updated.")
@@ -185,22 +181,17 @@ public class ChatRoomController {
 
     // 특정 채팅방 알림 설정 (ChatRoomService 사용)
     @PatchMapping("/notification/chatroom")
-    @Operation(
-            summary = "특정 채팅방 알림 ON/OFF",
-            description = "userId, chatRoomId, 알림 상태를 입력받아 해당 유저의 특정 채팅방 알림을 ON 또는 OFF로 설정합니다. " +
-                    "이 설정은 유저 전체 알림 설정이 true인 경우에만 유효합니다."
-    )
+    @Operation(summary = "특정 채팅방 알림 ON/OFF", description = "userId, chatRoomId, 알림 상태를 입력받아 해당 유저의 특정 채팅방 알림을 ON 또는 OFF로 설정합니다. "
+            +
+            "이 설정은 유저 전체 알림 설정이 true인 경우에만 유효합니다.")
     public ResponseEntity<String> updateChatRoomNotificationSetting(
             @RequestParam Long userId,
             @RequestParam UUID chatRoomId,
-            @RequestParam boolean isOn
-    ) {
+            @RequestParam boolean isOn) {
         boolean success = chatRoomService.updateChatRoomNotificationSetting(userId, chatRoomId, isOn);
         return success
                 ? ResponseEntity.ok("Chat room-specific notification setting updated.")
                 : ResponseEntity.badRequest().body("Invalid userId or chatRoomId");
     }
-
-
 
 }
