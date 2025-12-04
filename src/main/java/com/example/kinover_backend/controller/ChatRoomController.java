@@ -104,7 +104,7 @@ public class ChatRoomController {
         if (!authenticatedUserId.equals(userId)) {
             throw new RuntimeException("인증된 유저와 요청 유저가 일치하지 않습니다");
         }
-        return chatRoomService.getAllChatRooms(userId); // familyId는 사용하지 않음
+        return chatRoomService.getAllChatRooms(userId, familyId); // familyId는 사용하지 않음
     }
 
     // 채팅방의 모든 메시지 조회

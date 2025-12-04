@@ -40,7 +40,7 @@ public class ChatRoomService {
         ChatRoom chatRoom = new ChatRoom();
         chatRoom.setRoomName(roomName);
         chatRoom.setFamilyType(userIds.size() > 1 ? "family" : "personal");
-       
+
         Family family = familyRepository.findById(familyId)
                 .orElseThrow(() -> new RuntimeException("Family not found"));
         chatRoom.setFamily(family);
@@ -105,15 +105,26 @@ public class ChatRoomService {
         return chatRoomMapper.toDTO(chatRoom);
     }
 
-    public List<ChatRoomDTO> getAllChatRooms(Long userId) {
+    // ✅ familyId까지 받아서 해당 가족 채팅방만 필터링
+    public List<ChatRoomDTO> getAllChatRooms(Long userId, UUID familyId) {
+        // 1) 유저가 속한 모든 채팅방 ID 조회
         List<UserChatRoom> userChatRooms = userChatRoomRepository.findByUserId(userId);
         Set<UUID> chatRoomIds = userChatRooms.stream()
                 .map(UserChatRoom::getChatRoom)
                 .map(ChatRoom::getChatRoomId)
                 .collect(Collectors.toSet());
+
+        // 2) 채팅방 엔티티들 조회
         List<ChatRoom> chatRooms = chatRoomRepository.findByChatRoomIdIn(chatRoomIds);
 
-        return chatRooms.stream().map(chatRoom -> {
+        // 3) 🔹 familyId로 한 번 더 필터링
+        List<ChatRoom> filteredChatRooms = chatRooms.stream()
+                .filter(cr -> cr.getFamily() != null) // family가 null 아닌 것만
+                .filter(cr -> familyId.equals(cr.getFamily().getFamilyId()))
+                .collect(Collectors.toList());
+
+        // 4) DTO 매핑 + 나머지 기존 로직 그대로
+        return filteredChatRooms.stream().map(chatRoom -> {
             ChatRoomDTO dto = chatRoomMapper.toDTO(chatRoom);
 
             // 최신 메시지 추출
@@ -130,7 +141,7 @@ public class ChatRoomService {
                         dto.setLatestMessageTime(message.getCreatedAt());
                     });
 
-            // 채팅방 멤버 이미지 리스트
+            // 멤버 이미지
             List<String> images;
             if (isKinoRoom(chatRoom.getChatRoomId())) {
                 String suffix;
@@ -140,7 +151,7 @@ public class ChatRoomService {
                 } else if (personality == ChatBotPersonality.SNUGGLE) {
                     suffix = "pinkKino.png";
                 } else {
-                    suffix = "yellowKino.png"; // 기본값 SUNNY or null
+                    suffix = "yellowKino.png";
                 }
                 String kinoImageUrl = cloudFrontDomain + suffix;
                 images = List.of(kinoImageUrl);
@@ -152,8 +163,7 @@ public class ChatRoomService {
             }
             dto.setMemberImages(images);
 
-            // [추가됨] 알림 설정 여부 조회
-            // DB에 설정값이 없으면 기본적으로 알림이 켜져있다고(true) 가정
+            // 알림 설정 여부
             boolean isNotificationOn = chatRoomNotificationRepository
                     .findByUser_UserIdAndChatRoom_ChatRoomId(userId, chatRoom.getChatRoomId())
                     .map(ChatRoomNotificationSetting::isNotificationOn)
@@ -163,7 +173,6 @@ public class ChatRoomService {
 
             return dto;
         }).collect(Collectors.toList());
-
     }
 
     public List<UserDTO> getUsersByChatRoom(UUID chatRoomId) {
