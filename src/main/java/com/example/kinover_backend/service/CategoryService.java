@@ -29,7 +29,6 @@ public class CategoryService {
 
                 Category category = new Category();
                 // 🔸 프론트에서 만든 UUID 그대로 쓰는 경우
-                category.setCategoryId(dto.getCategoryId());
                 category.setTitle(dto.getTitle());
                 category.setFamily(family);
 

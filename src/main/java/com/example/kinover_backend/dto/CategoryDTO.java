@@ -14,9 +14,7 @@ import java.util.UUID;
 @Getter
 @Setter
 @AllArgsConstructor
-@NoArgsConstructor       // ✅ 이거 추가
 public class CategoryDTO {
-
     private UUID categoryId;      // 서버 응답 시 채워짐
     private UUID familyId;        // 요청 시 사용
     private String title;         // 요청/응답 공통
