@@ -19,9 +19,9 @@ public class CategoryController {
     private final CategoryService categoryService;
 
     @PostMapping
-    public ResponseEntity<Void> createCategory(@RequestBody CategoryDTO dto) {
-        categoryService.createCategory(dto);
-        return ResponseEntity.ok().build();
+    public ResponseEntity<CategoryDTO> createCategory(@RequestBody CategoryDTO dto) {
+        CategoryDTO created = categoryService.createCategory(dto); // 저장 후 DTO 리턴
+        return ResponseEntity.ok(created);
     }
 
     @GetMapping("/{familyId}")

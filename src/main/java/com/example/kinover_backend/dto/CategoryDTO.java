@@ -5,6 +5,7 @@ import com.example.kinover_backend.entity.Family;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.util.Date;
@@ -13,6 +14,7 @@ import java.util.UUID;
 @Getter
 @Setter
 @AllArgsConstructor
+@NoArgsConstructor       // ✅ 이거 추가
 public class CategoryDTO {
 
     private UUID categoryId;      // 서버 응답 시 채워짐
