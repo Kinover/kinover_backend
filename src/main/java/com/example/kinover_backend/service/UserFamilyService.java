@@ -91,7 +91,7 @@ public class UserFamilyService {
         kinoChatRoom.setKino(true);
         kinoChatRoom.setFamilyType("personal");
         kinoChatRoom.setImage(kino.getImage());
-        kinoChatRoom.setFamily(null);
+        kinoChatRoom.setFamily(family);
 
         chatRoomRepository.save(kinoChatRoom);
 
