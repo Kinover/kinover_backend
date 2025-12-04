@@ -283,23 +283,31 @@ public class ChatRoomService {
     public boolean updateChatRoomNotificationSetting(Long userId, UUID chatRoomId, boolean isOn) {
         Optional<User> userOpt = userRepository.findById(userId);
         Optional<ChatRoom> chatRoomOpt = chatRoomRepository.findById(chatRoomId);
-
-        if (userOpt.isEmpty() || chatRoomOpt.isEmpty())
+    
+        if (userOpt.isEmpty() || chatRoomOpt.isEmpty()) {
             return false;
-
+        }
+    
         User user = userOpt.get();
         ChatRoom chatRoom = chatRoomOpt.get();
-
-        Optional<ChatRoomNotificationSetting> settingOpt = chatRoomNotificationRepository.findByUserAndChatRoom(user,
-                chatRoom);
-
-        if (settingOpt.isEmpty())
-            return false;
-
-        ChatRoomNotificationSetting setting = settingOpt.get();
+    
+        // 기존 설정 조회
+        Optional<ChatRoomNotificationSetting> settingOpt =
+                chatRoomNotificationRepository.findByUserAndChatRoom(user, chatRoom);
+    
+        // 🔥 없으면 새로 생성, 있으면 기존 것 사용
+        ChatRoomNotificationSetting setting = settingOpt.orElseGet(() -> {
+            ChatRoomNotificationSetting s = new ChatRoomNotificationSetting();
+            s.setUser(user);
+            s.setChatRoom(chatRoom);
+            // 처음 생성 시에도 요청 들어온 isOn 값으로 맞춰줌
+            return s;
+        });
+    
         setting.setNotificationOn(isOn);
         chatRoomNotificationRepository.save(setting);
+    
         return true;
     }
-
+    
 }
