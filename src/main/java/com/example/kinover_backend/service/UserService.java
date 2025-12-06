@@ -43,6 +43,7 @@ public class UserService {
     private final ObjectMapper objectMapper;
     private final StringRedisTemplate redisTemplate;
     private final ObjectProvider<WebSocketStatusHandler> statusHandlerProvider;
+    private final UserChatRoomRepository userChatRoomRepository;
 
     @Autowired
     private EntityManager entityManager;
@@ -140,7 +141,12 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("존재하지 않는 유저입니다."));
 
-        // 1. 유저 정보 익명화
+        // 1. [추가됨] 챗봇(9999999999)과 함께 있는 채팅방 연결 정보 삭제
+        // 해당 유저가 챗봇과 공유하는 채팅방 데이터(row)만 딱 집어서 지웁니다.
+        Long chatbotId = 9999999999L;
+        userChatRoomRepository.deleteCommonChatRoomWithBot(userId, chatbotId);
+
+        // 2. 유저 정보 익명화
         user.setName("탈퇴했음");
         user.setImage(cloudFrontDomain + "kinover_deleted_user.png");
         user.setBirth(null);
@@ -149,11 +155,11 @@ public class UserService {
         user.setPhoneNumber(null);
         user.setTrait(null);
 
-        // 2. 유저-가족 관계 제거
+        // 3. 유저-가족 관계 제거
         List<UserFamily> toRemove = userFamilyRepository.findAllByUser_UserId(userId);
-        userFamilyRepository.deleteAll(toRemove);  // FK만 끊기면 됨
+        userFamilyRepository.deleteAll(toRemove);
 
-        // 3. 유저는 삭제하지 않고 저장 (익명화만 적용)
+        // 4. 유저는 삭제하지 않고 저장 (익명화만 적용)
         userRepository.save(user);
     }
 
