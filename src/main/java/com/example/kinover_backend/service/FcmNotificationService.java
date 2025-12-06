@@ -22,6 +22,7 @@ import com.google.auth.oauth2.AccessToken;
 
 import java.io.IOException;
 import java.util.Date;
+import java.util.Map;
 import java.util.TimeZone;
 
 import java.util.Optional;
@@ -175,6 +176,7 @@ public class FcmNotificationService {
             .setSound("default")      // 무음 방지
             .setBadge(1)              // 클라에서 누적 관리 권장
             .setThreadId("post_" + category.getCategoryId())
+            .setMutableContent(true) // ★수정됨: iOS에서 이미지를 띄우려면 필수 (Notification Extension 트리거)
             .build();
 
         ApnsConfig.Builder apnsBuilder = ApnsConfig.builder()
@@ -183,6 +185,11 @@ public class FcmNotificationService {
             .setAps(aps);
 
         if (firstImageUrl != null && !firstImageUrl.isBlank()) {
+            // ★수정됨: iOS 표준 이미지 전송 방식 (fcm_options -> image)
+            // 클라이언트가 별도 로직 없이 FCM SDK만으로 이미지를 처리하려 할 때 필요
+            apnsBuilder.putCustomData("fcm_options", Map.of("image", firstImageUrl));
+            
+            // (기존 유지) 혹시 클라이언트 앱 코드에서 'imageUrl' 키를 직접 파싱하고 있다면 유지
             apnsBuilder.putCustomData("imageUrl", firstImageUrl);
         }
 
@@ -204,14 +211,18 @@ public class FcmNotificationService {
             .build();
 
         // --- 공통 Notification ---
-        Notification notif = Notification.builder()
+        Notification.Builder notifBuilder = Notification.builder()
             .setTitle(title)
-            .setBody(body)
-            .build();
+            .setBody(body);
+
+        // ★수정됨: 공통 알림 객체에도 이미지 설정 (가장 권장되는 방식)
+        if (firstImageUrl != null && !firstImageUrl.isBlank()) {
+            notifBuilder.setImage(firstImageUrl);
+        }
 
         Message.Builder mb = Message.builder()
             .setToken(token)
-            .setNotification(notif)
+            .setNotification(notifBuilder.build()) // 수정된 빌더 사용
             .setApnsConfig(apnsConfig)
             .setAndroidConfig(androidConfig)
             .putData("notificationType", "POST")
@@ -228,7 +239,7 @@ public class FcmNotificationService {
         try {
             FirebaseMessaging.getInstance().send(mb.build());
         } catch (FirebaseMessagingException e) {
-            e.printStackTrace(); // 필요하다면 여기서만 예외 출력
+            e.printStackTrace();
         }
     }
 
