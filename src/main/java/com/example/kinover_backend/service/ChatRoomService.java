@@ -157,6 +157,7 @@ public class ChatRoomService {
                 images = List.of(kinoImageUrl);
             } else {
                 images = userChatRoomRepository.findUsersByChatRoomId(chatRoom.getChatRoomId()).stream()
+                        .filter(user -> !user.getUserId().equals(userId)) // 🔥 자기 자신 제외
                         .map(User::getImage)
                         .filter(Objects::nonNull)
                         .collect(Collectors.toList());
@@ -283,18 +284,18 @@ public class ChatRoomService {
     public boolean updateChatRoomNotificationSetting(Long userId, UUID chatRoomId, boolean isOn) {
         Optional<User> userOpt = userRepository.findById(userId);
         Optional<ChatRoom> chatRoomOpt = chatRoomRepository.findById(chatRoomId);
-    
+
         if (userOpt.isEmpty() || chatRoomOpt.isEmpty()) {
             return false;
         }
-    
+
         User user = userOpt.get();
         ChatRoom chatRoom = chatRoomOpt.get();
-    
+
         // 기존 설정 조회
-        Optional<ChatRoomNotificationSetting> settingOpt =
-                chatRoomNotificationRepository.findByUserAndChatRoom(user, chatRoom);
-    
+        Optional<ChatRoomNotificationSetting> settingOpt = chatRoomNotificationRepository.findByUserAndChatRoom(user,
+                chatRoom);
+
         // 🔥 없으면 새로 생성, 있으면 기존 것 사용
         ChatRoomNotificationSetting setting = settingOpt.orElseGet(() -> {
             ChatRoomNotificationSetting s = new ChatRoomNotificationSetting();
@@ -303,11 +304,11 @@ public class ChatRoomService {
             // 처음 생성 시에도 요청 들어온 isOn 값으로 맞춰줌
             return s;
         });
-    
+
         setting.setNotificationOn(isOn);
         chatRoomNotificationRepository.save(setting);
-    
+
         return true;
     }
-    
+
 }
