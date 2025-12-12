@@ -9,7 +9,6 @@ import lombok.Setter;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.Date;
 
@@ -17,6 +16,7 @@ import java.util.Date;
 @Setter
 @Entity
 public class ChatRoom {
+
     @Id
     @GeneratedValue
     private UUID chatRoomId;
@@ -25,8 +25,9 @@ public class ChatRoom {
     private String roomName;
 
     @Column(columnDefinition = "BOOLEAN DEFAULT FALSE")
-    private boolean isKino; // RoomType 대신 kino 여부만 체크
+    private boolean isKino;
 
+    // ✅ 이 필드가 빠져있었음
     @Enumerated(EnumType.STRING)
     @Column(nullable = true)
     private KinoType kinoType;
@@ -54,4 +55,11 @@ public class ChatRoom {
     @OneToMany(mappedBy = "chatRoom", cascade = CascadeType.ALL)
     private List<Message> messages = new ArrayList<>();
 
+    // ✅ 저장 직전에 키노방이면 kinoType 기본값 강제
+    @PrePersist
+    public void prePersist() {
+        if (isKino && kinoType == null) {
+            kinoType = KinoType.YELLOW_KINO;
+        }
+    }
 }
