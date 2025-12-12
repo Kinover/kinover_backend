@@ -5,6 +5,7 @@ import com.example.kinover_backend.dto.ChatRoomMapper;
 import com.example.kinover_backend.dto.UserDTO;
 import com.example.kinover_backend.entity.*;
 import com.example.kinover_backend.enums.ChatBotPersonality;
+import com.example.kinover_backend.enums.KinoType;
 import com.example.kinover_backend.enums.MessageType;
 import com.example.kinover_backend.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -273,7 +274,13 @@ public class ChatRoomService {
         System.out.println("[updateChatBotPersonality] Deleting messages for chatRoomId: " + chatRoomId);
         messageRepository.deleteByChatRoom(chatRoom);
 
+        // ✅ 퍼스널리티 변경
         chatRoom.setPersonality(personality);
+
+        // ✅ 퍼스널리티에 따라 KinoType 변경
+        KinoType kinoType = mapPersonalityToKinoType(personality);
+        chatRoom.setKinoType(kinoType);
+
         chatRoomRepository.save(chatRoom);
         System.out.println("[updateChatBotPersonality] Personality updated to: " + personality);
 
@@ -309,6 +316,14 @@ public class ChatRoomService {
         chatRoomNotificationRepository.save(setting);
 
         return true;
+    }
+
+    private KinoType mapPersonalityToKinoType(ChatBotPersonality personality) {
+        return switch (personality) {
+            case SUNNY -> KinoType.YELLOW_KINO;
+            case SERENE -> KinoType.BLUE_KINO;
+            case SNUGGLE -> KinoType.PINK_KINO;
+        };
     }
 
 }

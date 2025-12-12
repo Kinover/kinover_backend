@@ -1,6 +1,8 @@
 package com.example.kinover_backend.dto;
 
 import com.example.kinover_backend.entity.ChatRoom;
+import com.example.kinover_backend.enums.KinoType;
+
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -23,11 +25,11 @@ public class ChatRoomDTO {
 
     @JsonProperty("kino")
     private boolean isKino; // RoomType 대신 boolean으로 kino 여부만 구분
-
+    private KinoType kinoType;
     private String familyType;
     private String image;
     private Date createdAt;
-    private FamilyDTO family;  // Family 엔티티의 DTO
+    private FamilyDTO family; // Family 엔티티의 DTO
     private List<UserChatRoomDTO> userChatRooms; // UserChatRoom 엔티티의 DTO 리스트
     private String latestMessageContent;
     private LocalDateTime latestMessageTime;
@@ -39,7 +41,7 @@ public class ChatRoomDTO {
             String latestMessageContent,
             LocalDateTime latestMessageTime,
             List<String> memberImages,
-            List<UserChatRoomDTO> userChatRooms  // 필요 시
+            List<UserChatRoomDTO> userChatRooms // 필요 시
     ) {
         if (chatRoom.getChatRoomId() == null) {
             chatRoom.setChatRoomId(UUID.randomUUID());
@@ -47,6 +49,14 @@ public class ChatRoomDTO {
         this.chatRoomId = chatRoom.getChatRoomId();
         this.roomName = chatRoom.getRoomName();
         this.isKino = chatRoom.isKino();
+        if (this.isKino) {
+            this.kinoType = chatRoom.getKinoType() != null
+                    ? chatRoom.getKinoType()
+                    : KinoType.YELLOW_KINO;
+        } else {
+            this.kinoType = null;
+        }
+
         this.familyType = chatRoom.getFamilyType();
         this.createdAt = chatRoom.getCreatedAt();
         this.image = chatRoom.getImage();

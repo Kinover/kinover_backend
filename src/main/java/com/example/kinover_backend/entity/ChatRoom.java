@@ -1,6 +1,8 @@
 package com.example.kinover_backend.entity;
 
 import com.example.kinover_backend.enums.ChatBotPersonality;
+import com.example.kinover_backend.enums.KinoType;
+
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -24,6 +26,10 @@ public class ChatRoom {
 
     @Column(columnDefinition = "BOOLEAN DEFAULT FALSE")
     private boolean isKino; // RoomType 대신 kino 여부만 체크
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = true)
+    private KinoType kinoType;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = true)
