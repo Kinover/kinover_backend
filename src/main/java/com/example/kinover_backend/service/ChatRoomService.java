@@ -133,22 +133,17 @@ public class ChatRoomService {
     // 특정 유저가 가진 채팅방 조회
     // (컨트롤러 주석대로 familyId는 사용하지 않음)
     // =========================
-    public List<ChatRoomDTO> getAllChatRooms(Long userId, UUID familyId /* 사용되지 않음 */) {
-        // 1) 유저가 속한 모든 채팅방 ID 조회
-        List<UserChatRoom> userChatRooms = userChatRoomRepository.findByUserId(userId);
-        Set<UUID> chatRoomIds = userChatRooms.stream()
-                .map(UserChatRoom::getChatRoom)
-                .map(ChatRoom::getChatRoomId)
-                .collect(Collectors.toSet());
+    public List<ChatRoomDTO> getAllChatRooms(Long userId, UUID familyId) {
 
-        // 2) 채팅방 엔티티들 조회
-        List<ChatRoom> chatRooms = chatRoomRepository.findByChatRoomIdIn(chatRoomIds);
+        // ✅ 여기서 끝: 해당 유저 + 해당 가족 채팅방만
+        List<ChatRoom> chatRooms = chatRoomRepository.findByUserIdAndFamilyId(userId, familyId);
 
         return chatRooms.stream().map(chatRoom -> {
             ChatRoomDTO dto = chatRoomMapper.toDTO(chatRoom);
 
-            // 최신 메시지
-            messageRepository.findTopByChatRoom_ChatRoomIdOrderByCreatedAtDesc(chatRoom.getChatRoomId())
+            // ✅ 최신 메시지
+            messageRepository
+                    .findTopByChatRoom_ChatRoomIdOrderByCreatedAtDesc(chatRoom.getChatRoomId())
                     .ifPresent(message -> {
                         if (message.getMessageType() == MessageType.text) {
                             dto.setLatestMessageContent(message.getContent());
@@ -163,7 +158,7 @@ public class ChatRoomService {
                         dto.setLatestMessageTime(message.getCreatedAt());
                     });
 
-            // 멤버 이미지
+            // ✅ 멤버 이미지
             List<String> images;
             if (isKinoRoom(chatRoom.getChatRoomId())) {
                 String suffix;
@@ -177,15 +172,16 @@ public class ChatRoomService {
                 }
                 images = List.of(cloudFrontDomain + suffix);
             } else {
-                images = userChatRoomRepository.findUsersByChatRoomId(chatRoom.getChatRoomId()).stream()
-                        .filter(user -> !user.getUserId().equals(userId)) // 자기 자신 제외
+                images = chatRoom.getUserChatRooms().stream()
+                        .map(UserChatRoom::getUser)
+                        .filter(user -> !user.getUserId().equals(userId))
                         .map(User::getImage)
                         .filter(Objects::nonNull)
                         .collect(Collectors.toList());
             }
             dto.setMemberImages(images);
 
-            // 채팅방 알림 설정 (기본 true)
+            // ✅ 알림 설정
             boolean isNotificationOn = chatRoomNotificationRepository
                     .findByUser_UserIdAndChatRoom_ChatRoomId(userId, chatRoom.getChatRoomId())
                     .map(ChatRoomNotificationSetting::isNotificationOn)
