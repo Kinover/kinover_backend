@@ -35,27 +35,33 @@ public class ChatRoomService {
     @Autowired
     private ChatRoomMapper chatRoomMapper;
 
-    // 채팅방 생성 메서드
+    // =========================
+    // 채팅방 생성
+    // =========================
     @Transactional
     public ChatRoomDTO createChatRoom(UUID familyId, Long creatorId, String roomName, List<Long> userIds) {
-        ChatRoom chatRoom = new ChatRoom();
-        chatRoom.setRoomName("Initial");
-        chatRoom.setFamilyType(userIds.size() > 1 ? "family" : "personal");
-
         Family family = familyRepository.findById(familyId)
                 .orElseThrow(() -> new RuntimeException("Family not found"));
-        chatRoom.setFamily(family);
 
-        chatRoomRepository.save(chatRoom);
-
+        // creator 포함한 전체 유저 목록 확정
         List<Long> allUserIds = new ArrayList<>(userIds);
         if (!allUserIds.contains(creatorId)) {
             allUserIds.add(creatorId);
         }
 
+        ChatRoom chatRoom = new ChatRoom();
+        chatRoom.setRoomName(roomName); // ✅ roomName 반영 (Initial 하드코딩 제거)
+        chatRoom.setFamily(family);
+
+        // 참여 인원 기준: 2명=personal, 3명 이상=family (원하는 기준이면 여기서 변경)
+        chatRoom.setFamilyType(allUserIds.size() > 2 ? "family" : "personal");
+
+        chatRoomRepository.save(chatRoom);
+
         for (Long userId : allUserIds) {
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new RuntimeException("유저를 찾을 수 없습니다: " + userId));
+
             UserChatRoom userChatRoom = new UserChatRoom();
             userChatRoom.setUser(user);
             userChatRoom.setChatRoom(chatRoom);
@@ -65,7 +71,22 @@ public class ChatRoomService {
         return chatRoomMapper.toDTO(chatRoom);
     }
 
+    // ✅ WebSocket 권한 체크용: 해당 유저가 채팅방 멤버인지 확인
+    public boolean isMember(UUID chatRoomId, Long userId) {
+        if (chatRoomId == null || userId == null)
+            return false;
+
+        // 가장 안전한 방식: userChatRoom 테이블에서 존재 여부 확인
+        // (레포지토리에 exists 메서드가 있으면 그걸 쓰는게 제일 빠름)
+        return userChatRoomRepository.findByUserId(userId).stream()
+                .anyMatch(ucr -> ucr.getChatRoom() != null
+                        && chatRoomId.equals(ucr.getChatRoom().getChatRoomId()));
+    }
+
+    // =========================
     // 채팅방에 유저 추가
+    // =========================
+    @Transactional
     public ChatRoomDTO addUsersToChatRoom(UUID chatRoomId, List<Long> userIds, Long requesterId) {
         ChatRoom chatRoom = chatRoomRepository.findByChatRoomId(chatRoomId);
         if (chatRoom == null) {
@@ -93,21 +114,26 @@ public class ChatRoomService {
         for (Long userId : newUserIds) {
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new RuntimeException("유저를 찾을 수 없습니다: " + userId));
+
             UserChatRoom userChatRoom = new UserChatRoom();
             userChatRoom.setUser(user);
             userChatRoom.setChatRoom(chatRoom);
             userChatRoomRepository.save(userChatRoom);
         }
 
-        List<User> updatedUsers = userChatRoomRepository.findUsersByChatRoomId(chatRoomId);
-        chatRoom.setFamilyType(updatedUsers.size() > 2 ? "family" : "personal");
+        // 인원수로 familyType 재설정
+        int memberCount = userChatRoomRepository.countByChatRoom(chatRoom);
+        chatRoom.setFamilyType(memberCount > 2 ? "family" : "personal");
         chatRoomRepository.save(chatRoom);
 
         return chatRoomMapper.toDTO(chatRoom);
     }
 
-    // ✅ familyId까지 받아서 해당 가족 채팅방만 필터링
-    public List<ChatRoomDTO> getAllChatRooms(Long userId, UUID familyId) {
+    // =========================
+    // 특정 유저가 가진 채팅방 조회
+    // (컨트롤러 주석대로 familyId는 사용하지 않음)
+    // =========================
+    public List<ChatRoomDTO> getAllChatRooms(Long userId, UUID familyId /* 사용되지 않음 */) {
         // 1) 유저가 속한 모든 채팅방 ID 조회
         List<UserChatRoom> userChatRooms = userChatRoomRepository.findByUserId(userId);
         Set<UUID> chatRoomIds = userChatRooms.stream()
@@ -118,23 +144,18 @@ public class ChatRoomService {
         // 2) 채팅방 엔티티들 조회
         List<ChatRoom> chatRooms = chatRoomRepository.findByChatRoomIdIn(chatRoomIds);
 
-        // 3) 🔹 familyId로 한 번 더 필터링
-        List<ChatRoom> filteredChatRooms = chatRooms.stream()
-                .filter(cr -> cr.getFamily() != null) // family가 null 아닌 것만
-                .filter(cr -> familyId.equals(cr.getFamily().getFamilyId()))
-                .collect(Collectors.toList());
-
-        // 4) DTO 매핑 + 나머지 기존 로직 그대로
-        return filteredChatRooms.stream().map(chatRoom -> {
+        return chatRooms.stream().map(chatRoom -> {
             ChatRoomDTO dto = chatRoomMapper.toDTO(chatRoom);
 
-            // 최신 메시지 추출
+            // 최신 메시지
             messageRepository.findTopByChatRoom_ChatRoomIdOrderByCreatedAtDesc(chatRoom.getChatRoomId())
                     .ifPresent(message -> {
                         if (message.getMessageType() == MessageType.text) {
                             dto.setLatestMessageContent(message.getContent());
                         } else if (message.getMessageType() == MessageType.image) {
-                            int count = message.getContent().split(",").length;
+                            int count = (message.getContent() == null || message.getContent().isBlank())
+                                    ? 0
+                                    : message.getContent().split(",").length;
                             dto.setLatestMessageContent("사진을 " + count + "장 보냈습니다.");
                         } else if (message.getMessageType() == MessageType.video) {
                             dto.setLatestMessageContent("동영상을 보냈습니다.");
@@ -154,18 +175,17 @@ public class ChatRoomService {
                 } else {
                     suffix = "yellowKino.png";
                 }
-                String kinoImageUrl = cloudFrontDomain + suffix;
-                images = List.of(kinoImageUrl);
+                images = List.of(cloudFrontDomain + suffix);
             } else {
                 images = userChatRoomRepository.findUsersByChatRoomId(chatRoom.getChatRoomId()).stream()
-                        .filter(user -> !user.getUserId().equals(userId)) // 🔥 자기 자신 제외
+                        .filter(user -> !user.getUserId().equals(userId)) // 자기 자신 제외
                         .map(User::getImage)
                         .filter(Objects::nonNull)
                         .collect(Collectors.toList());
             }
             dto.setMemberImages(images);
 
-            // 알림 설정 여부
+            // 채팅방 알림 설정 (기본 true)
             boolean isNotificationOn = chatRoomNotificationRepository
                     .findByUser_UserIdAndChatRoom_ChatRoomId(userId, chatRoom.getChatRoomId())
                     .map(ChatRoomNotificationSetting::isNotificationOn)
@@ -177,21 +197,24 @@ public class ChatRoomService {
         }).collect(Collectors.toList());
     }
 
+    // =========================
+    // 특정 채팅방의 유저 조회
+    // =========================
     public List<UserDTO> getUsersByChatRoom(UUID chatRoomId) {
-        List<User> list = userChatRoomRepository.findUsersByChatRoomId(chatRoomId);
-        List<UserDTO> userDTOList = new ArrayList<>();
-        for (User user : list) {
-            userDTOList.add(new UserDTO(user));
-        }
-        return userDTOList;
+        return userChatRoomRepository.findUsersByChatRoomId(chatRoomId).stream()
+                .map(UserDTO::new)
+                .collect(Collectors.toList());
     }
 
     public boolean isKinoRoom(UUID chatRoomId) {
         return chatRoomRepository.findById(chatRoomId)
                 .map(ChatRoom::isKino)
-                .orElse(false); // 없으면 false 처리
+                .orElse(false);
     }
 
+    // =========================
+    // 채팅방 이름 변경
+    // =========================
     @Transactional
     public void renameChatRoom(UUID chatRoomId, String newRoomName, Long userId) {
         ChatRoom chatRoom = chatRoomRepository.findByChatRoomId(chatRoomId);
@@ -199,7 +222,6 @@ public class ChatRoomService {
             throw new RuntimeException("채팅방을 찾을 수 없습니다: " + chatRoomId);
         }
 
-        // 채팅방에 사용자가 포함되어 있는지 확인
         boolean isParticipant = userChatRoomRepository.findByUserId(userId).stream()
                 .anyMatch(ucr -> ucr.getChatRoom().getChatRoomId().equals(chatRoomId));
         if (!isParticipant) {
@@ -210,9 +232,11 @@ public class ChatRoomService {
         chatRoomRepository.save(chatRoom);
     }
 
+    // =========================
+    // 채팅방 나가기 (마지막이면 메시지/채팅방/S3 삭제)
+    // =========================
     @Transactional
     public void leaveChatRoom(UUID chatRoomId, Long userId) {
-        // 1. 유저-채팅방 관계 삭제
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("사용자 정보를 찾을 수 없습니다."));
 
@@ -221,10 +245,8 @@ public class ChatRoomService {
 
         userChatRoomRepository.deleteByUserAndChatRoom(user, chatRoom);
 
-        // 2. 남은 유저 수 확인
         int remainingUsers = userChatRoomRepository.countByChatRoom(chatRoom);
 
-        // 3. 마지막 사용자였다면 메시지와 채팅방 삭제
         if (remainingUsers == 0) {
             List<Message> messages = messageRepository.findAllByChatRoomId(chatRoomId);
 
@@ -232,7 +254,6 @@ public class ChatRoomService {
 
             for (Message message : messages) {
                 MessageType type = message.getMessageType();
-
                 if (type == MessageType.image || type == MessageType.video) {
                     String content = message.getContent();
                     if (content != null && !content.isBlank()) {
@@ -246,71 +267,66 @@ public class ChatRoomService {
                 }
             }
 
-            // DB 삭제
             messageRepository.deleteAll(messages);
             chatRoomRepository.delete(chatRoom);
 
-            // S3 삭제
             for (String s3Key : s3KeysToDelete) {
                 s3Service.deleteImageFromS3(s3Key);
             }
         }
     }
 
+    // =========================
+    // Kino 채팅방 퍼스널리티 변경 (메시지 초기화 포함)
+    // =========================
     @Transactional
     public boolean updateChatBotPersonality(UUID chatRoomId, ChatBotPersonality personality) {
         Optional<ChatRoom> optionalChatRoom = chatRoomRepository.findById(chatRoomId);
-        if (optionalChatRoom.isEmpty()) {
-            System.out.println("[updateChatBotPersonality] ChatRoom not found: " + chatRoomId);
+        if (optionalChatRoom.isEmpty())
             return false;
-        }
 
         ChatRoom chatRoom = optionalChatRoom.get();
-        if (!Boolean.TRUE.equals(chatRoom.isKino())) {
-            System.out.println("[updateChatBotPersonality] Not a Kino room: " + chatRoomId);
+        if (!Boolean.TRUE.equals(chatRoom.isKino()))
             return false;
-        }
 
-        System.out.println("[updateChatBotPersonality] Deleting messages for chatRoomId: " + chatRoomId);
         messageRepository.deleteByChatRoom(chatRoom);
 
-        // ✅ 퍼스널리티 변경
         chatRoom.setPersonality(personality);
-
-        // ✅ 퍼스널리티에 따라 KinoType 변경
-        KinoType kinoType = mapPersonalityToKinoType(personality);
-        chatRoom.setKinoType(kinoType);
+        chatRoom.setKinoType(mapPersonalityToKinoType(personality));
 
         chatRoomRepository.save(chatRoom);
-        System.out.println("[updateChatBotPersonality] Personality updated to: " + personality);
-
         return true;
     }
 
+    // =========================
+    // 특정 채팅방 알림 설정
+    // - 유저 전체 채팅 알림이 true일 때만 유효
+    // =========================
     @Transactional
     public boolean updateChatRoomNotificationSetting(Long userId, UUID chatRoomId, boolean isOn) {
         Optional<User> userOpt = userRepository.findById(userId);
         Optional<ChatRoom> chatRoomOpt = chatRoomRepository.findById(chatRoomId);
 
-        if (userOpt.isEmpty() || chatRoomOpt.isEmpty()) {
+        if (userOpt.isEmpty() || chatRoomOpt.isEmpty())
             return false;
-        }
 
         User user = userOpt.get();
         ChatRoom chatRoom = chatRoomOpt.get();
 
-        // 기존 설정 조회
-        Optional<ChatRoomNotificationSetting> settingOpt = chatRoomNotificationRepository.findByUserAndChatRoom(user,
-                chatRoom);
+        // ✅ User 엔티티 필드명이 Boolean isChatNotificationOn 이므로 getter는
+        // getIsChatNotificationOn()
+        if (!Boolean.TRUE.equals(user.getIsChatNotificationOn())) {
+            return false;
+        }
 
-        // 🔥 없으면 새로 생성, 있으면 기존 것 사용
-        ChatRoomNotificationSetting setting = settingOpt.orElseGet(() -> {
-            ChatRoomNotificationSetting s = new ChatRoomNotificationSetting();
-            s.setUser(user);
-            s.setChatRoom(chatRoom);
-            // 처음 생성 시에도 요청 들어온 isOn 값으로 맞춰줌
-            return s;
-        });
+        ChatRoomNotificationSetting setting = chatRoomNotificationRepository
+                .findByUserAndChatRoom(user, chatRoom)
+                .orElseGet(() -> {
+                    ChatRoomNotificationSetting s = new ChatRoomNotificationSetting();
+                    s.setUser(user);
+                    s.setChatRoom(chatRoom);
+                    return s;
+                });
 
         setting.setNotificationOn(isOn);
         chatRoomNotificationRepository.save(setting);
@@ -325,5 +341,4 @@ public class ChatRoomService {
             case SNUGGLE -> KinoType.PINK_KINO;
         };
     }
-
 }
