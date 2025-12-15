@@ -1,3 +1,5 @@
+// package com.example.kinover_backend.controller;
+
 package com.example.kinover_backend.controller;
 
 import com.example.kinover_backend.service.S3Service;
@@ -25,8 +27,8 @@ public class ImageController {
     @Operation(
             summary = "여러 미디어 업로드용 Presigned URL 요청",
             description = """
-                    1) 신 포맷: { "files": [ { "fileName": "...", "contentType": "image/jpeg|video/mp4|..." }, ... ] }
-                    2) 구 포맷(호환): { "fileNames": [ "...", "..." ] }  (이 경우 contentType은 기본값으로 처리됨)
+                    1) 신 포맷: { "files": [ { "fileName": "...", "contentType": "image/jpeg|video/mp4|video/quicktime|..." }, ... ] }
+                    2) 구 포맷(호환): { "fileNames": [ "...", "..." ] }  (이 경우 contentType은 파일 확장자로 추론)
                     """
     )
     @ApiResponse(responseCode = "200", description = "Presigned URL 리스트 반환")
@@ -44,9 +46,9 @@ public class ImageController {
                         Object ct = m.get("contentType");
                         String fileName = fn == null ? null : String.valueOf(fn);
                         String contentType = ct == null ? null : String.valueOf(ct);
-                        return s3Service.generatePresignedUrl(fileName, contentType);
+                        URL url = s3Service.generatePresignedUrl(fileName, contentType);
+                        return url.toString();
                     })
-                    .map(URL::toString)
                     .collect(Collectors.toList());
 
             return ResponseEntity.ok(urls);
@@ -55,9 +57,10 @@ public class ImageController {
         // ✅ 2) 구 포맷: fileNames (기존 클라 호환)
         Object fileNamesObj = body.get("fileNames");
         if (fileNamesObj instanceof List<?> fileNames && !fileNames.isEmpty()) {
+
             List<String> urls = fileNames.stream()
                     .map(String::valueOf)
-                    .map(fileName -> s3Service.generatePresignedUrl(fileName, null)) // contentType 없으면 서비스 기본값
+                    .map(fileName -> s3Service.generatePresignedUrl(fileName, null)) // ✅ contentType 없으면 확장자로 추론
                     .map(URL::toString)
                     .collect(Collectors.toList());
 
