@@ -4,9 +4,10 @@ import com.example.kinover_backend.dto.*;
 import com.example.kinover_backend.entity.*;
 import com.example.kinover_backend.enums.NotificationType;
 import com.example.kinover_backend.repository.*;
+import com.example.kinover_backend.websocket.WebSocketStatusHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,13 +16,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.stereotype.Service;
-import jakarta.persistence.EntityManager;
+import org.springframework.transaction.annotation.Transactional;
 import org.webjars.NotFoundException;
-import com.example.kinover_backend.websocket.WebSocketStatusHandler;
 
-import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -48,11 +46,10 @@ public class UserService {
     @Autowired
     private EntityManager entityManager;
 
-    private static final Logger logger = LoggerFactory.getLogger(KakaoUserService.class);
+    private static final Logger logger = LoggerFactory.getLogger(UserService.class);
 
     @Value("${cloudfront.domain}")
     private String cloudFrontDomain;
-
 
     // 유저 아이디 통해서 유저 조회 (DTO 반환)
     @Transactional
@@ -64,7 +61,7 @@ public class UserService {
 
         List<UserFamily> list = userFamilyRepository.findAllByUser_UserId(user.getUserId());
         if (!list.isEmpty()) {
-            dto.setFamilyId(list.get(0).getFamily().getFamilyId());  // 보통 1인 1가족 구조
+            dto.setFamilyId(list.get(0).getFamily().getFamilyId());
         }
 
         return dto;
@@ -72,7 +69,6 @@ public class UserService {
 
     public User createNewUserFromKakao(KakaoUserDto kakaoUserDto) {
         try {
-            // 1. PESSIMISTIC_WRITE 잠금으로 유저 조회 (중복 방지)
             User user = entityManager.find(User.class, kakaoUserDto.getKakaoId(), LockModeType.PESSIMISTIC_WRITE);
 
             if (user == null) {
@@ -80,22 +76,19 @@ public class UserService {
                 user.setUserId(kakaoUserDto.getKakaoId());
             }
 
-            // 2. 필수 정보 업데이트
             user.setEmail(kakaoUserDto.getEmail());
             user.setName(kakaoUserDto.getNickname());
             user.setPhoneNumber(kakaoUserDto.getPhoneNumber());
 
-            // 3. 프로필 이미지: http → https (iOS 호환)
             String profileImageUrl = kakaoUserDto.getProfileImageUrl();
             if (profileImageUrl != null && profileImageUrl.startsWith("http://")) {
                 profileImageUrl = "https://" + profileImageUrl.substring(7);
             }
             user.setImage(profileImageUrl);
 
-            // 4. 생일 정보 가공 (예: birthyear=1990, birthday=0101)
             if (kakaoUserDto.getBirthyear() != null && kakaoUserDto.getBirthday() != null) {
                 try {
-                    String yyyyMMdd = kakaoUserDto.getBirthyear() + kakaoUserDto.getBirthday(); // "19900101"
+                    String yyyyMMdd = kakaoUserDto.getBirthyear() + kakaoUserDto.getBirthday();
                     LocalDate birthDate = LocalDate.parse(yyyyMMdd, DateTimeFormatter.ofPattern("yyyyMMdd"));
                     user.setBirth(Date.from(birthDate.atStartOfDay(ZoneId.systemDefault()).toInstant()));
                 } catch (DateTimeParseException ex) {
@@ -120,33 +113,34 @@ public class UserService {
     public User updateUserFromKakao(User user, KakaoUserDto kakaoUserDto) {
         user.setName(kakaoUserDto.getNickname());
         user.setEmail(kakaoUserDto.getEmail());
-        // 이미지 URL을 https로 변환 (ios에서 http:// 이미지 안열리는 이슈)
+
         String profileImageUrl = kakaoUserDto.getProfileImageUrl();
         if (profileImageUrl != null && profileImageUrl.startsWith("http://")) {
             profileImageUrl = "https://" + profileImageUrl.substring(7);
         }
         user.setImage(profileImageUrl);
+
         user.setPhoneNumber(kakaoUserDto.getPhoneNumber());
+
         if (kakaoUserDto.getBirthyear() != null && kakaoUserDto.getBirthday() != null) {
-            String birthDateStr = kakaoUserDto.getBirthyear() + "-" + kakaoUserDto.getBirthday().substring(0, 2) + "-" + kakaoUserDto.getBirthday().substring(2);
+            String birthDateStr = kakaoUserDto.getBirthyear() + "-" +
+                    kakaoUserDto.getBirthday().substring(0, 2) + "-" +
+                    kakaoUserDto.getBirthday().substring(2);
             LocalDate birthDate = LocalDate.parse(birthDateStr, DateTimeFormatter.ISO_LOCAL_DATE);
             user.setBirth(Date.from(birthDate.atStartOfDay(ZoneId.systemDefault()).toInstant()));
         }
+
         return userRepository.saveAndFlush(user);
     }
-
 
     @Transactional
     public void deleteUserById(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("존재하지 않는 유저입니다."));
 
-        // 1. [추가됨] 챗봇(9999999999)과 함께 있는 채팅방 연결 정보 삭제
-        // 해당 유저가 챗봇과 공유하는 채팅방 데이터(row)만 딱 집어서 지웁니다.
         Long chatbotId = 9999999999L;
         userChatRoomRepository.deleteCommonChatRoomWithBot(userId, chatbotId);
 
-        // 2. 유저 정보 익명화
         user.setName("탈퇴했음");
         user.setImage(cloudFrontDomain + "kinover_deleted_user.png");
         user.setBirth(null);
@@ -155,16 +149,12 @@ public class UserService {
         user.setPhoneNumber(null);
         user.setTrait(null);
 
-        // 3. 유저-가족 관계 제거
         List<UserFamily> toRemove = userFamilyRepository.findAllByUser_UserId(userId);
         userFamilyRepository.deleteAll(toRemove);
 
-        // 4. 유저는 삭제하지 않고 저장 (익명화만 적용)
         userRepository.save(user);
     }
 
-
-    // 유저 프로필 수정
     public UserDTO modifyUser(UserDTO userDTO) {
         if (userDTO.getUserId() == null) {
             throw new IllegalArgumentException("User ID must not be null");
@@ -173,30 +163,22 @@ public class UserService {
         User user = userRepository.findById(userDTO.getUserId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // 수정 가능한 필드들만 null 체크 후 반영
-        if (userDTO.getName() != null) {
-            user.setName(userDTO.getName());
-        }
-
-        if (userDTO.getBirth() != null) {
-            user.setBirth(userDTO.getBirth());
-        }
+        if (userDTO.getName() != null) user.setName(userDTO.getName());
+        if (userDTO.getBirth() != null) user.setBirth(userDTO.getBirth());
 
         if (userDTO.getImage() != null) {
             String imagePath = userDTO.getImage();
             user.setImage(imagePath.startsWith("http") ? imagePath : cloudFrontDomain + imagePath);
         }
 
-        if (userDTO.getTrait() != null) {
-            user.setTrait(userDTO.getTrait());
-        }
+        if (userDTO.getTrait() != null) user.setTrait(userDTO.getTrait());
 
         if (userDTO.getEmotion() != null) {
-        if (user.getEmotion() == null || !user.getEmotion().equals(userDTO.getEmotion())) {
-            user.setEmotion(userDTO.getEmotion());
-            user.setEmotionUpdatedAt(LocalDateTime.now());
+            if (user.getEmotion() == null || !user.getEmotion().equals(userDTO.getEmotion())) {
+                user.setEmotion(userDTO.getEmotion());
+                user.setEmotionUpdatedAt(LocalDateTime.now());
+            }
         }
-    }
 
         User saved = userRepository.save(user);
 
@@ -219,11 +201,9 @@ public class UserService {
             userRepository.save(user);
         }
 
-        
-        // 유저가 속한 모든 가족 찾기
-        if(isMyself){
+        if (isMyself) {
             List<Family> families = userFamilyRepository.findFamiliesByUserId(userId);
-            
+
             for (Family family : families) {
                 List<UserStatusDTO> statusList = getFamilyStatus(family.getFamilyId());
 
@@ -235,49 +215,36 @@ public class UserService {
                     throw new RuntimeException("접속 상태 broadcast 실패", e);
                 }
             }
-        }   
+        }
     }
-
 
     public List<UserStatusDTO> getFamilyStatus(UUID familyId) {
-    System.out.println("\n[FamilyStatus] === getFamilyStatus() called ===");
-    System.out.println("[FamilyStatus] familyId = " + familyId);
+        List<User> familyMembers = userFamilyRepository.findUsersByFamilyId(familyId);
+        WebSocketStatusHandler handler = statusHandlerProvider.getObject();
 
-    List<User> familyMembers = userFamilyRepository.findUsersByFamilyId(familyId);
-    System.out.println("[FamilyStatus] found " + familyMembers.size() + " members in DB");
-
-    WebSocketStatusHandler handler = statusHandlerProvider.getObject();
-
-    // 각 멤버별 상태 출력
-    List<UserStatusDTO> result = familyMembers.stream()
-        .map(member -> {
-            Long memberId = member.getUserId();
-            boolean online = !handler.getSessionsByUserId(memberId).isEmpty();
-            System.out.println("[FamilyStatus] memberId=" + memberId 
-                    + " | online=" + online 
-                    + " | lastActiveAt=" + member.getLastActiveAt());
-            return new UserStatusDTO(memberId, online, member.getLastActiveAt());
-        })
-        .collect(Collectors.toList());
-
-    // 전체 결과 출력
-    System.out.println("[FamilyStatus] returning " + result.size() + " DTOs:");
-    for (UserStatusDTO dto : result) {
-        System.out.println("  → userId=" + dto.getUserId() 
-                + ", online=" + dto.isOnline() 
-                + ", lastActiveAt=" + dto.getLastActiveAt());
+        return familyMembers.stream()
+                .map(member -> {
+                    Long memberId = member.getUserId();
+                    boolean online = !handler.getSessionsByUserId(memberId).isEmpty();
+                    return new UserStatusDTO(memberId, online, member.getLastActiveAt());
+                })
+                .collect(Collectors.toList());
     }
-    System.out.println("[FamilyStatus] === getFamilyStatus() end ===\n");
 
-    return result;
-}
-
+    /**
+     * ✅ 알림 조회 (알림 화면 진입 = 즉시 읽음 처리)
+     * - 호출 시점(now)으로 lastNotificationCheckedAt 갱신해서 "읽음 확정"
+     */
     @Transactional
     public NotificationResponseDTO getUserNotifications(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("사용자 없음"));
 
-        LocalDateTime lastCheckedAt = user.getLastNotificationCheckedAt();
+        LocalDateTime now = LocalDateTime.now();
+
+        // ✅ 알림 화면 들어오면 즉시 읽음 처리 확정
+        user.setLastNotificationCheckedAt(now);
+        userRepository.save(user);
 
         List<UUID> familyIds = userFamilyRepository.findFamiliesByUserId(userId).stream()
                 .map(Family::getFamilyId)
@@ -285,22 +252,23 @@ public class UserService {
 
         if (familyIds.isEmpty()) {
             return NotificationResponseDTO.builder()
-                    .lastCheckedAt(lastCheckedAt)
+                    .lastCheckedAt(now)
                     .notifications(Collections.emptyList())
                     .build();
         }
 
-        List<Notification> notifications = notificationRepository.findByFamilyIdInOrderByCreatedAtDesc(familyIds);
+        List<Notification> notifications =
+                notificationRepository.findByFamilyIdInOrderByCreatedAtDesc(familyIds);
 
         List<NotificationDTO> dtoList = notifications.stream()
-                .filter(n -> !n.getAuthorId().equals(userId)) // 자기 알림 제외
+                .filter(n -> !Objects.equals(n.getAuthorId(), userId)) // 자기 알림 제외
                 .map(n -> {
                     User author = userRepository.findById(n.getAuthorId())
                             .orElseThrow(() -> new RuntimeException("작성자 정보 없음"));
 
                     String categoryTitle = "";
                     String contentPreview = "";
-                    String firstImageUrl = "";
+                    String firstImageUrl = null;
 
                     if (n.getNotificationType() == NotificationType.POST) {
                         Post post = postRepository.findById(n.getPostId())
@@ -309,16 +277,21 @@ public class UserService {
                         contentPreview = post.getContent() != null && post.getContent().length() > 30
                                 ? post.getContent().substring(0, 30) + "..."
                                 : post.getContent();
-                        firstImageUrl = post.getImages().isEmpty() ? null : post.getImages().get(0).getImageUrl();
+                        firstImageUrl = post.getImages().isEmpty()
+                                ? null
+                                : post.getImages().get(0).getImageUrl();
+
                     } else if (n.getNotificationType() == NotificationType.COMMENT) {
                         Comment comment = commentRepository.findById(n.getCommentId())
                                 .orElseThrow(() -> new RuntimeException("댓글 없음"));
-                        categoryTitle = comment.getPost().getCategory().getTitle();
+                        Post post = comment.getPost();
+                        categoryTitle = post.getCategory().getTitle();
                         contentPreview = comment.getContent() != null && comment.getContent().length() > 30
                                 ? comment.getContent().substring(0, 30) + "..."
                                 : comment.getContent();
-                        Post post = comment.getPost();
-                        firstImageUrl = post.getImages().isEmpty() ? null : post.getImages().get(0).getImageUrl();
+                        firstImageUrl = post.getImages().isEmpty()
+                                ? null
+                                : post.getImages().get(0).getImageUrl();
                     }
 
                     return NotificationDTO.builder()
@@ -335,13 +308,33 @@ public class UserService {
                 })
                 .collect(Collectors.toList());
 
-        user.setLastNotificationCheckedAt(LocalDateTime.now());
-        userRepository.save(user);
-
         return NotificationResponseDTO.builder()
-                .lastCheckedAt(lastCheckedAt)
+                .lastCheckedAt(now)
                 .notifications(dtoList)
                 .build();
+    }
+
+    /**
+     * ✅ 벨 아이콘 빨간점용: 안 읽은 알림 존재 여부
+     * - lastNotificationCheckedAt 이후 생성된 알림이 있으면 true
+     */
+    @Transactional(readOnly = true)
+    public boolean hasUnreadNotifications(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("사용자 없음"));
+
+        LocalDateTime lastCheckedAt = user.getLastNotificationCheckedAt();
+
+        List<UUID> familyIds = userFamilyRepository.findFamiliesByUserId(userId).stream()
+                .map(Family::getFamilyId)
+                .collect(Collectors.toList());
+
+        if (familyIds.isEmpty()) return false;
+
+        // lastCheckedAt이 null이면 "처음" -> 전부 안읽음 취급하려면 MIN으로
+        LocalDateTime 기준 = (lastCheckedAt != null) ? lastCheckedAt : LocalDateTime.MIN;
+
+        return notificationRepository.existsByFamilyIdInAndCreatedAtAfter(familyIds, 기준);
     }
 
     @Transactional
@@ -386,75 +379,34 @@ public class UserService {
     }
 
     private Date parseDateTime(String birth) {
-        if (birth == null || birth.isEmpty()) {
-            return null;
-        }
+        if (birth == null || birth.isEmpty()) return null;
 
-        // "YYYY-MM-DD" 기준 파싱
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
         try {
             LocalDate localDate = LocalDate.parse(birth, formatter);
-            // LocalDate → Date 변환
             return Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
         } catch (DateTimeParseException e) {
             throw new IllegalArgumentException("Invalid date format. Expected yyyy-MM-dd");
         }
     }
 
-
-
     public UserDTO updateUserProfile(Long userId, UpdateProfileRequest req) {
-
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // 이름
-        if (req.getName() != null && !req.getName().isBlank()) {
-            user.setName(req.getName());
-        }
+        if (req.getName() != null && !req.getName().isBlank()) user.setName(req.getName());
+        if (req.getBirth() != null && !req.getBirth().isBlank()) user.setBirth(parseDate(req.getBirth()));
 
-        // 생년월일
-        if (req.getBirth() != null && !req.getBirth().isBlank()) {
-            user.setBirth(parseDate(req.getBirth()));
-        }
-
-        // 필수 약관 동의
-        if (req.getTermsAgreed() != null) {
-            user.setTermsAgreed(req.getTermsAgreed());
-        }
-
-        if (req.getPrivacyAgreed() != null) {
-            user.setPrivacyAgreed(req.getPrivacyAgreed());
-        }
-
-        if (req.getMarketingAgreed() != null) {
-            user.setMarketingAgreed(req.getMarketingAgreed());
-        }
-
-        if (req.getTermsVersion() != null) {
-            user.setTermsVersion(req.getTermsVersion());
-        }
-
-        if (req.getPrivacyVersion() != null) {
-            user.setPrivacyVersion(req.getPrivacyVersion());
-        }
-
-        if (req.getAgreedAt() != null) {
-            user.setAgreedAt(parseDateTime(req.getAgreedAt()));
-        }
-
-        if (req.getMarketingAgreedAt() != null) {
-            user.setMarketingAgreedAt(parseDateTime(req.getMarketingAgreedAt()));
-        }
+        if (req.getTermsAgreed() != null) user.setTermsAgreed(req.getTermsAgreed());
+        if (req.getPrivacyAgreed() != null) user.setPrivacyAgreed(req.getPrivacyAgreed());
+        if (req.getMarketingAgreed() != null) user.setMarketingAgreed(req.getMarketingAgreed());
+        if (req.getTermsVersion() != null) user.setTermsVersion(req.getTermsVersion());
+        if (req.getPrivacyVersion() != null) user.setPrivacyVersion(req.getPrivacyVersion());
+        if (req.getAgreedAt() != null) user.setAgreedAt(parseDateTime(req.getAgreedAt()));
+        if (req.getMarketingAgreedAt() != null) user.setMarketingAgreedAt(parseDateTime(req.getMarketingAgreedAt()));
 
         userRepository.save(user);
-
         return new UserDTO(user);
     }
-
-
-
-
-
 }

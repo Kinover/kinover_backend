@@ -3,6 +3,7 @@ package com.example.kinover_backend.entity;
 import com.example.kinover_backend.enums.NotificationType;
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -36,7 +37,12 @@ public class Notification {
     @Column(name = "author_id", nullable = false)
     private Long authorId;
 
-    @Column(name = "created_at", nullable = false, insertable = false, updatable = false,
-            columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP")
+    @Column(
+            name = "created_at",
+            nullable = false,
+            insertable = false,
+            updatable = false,
+            columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP"
+    )
     private LocalDateTime createdAt;
 }
