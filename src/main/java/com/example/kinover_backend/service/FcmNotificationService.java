@@ -17,14 +17,10 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import com.google.auth.Credentials;
 import com.google.auth.oauth2.AccessToken;
 
 import java.io.IOException;
-import java.util.Date;
 import java.util.Map;
-import java.util.TimeZone;
-
 import java.util.Optional;
 import java.util.UUID;
 
@@ -39,6 +35,7 @@ public class FcmNotificationService {
     private final CategoryRepository categoryRepository;
     private final PostRepository postRepository;
     private final NotificationRepository notificationRepository;
+
     private static GoogleCredentials firebaseCreds;
 
     public boolean isChatRoomNotificationOn(Long userId, UUID chatRoomId) {
@@ -55,7 +52,6 @@ public class FcmNotificationService {
                 .map(ChatRoomNotificationSetting::isNotificationOn)
                 .orElse(true); // 설정 없으면 알림 ON
     }
-
 
     public void sendChatNotification(Long userId, MessageDTO messageDTO) {
         User user = userRepository.findById(userId)
@@ -142,54 +138,54 @@ public class FcmNotificationService {
         }
     }
 
-
-    
     @Transactional
     public void sendPostNotification(Long userId, PostDTO postDTO) {
+
+        // ✅ 작성자 본인에게는 알림 보내지 않음 (빨간점 방지)
+        if (postDTO.getAuthorId() != null && postDTO.getAuthorId().equals(userId)) {
+            return;
+        }
+
         User receiver = userRepository.findById(userId)
-            .orElseThrow(() -> new RuntimeException("알림 받을 사용자를 찾을 수 없습니다."));
+                .orElseThrow(() -> new RuntimeException("알림 받을 사용자를 찾을 수 없습니다."));
         User author = userRepository.findById(postDTO.getAuthorId())
-            .orElseThrow(() -> new RuntimeException("작성자를 찾을 수 없습니다."));
+                .orElseThrow(() -> new RuntimeException("작성자를 찾을 수 없습니다."));
         Category category = categoryRepository.findById(postDTO.getCategoryId())
-            .orElseThrow(() -> new RuntimeException("카테고리를 찾을 수 없습니다."));
+                .orElseThrow(() -> new RuntimeException("카테고리를 찾을 수 없습니다."));
 
         Optional<FcmToken> fcmTokenOpt = fcmTokenRepository.findByUser(receiver);
         if (fcmTokenOpt.isEmpty()) return;
 
         final String token = fcmTokenOpt.get().getToken();
         final String firstImageUrl = (postDTO.getImageUrls() != null && !postDTO.getImageUrls().isEmpty())
-            ? postDTO.getImageUrls().get(0)
-            : null;
+                ? postDTO.getImageUrls().get(0)
+                : null;
 
         final String title = "새 게시물 알림";
         final String body  = author.getName() + "님이 \"" + category.getTitle() + "\"에 \""
-            + trimContent(postDTO.getContent()) + "\" 글을 작성했습니다.";
+                + trimContent(postDTO.getContent()) + "\" 글을 작성했습니다.";
 
         // --- iOS(APNs) 세팅 ---
         ApsAlert apsAlert = ApsAlert.builder()
-            .setTitle(title)
-            .setBody(body)
-            .build();
+                .setTitle(title)
+                .setBody(body)
+                .build();
 
         Aps aps = Aps.builder()
-            .setAlert(apsAlert)       // iOS 배너를 위해 반드시 필요
-            .setSound("default")      // 무음 방지
-            .setBadge(1)              // 클라에서 누적 관리 권장
-            .setThreadId("post_" + category.getCategoryId())
-            .setMutableContent(true) // ★수정됨: iOS에서 이미지를 띄우려면 필수 (Notification Extension 트리거)
-            .build();
+                .setAlert(apsAlert)
+                .setSound("default")
+                .setBadge(1)
+                .setThreadId("post_" + category.getCategoryId())
+                .setMutableContent(true)
+                .build();
 
         ApnsConfig.Builder apnsBuilder = ApnsConfig.builder()
-            .putHeader("apns-push-type", "alert") // iOS13+ 필수
-            .putHeader("apns-priority", "10")     // 즉시 표시
-            .setAps(aps);
+                .putHeader("apns-push-type", "alert")
+                .putHeader("apns-priority", "10")
+                .setAps(aps);
 
         if (firstImageUrl != null && !firstImageUrl.isBlank()) {
-            // ★수정됨: iOS 표준 이미지 전송 방식 (fcm_options -> image)
-            // 클라이언트가 별도 로직 없이 FCM SDK만으로 이미지를 처리하려 할 때 필요
             apnsBuilder.putCustomData("fcm_options", Map.of("image", firstImageUrl));
-            
-            // (기존 유지) 혹시 클라이언트 앱 코드에서 'imageUrl' 키를 직접 파싱하고 있다면 유지
             apnsBuilder.putCustomData("imageUrl", firstImageUrl);
         }
 
@@ -197,40 +193,39 @@ public class FcmNotificationService {
 
         // --- Android 세팅 ---
         AndroidNotification.Builder an = AndroidNotification.builder()
-            .setSound("default")
-            .setChannelId("post")
-            .setTag("post_" + category.getCategoryId());
+                .setSound("default")
+                .setChannelId("post")
+                .setTag("post_" + category.getCategoryId());
 
         if (firstImageUrl != null && !firstImageUrl.isBlank()) {
             an.setImage(firstImageUrl);
         }
 
         AndroidConfig androidConfig = AndroidConfig.builder()
-            .setPriority(AndroidConfig.Priority.HIGH)
-            .setNotification(an.build())
-            .build();
+                .setPriority(AndroidConfig.Priority.HIGH)
+                .setNotification(an.build())
+                .build();
 
         // --- 공통 Notification ---
         Notification.Builder notifBuilder = Notification.builder()
-            .setTitle(title)
-            .setBody(body);
+                .setTitle(title)
+                .setBody(body);
 
-        // ★수정됨: 공통 알림 객체에도 이미지 설정 (가장 권장되는 방식)
         if (firstImageUrl != null && !firstImageUrl.isBlank()) {
             notifBuilder.setImage(firstImageUrl);
         }
 
         Message.Builder mb = Message.builder()
-            .setToken(token)
-            .setNotification(notifBuilder.build()) // 수정된 빌더 사용
-            .setApnsConfig(apnsConfig)
-            .setAndroidConfig(androidConfig)
-            .putData("notificationType", "POST")
-            .putData("postId", String.valueOf(postDTO.getPostId()))
-            .putData("authorName", nvl(author.getName()))
-            .putData("authorImage", nvl(author.getImage()))
-            .putData("categoryTitle", nvl(category.getTitle()))
-            .putData("contentPreview", nvl(trimContent(postDTO.getContent())));
+                .setToken(token)
+                .setNotification(notifBuilder.build())
+                .setApnsConfig(apnsConfig)
+                .setAndroidConfig(androidConfig)
+                .putData("notificationType", "POST")
+                .putData("postId", String.valueOf(postDTO.getPostId()))
+                .putData("authorName", nvl(author.getName()))
+                .putData("authorImage", nvl(author.getImage()))
+                .putData("categoryTitle", nvl(category.getTitle()))
+                .putData("contentPreview", nvl(trimContent(postDTO.getContent())));
 
         if (firstImageUrl != null && !firstImageUrl.isBlank()) {
             mb.putData("firstImageUrl", firstImageUrl);
@@ -247,6 +242,12 @@ public class FcmNotificationService {
     private static String nvl(String s) { return s == null ? "" : s; }
 
     public void sendCommentNotification(Long userId, CommentDTO commentDTO) {
+
+        // ✅ 작성자 본인에게는 알림 보내지 않음 (빨간점 방지)
+        if (commentDTO.getAuthorId() != null && commentDTO.getAuthorId().equals(userId)) {
+            return;
+        }
+
         User receiver = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("알림 받을 사용자를 찾을 수 없습니다."));
         User author = userRepository.findById(commentDTO.getAuthorId())
@@ -339,46 +340,44 @@ public class FcmNotificationService {
                 if (content != null) System.out.println("[FCM HTTP body] " + content);
             }
 
-            diagnoseFirebaseAuth(); // 아래 함수
-            throw new RuntimeException(e); // 필요 없으면 제거
+            diagnoseFirebaseAuth();
+            throw new RuntimeException(e);
         }
     }
-    
+
     private void diagnoseFirebaseAuth() {
-    try {
-        FirebaseApp app = FirebaseApp.getInstance();
-        FirebaseOptions opts = app.getOptions();
-
-        System.out.println("[FCM DIAG] projectId(opt)=" + opts.getProjectId());
-
-        if (firebaseCreds == null) {
-            System.out.println("[FCM DIAG] firebaseCreds is null (init not done?)");
-            return;
-        }
-
-        System.out.println("[FCM DIAG] credsClass=" + firebaseCreds.getClass().getName());
-        if (firebaseCreds instanceof ServiceAccountCredentials sac) {
-            System.out.println("[FCM DIAG] saEmail=" + sac.getClientEmail()
-                    + ", saProjectId=" + sac.getProjectId());
-        }
-
         try {
-            AccessToken t = firebaseCreds.refreshAccessToken();
-            System.out.println("[FCM DIAG] accessToken exp=" + t.getExpirationTime());
-        } catch (IOException tokEx) {
-            System.out.println("[FCM DIAG] token refresh failed: " + tokEx);
+            FirebaseApp app = FirebaseApp.getInstance();
+            FirebaseOptions opts = app.getOptions();
+
+            System.out.println("[FCM DIAG] projectId(opt)=" + opts.getProjectId());
+
+            if (firebaseCreds == null) {
+                System.out.println("[FCM DIAG] firebaseCreds is null (init not done?)");
+                return;
+            }
+
+            System.out.println("[FCM DIAG] credsClass=" + firebaseCreds.getClass().getName());
+            if (firebaseCreds instanceof ServiceAccountCredentials sac) {
+                System.out.println("[FCM DIAG] saEmail=" + sac.getClientEmail()
+                        + ", saProjectId=" + sac.getProjectId());
+            }
+
+            try {
+                AccessToken t = firebaseCreds.refreshAccessToken();
+                System.out.println("[FCM DIAG] accessToken exp=" + t.getExpirationTime());
+            } catch (IOException tokEx) {
+                System.out.println("[FCM DIAG] token refresh failed: " + tokEx);
+            }
+
+            System.out.println("[FCM DIAG] $GOOGLE_APPLICATION_CREDENTIALS="
+                    + System.getenv("GOOGLE_APPLICATION_CREDENTIALS"));
+            System.out.println("[FCM DIAG] systemNow=" + new java.util.Date()
+                    + ", tz=" + java.util.TimeZone.getDefault().getID());
+        } catch (Throwable diagEx) {
+            System.out.println("[FCM DIAG] failed: " + diagEx);
         }
-
-        System.out.println("[FCM DIAG] $GOOGLE_APPLICATION_CREDENTIALS="
-                + System.getenv("GOOGLE_APPLICATION_CREDENTIALS"));
-        System.out.println("[FCM DIAG] systemNow=" + new java.util.Date()
-                + ", tz=" + java.util.TimeZone.getDefault().getID());
-    } catch (Throwable diagEx) {
-        System.out.println("[FCM DIAG] failed: " + diagEx);
     }
-}
-
-
 
     private String trimContent(String content) {
         if (content == null) return "";
@@ -406,6 +405,4 @@ public class FcmNotificationService {
 
         return true;
     }
-
-
 }

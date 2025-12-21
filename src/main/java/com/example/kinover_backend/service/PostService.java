@@ -33,7 +33,8 @@ public class PostService {
 
     @Transactional
     public void createPost(PostDTO postDTO) {
-        if (postDTO == null) throw new IllegalArgumentException("postDTO is null");
+        if (postDTO == null)
+            throw new IllegalArgumentException("postDTO is null");
 
         // 1) 작성자/가족 조회
         User author = userRepository.findById(postDTO.getAuthorId())
@@ -55,7 +56,7 @@ public class PostService {
             // c.setCategoryId(...) 절대 금지 (@GeneratedValue 사용)
             c.setTitle(categoryTitle);
             c.setFamily(family);
-            category = categoryRepository.save(c);   // ← save 반환 객체는 즉시 managed
+            category = categoryRepository.save(c); // ← save 반환 객체는 즉시 managed
 
             postDTO.setCategoryId(category.getCategoryId());
         } else {
@@ -97,14 +98,26 @@ public class PostService {
         postRepository.save(post);
 
         // 6) 알림 저장
-        Notification notification = Notification.builder()
-                .notificationType(NotificationType.POST)
-                .postId(post.getPostId())
-                .commentId(null)
-                .familyId(post.getFamily().getFamilyId())
-                .authorId(post.getAuthor().getUserId())
-                .build();
-        notificationRepository.save(notification);
+        // Notification notification = Notification.builder()
+        // .notificationType(NotificationType.POST)
+        // .postId(post.getPostId())
+        // .commentId(null)
+        // .familyId(post.getFamily().getFamilyId())
+        // .authorId(post.getAuthor().getUserId())
+        // .build();
+        // notificationRepository.save(notification);
+
+        // ✅ 작성자 본인 제외
+        if (!postDTO.getAuthorId().equals(author.getUserId())) {
+            Notification notification = Notification.builder()
+                    .notificationType(NotificationType.POST)
+                    .postId(post.getPostId())
+                    .commentId(null)
+                    .familyId(post.getFamily().getFamilyId())
+                    .authorId(author.getUserId())
+                    .build();
+            notificationRepository.save(notification);
+        }
 
         // 7) FCM 전송 (읽기/외부 I/O는 여기서)
         List<User> familyMembers = userFamilyRepository.findUsersByFamilyId(postDTO.getFamilyId());
@@ -187,7 +200,8 @@ public class PostService {
         if (categoryId == null) {
             posts = postRepository.findAllByFamily_FamilyIdOrderByCreatedAtDesc(familyId);
         } else {
-            posts = postRepository.findAllByFamily_FamilyIdAndCategory_CategoryIdOrderByCreatedAtDesc(familyId, categoryId);
+            posts = postRepository.findAllByFamily_FamilyIdAndCategory_CategoryIdOrderByCreatedAtDesc(familyId,
+                    categoryId);
         }
 
         List<PostDTO> result = new ArrayList<>();

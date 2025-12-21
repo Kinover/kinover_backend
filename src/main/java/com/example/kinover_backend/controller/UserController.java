@@ -34,8 +34,7 @@ public class UserController {
     }
 
     @Operation(summary = "토큰으로 유저 조회", description = "JWT 토큰을 이용해 유저 정보를 조회합니다.")
-    @ApiResponse(responseCode = "200", description = "유저 정보 조회 성공",
-            content = @Content(schema = @Schema(implementation = UserDTO.class)))
+    @ApiResponse(responseCode = "200", description = "유저 정보 조회 성공", content = @Content(schema = @Schema(implementation = UserDTO.class)))
     @GetMapping("/userinfo")
     public UserDTO getUserInfo(@RequestHeader("Authorization") String authorizationHeader) {
         String token = authorizationHeader.replace("Bearer ", "");
@@ -55,8 +54,7 @@ public class UserController {
     }
 
     @Operation(summary = "유저 정보 수정", description = "userId를 포함한 DTO를 기반으로 유저 정보를 수정합니다.")
-    @ApiResponse(responseCode = "200", description = "수정된 유저 정보 반환",
-            content = @Content(schema = @Schema(implementation = UserDTO.class)))
+    @ApiResponse(responseCode = "200", description = "수정된 유저 정보 반환", content = @Content(schema = @Schema(implementation = UserDTO.class)))
     @PostMapping("/modify")
     public UserDTO modifyUser(@RequestBody UserDTO userDTO) {
         return userService.modifyUser(userDTO);
@@ -85,8 +83,7 @@ public class UserController {
     @PatchMapping("/profile")
     public ResponseEntity<?> updateUserProfile(
             @RequestHeader("Authorization") String authorizationHeader,
-            @RequestBody UpdateProfileRequest request
-    ) {
+            @RequestBody UpdateProfileRequest request) {
         String jwt = authorizationHeader.replace("Bearer ", "");
         Long userId = jwtUtil.getUserIdFromToken(jwt);
 

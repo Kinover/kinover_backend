@@ -42,19 +42,32 @@ public class CommentService {
         postRepository.save(post);
 
         // 알림 저장
-        Notification notification = Notification.builder()
-                .notificationType(NotificationType.COMMENT)
-                .postId(post.getPostId())
-                .commentId(comment.getCommentId())
-                .familyId(post.getFamily().getFamilyId())  // comment로부터는 familyId 직접 접근 어려움
-                .authorId(author.getUserId())
-                .build();
-        notificationRepository.save(notification);
+        // Notification notification = Notification.builder()
+        // .notificationType(NotificationType.COMMENT)
+        // .postId(post.getPostId())
+        // .commentId(comment.getCommentId())
+        // .familyId(post.getFamily().getFamilyId()) // comment로부터는 familyId 직접 접근 어려움
+        // .authorId(author.getUserId())
+        // .build();
+        // notificationRepository.save(notification);
+
+        // ✅ 작성자 본인 제외하고만 Notification 저장
+        if (!author.getUserId().equals(dto.getAuthorId())) {
+            Notification notification = Notification.builder()
+                    .notificationType(NotificationType.COMMENT)
+                    .postId(post.getPostId())
+                    .commentId(comment.getCommentId())
+                    .familyId(post.getFamily().getFamilyId())
+                    .authorId(author.getUserId())
+                    .build();
+            notificationRepository.save(notification);
+        }
 
         List<User> familyMembers = userFamilyRepository.findUsersByFamilyId(post.getFamily().getFamilyId());
 
         for (User member : familyMembers) {
-            if (!member.getUserId().equals(dto.getAuthorId()) && Boolean.TRUE.equals(member.getIsCommentNotificationOn())) {
+            if (!member.getUserId().equals(dto.getAuthorId())
+                    && Boolean.TRUE.equals(member.getIsCommentNotificationOn())) {
                 fcmNotificationService.sendCommentNotification(member.getUserId(), dto);
             }
         }
@@ -96,5 +109,3 @@ public class CommentService {
         postRepository.save(post);
     }
 }
-
-
