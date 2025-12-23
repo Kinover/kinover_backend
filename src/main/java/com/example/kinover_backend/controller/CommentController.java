@@ -32,7 +32,7 @@ public class CommentController {
         String token = authHeader.replace("Bearer ", "");
         Long authenticatedUserId = jwtUtil.getUserIdFromToken(token);
 
-        if (!authenticatedUserId.equals(dto.getAuthorId())) {
+        if (dto.getAuthorId() == null || !authenticatedUserId.equals(dto.getAuthorId())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 

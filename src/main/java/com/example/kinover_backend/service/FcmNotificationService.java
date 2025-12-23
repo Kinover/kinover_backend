@@ -405,4 +405,194 @@ public class FcmNotificationService {
 
         return true;
     }
+
+    public void sendMentionCommentNotification(Long userId, CommentDTO commentDTO) {
+
+        // ✅ 작성자 본인에게는 알림 보내지 않음
+        if (commentDTO.getAuthorId() != null && commentDTO.getAuthorId().equals(userId)) {
+            return;
+        }
+    
+        User receiver = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("알림 받을 사용자를 찾을 수 없습니다."));
+        User author = userRepository.findById(commentDTO.getAuthorId())
+                .orElseThrow(() -> new RuntimeException("작성자를 찾을 수 없습니다."));
+        Post post = postRepository.findById(commentDTO.getPostId())
+                .orElseThrow(() -> new RuntimeException("게시물을 찾을 수 없습니다."));
+        Category category = post.getCategory();
+    
+        Optional<FcmToken> fcmTokenOpt = fcmTokenRepository.findByUser(receiver);
+        if (fcmTokenOpt.isEmpty()) return;
+    
+        String token = fcmTokenOpt.get().getToken();
+    
+        String firstImageUrl = (post.getImages() != null && !post.getImages().isEmpty())
+                ? post.getImages().get(0).getImageUrl()
+                : null;
+    
+        // ✅ 멘션 전용 제목/바디
+        String title = "멘션 알림";
+        String body = author.getName() + "님이 댓글에서 당신을 언급했어요: \"" +
+                trimContent(commentDTO.getContent()) + "\"";
+    
+        // --- iOS(APNs) 세팅 ---
+        ApsAlert apsAlert = ApsAlert.builder()
+                .setTitle(title)
+                .setBody(body)
+                .build();
+    
+        Aps aps = Aps.builder()
+                .setAlert(apsAlert)
+                .setSound("default")
+                .setBadge(1)
+                .setThreadId("mention_comment_" + post.getPostId())
+                .build();
+    
+        ApnsConfig apnsConfig = ApnsConfig.builder()
+                .putHeader("apns-push-type", "alert")
+                .putHeader("apns-priority", "10")
+                .setAps(aps)
+                .build();
+    
+        // --- Android 세팅 ---
+        AndroidNotification.Builder an = AndroidNotification.builder()
+                .setSound("default")
+                .setChannelId("comment") // ✅ 멘션 전용 채널 만들 거면 "mention"으로 분리 가능
+                .setTag("mention_comment_" + post.getPostId());
+    
+        if (firstImageUrl != null) {
+            an.setImage(firstImageUrl);
+        }
+    
+        AndroidConfig androidConfig = AndroidConfig.builder()
+                .setPriority(AndroidConfig.Priority.HIGH)
+                .setNotification(an.build())
+                .build();
+    
+        // --- 공통 Notification + Data ---
+        Message.Builder messageBuilder = Message.builder()
+                .setToken(token)
+                .setNotification(Notification.builder()
+                        .setTitle(title)
+                        .setBody(body)
+                        .build())
+                .setApnsConfig(apnsConfig)
+                .setAndroidConfig(androidConfig)
+                // ✅ 멘션 타입으로 분리
+                .putData("notificationType", "MENTION_COMMENT")
+                .putData("postId", String.valueOf(post.getPostId()))
+                .putData("authorName", nvl(author.getName()))
+                .putData("authorImage", nvl(author.getImage()))
+                .putData("categoryTitle", nvl(category.getTitle()))
+                .putData("contentPreview", nvl(trimContent(commentDTO.getContent())));
+    
+        if (firstImageUrl != null) {
+            messageBuilder.putData("firstImageUrl", firstImageUrl);
+        }
+    
+        try {
+            String messageId = FirebaseMessaging.getInstance().send(messageBuilder.build());
+            System.out.println("[FCM OK][MENTION_COMMENT] messageId=" + messageId);
+        } catch (FirebaseMessagingException e) {
+            System.out.println("[FCM ERROR][MENTION_COMMENT] msg=" + e.getMessage());
+            diagnoseFirebaseAuth();
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void sendMentionChatNotification(Long userId, MessageDTO messageDTO) {
+
+        // ✅ 본인 멘션 알림 방지
+        if (messageDTO.getSenderId() != null && messageDTO.getSenderId().equals(userId)) {
+            return;
+        }
+    
+        User receiver = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("알림 받을 사용자를 찾을 수 없습니다."));
+        ChatRoom chatRoom = chatRoomRepository.findById(messageDTO.getChatRoomId())
+                .orElseThrow(() -> new RuntimeException("채팅방을 찾을 수 없습니다."));
+    
+        Optional<FcmToken> fcmTokenOpt = fcmTokenRepository.findByUser(receiver);
+        if (fcmTokenOpt.isEmpty()) return;
+    
+        String token = fcmTokenOpt.get().getToken();
+    
+        String body;
+        String messageType = messageDTO.getMessageType().name();
+    
+        switch (messageType) {
+            case "text" -> body = messageDTO.getSenderName() + ": " + nvl(messageDTO.getContent());
+            case "image" -> {
+                int imageCount = messageDTO.getImageUrls() != null ? messageDTO.getImageUrls().size() : 0;
+                body = messageDTO.getSenderName() + ": 사진 " + imageCount + "장을 보냈습니다.";
+            }
+            case "video" -> body = messageDTO.getSenderName() + ": 동영상을 보냈습니다.";
+            default -> body = messageDTO.getSenderName() + ": 새로운 메시지가 도착했습니다.";
+        }
+    
+        // ✅ 멘션 전용 문구
+        String title = chatRoom.getRoomName();
+        String mentionBody = "당신을 언급했어요 · " + body;
+    
+        // --- iOS(APNs) ---
+        ApsAlert apsAlert = ApsAlert.builder()
+                .setTitle(title)
+                .setBody(mentionBody)
+                .build();
+    
+        Aps aps = Aps.builder()
+                .setAlert(apsAlert)
+                .setSound("default")
+                .setBadge(1)
+                .setThreadId("mention_chat_" + chatRoom.getChatRoomId())
+                .build();
+    
+        ApnsConfig apnsConfig = ApnsConfig.builder()
+                .putHeader("apns-push-type", "alert")
+                .putHeader("apns-priority", "10")
+                .setAps(aps)
+                .build();
+    
+        // --- Android ---
+        AndroidNotification androidNotification = AndroidNotification.builder()
+                .setSound("default")
+                .setChannelId("chat")
+                .setTag("mention_chat_" + chatRoom.getChatRoomId())
+                .build();
+    
+        AndroidConfig androidConfig = AndroidConfig.builder()
+                .setPriority(AndroidConfig.Priority.HIGH)
+                .setNotification(androidNotification)
+                .build();
+    
+        Message.Builder mb = Message.builder()
+                .setToken(token)
+                .setNotification(Notification.builder()
+                        .setTitle(title)
+                        .setBody(mentionBody)
+                        .build())
+                .setApnsConfig(apnsConfig)
+                .setAndroidConfig(androidConfig)
+                .putData("notificationType", "MENTION_CHAT")
+                .putData("chatRoomId", String.valueOf(chatRoom.getChatRoomId()))
+                .putData("messageType", messageType)
+                .putData("senderName", nvl(messageDTO.getSenderName()))
+                .putData("senderImage", nvl(messageDTO.getSenderImage()))
+                .putData("roomName", nvl(chatRoom.getRoomName()));
+    
+        if ("image".equals(messageType) || "video".equals(messageType)) {
+            try {
+                String imageUrlJson = new ObjectMapper().writeValueAsString(messageDTO.getImageUrls());
+                mb.putData("imageUrls", imageUrlJson);
+            } catch (Exception ignore) {}
+        }
+    
+        try {
+            FirebaseMessaging.getInstance().send(mb.build());
+        } catch (FirebaseMessagingException e) {
+            e.printStackTrace();
+        }
+    }
+    
+    
 }
