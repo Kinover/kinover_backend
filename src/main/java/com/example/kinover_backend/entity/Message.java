@@ -1,3 +1,4 @@
+// src/main/java/com/example/kinover_backend/entity/Message.java
 package com.example.kinover_backend.entity;
 
 import com.example.kinover_backend.enums.MessageType;
@@ -6,7 +7,6 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
-import java.util.Date;
 import java.util.UUID;
 
 @Getter

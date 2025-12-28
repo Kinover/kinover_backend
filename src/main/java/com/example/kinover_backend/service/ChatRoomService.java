@@ -53,8 +53,6 @@ public class ChatRoomService {
 
         chatRoomRepository.save(chatRoom);
 
-        LocalDateTime now = LocalDateTime.now();
-
         for (Long userId : allUserIds) {
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new RuntimeException("유저를 찾을 수 없습니다: " + userId));
@@ -63,8 +61,8 @@ public class ChatRoomService {
             ucr.setUser(user);
             ucr.setChatRoom(chatRoom);
 
-            // ✅ 신규 참여 UX: 이전 메시지는 "읽음"으로 처리하고 들어오게
-            ucr.setLastReadAt(now);
+            // ✅ 신규 생성/초대 정책: 초대 시점 이전 메시지는 읽음 처리하는 게 보통 자연스러움
+            ucr.setLastReadAt(LocalDateTime.now());
 
             userChatRoomRepository.save(ucr);
         }
@@ -73,7 +71,7 @@ public class ChatRoomService {
     }
 
     // =========================
-    // ✅ 멤버 체크(최적화)
+    // 멤버 체크
     // =========================
     public boolean isMember(UUID chatRoomId, Long userId) {
         if (chatRoomId == null || userId == null) return false;
@@ -81,7 +79,7 @@ public class ChatRoomService {
     }
 
     // =========================
-    // ✅ WS 브로드캐스트용: 방 멤버 ID 리스트
+    // WS 브로드캐스트용: 방 멤버 ID 리스트
     // =========================
     @Transactional(readOnly = true)
     public List<Long> getMemberIds(UUID chatRoomId) {
@@ -89,7 +87,18 @@ public class ChatRoomService {
     }
 
     // =========================
-    // ✅ 읽음 처리 (lastReadAt 기준, 역행 방지)
+    // ✅ 특정 유저의 lastReadAt 가져오기 (푸시 스킵 등에 사용)
+    // =========================
+    @Transactional(readOnly = true)
+    public LocalDateTime getLastReadAt(UUID chatRoomId, Long userId) {
+        return userChatRoomRepository
+                .findByUser_UserIdAndChatRoom_ChatRoomId(userId, chatRoomId)
+                .map(UserChatRoom::getLastReadAt)
+                .orElse(null);
+    }
+
+    // =========================
+    // 읽음 처리 (역행 방지 max)
     // =========================
     @Transactional
     public void markRead(UUID chatRoomId, Long userId, LocalDateTime lastReadAt) {
@@ -102,12 +111,15 @@ public class ChatRoomService {
 
         int updated = userChatRoomRepository.updateLastReadAtIfLater(chatRoomId, userId, lastReadAt);
         if (updated == 0) {
-            throw new RuntimeException("읽음 처리 실패: user_chat_room row 없음");
+            // row가 없거나, lastReadAt이 더 최신이라 업데이트 안 된 경우(=정상)일 수도 있으니
+            // row 존재는 한 번 확인해주는 게 안전
+            userChatRoomRepository.findByUser_UserIdAndChatRoom_ChatRoomId(userId, chatRoomId)
+                    .orElseThrow(() -> new RuntimeException("읽음 처리 대상 row 없음"));
         }
     }
 
     // =========================
-    // ✅ readPointers 조회
+    // readPointers 조회
     // =========================
     @Transactional(readOnly = true)
     public ReadPointersResponseDTO getReadPointers(UUID chatRoomId) {
@@ -129,9 +141,7 @@ public class ChatRoomService {
     @Transactional
     public ChatRoomDTO addUsersToChatRoom(UUID chatRoomId, List<Long> userIds, Long requesterId) {
         ChatRoom chatRoom = chatRoomRepository.findByChatRoomId(chatRoomId);
-        if (chatRoom == null) {
-            throw new RuntimeException("채팅방을 찾을 수 없습니다: " + chatRoomId);
-        }
+        if (chatRoom == null) throw new RuntimeException("채팅방을 찾을 수 없습니다: " + chatRoomId);
 
         if (!isMember(chatRoomId, requesterId)) {
             throw new RuntimeException("요청자가 채팅방에 속해 있지 않습니다");
@@ -149,8 +159,6 @@ public class ChatRoomService {
                 .filter(id -> !existingUserIds.contains(id))
                 .collect(Collectors.toList());
 
-        LocalDateTime now = LocalDateTime.now();
-
         for (Long userId : newUserIds) {
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new RuntimeException("유저를 찾을 수 없습니다: " + userId));
@@ -159,8 +167,8 @@ public class ChatRoomService {
             ucr.setUser(user);
             ucr.setChatRoom(chatRoom);
 
-            // ✅ 초대 시점 이전은 읽음 처리
-            ucr.setLastReadAt(now);
+            // ✅ 신규 초대 정책: 초대 시점 이전 메시지는 읽음 처리
+            ucr.setLastReadAt(LocalDateTime.now());
 
             userChatRoomRepository.save(ucr);
         }
@@ -173,7 +181,7 @@ public class ChatRoomService {
     }
 
     // =========================
-    // 특정 유저가 가진 채팅방 조회 (unreadCount 포함)
+    // 특정 유저가 가진 채팅방 조회 (+ unreadCount)
     // =========================
     @Transactional(readOnly = true)
     public List<ChatRoomDTO> getAllChatRooms(Long userId, UUID familyId) {
@@ -207,6 +215,7 @@ public class ChatRoomService {
                 if (personality == ChatBotPersonality.SERENE) suffix = "blueKino.png";
                 else if (personality == ChatBotPersonality.SNUGGLE) suffix = "pinkKino.png";
                 else suffix = "yellowKino.png";
+
                 images = List.of(cloudFrontDomain + suffix);
             } else {
                 images = chatRoom.getUserChatRooms().stream()
@@ -225,7 +234,7 @@ public class ChatRoomService {
                     .orElse(true);
             dto.setNotificationOn(isNotificationOn);
 
-            // ✅ unreadCount 계산 (null 방어 포함)
+            // ✅ unreadCount
             LocalDateTime lastReadAt = userChatRoomRepository
                     .findByUser_UserIdAndChatRoom_ChatRoomId(userId, chatRoom.getChatRoomId())
                     .map(UserChatRoom::getLastReadAt)
@@ -234,14 +243,11 @@ public class ChatRoomService {
             int unread;
             if (lastReadAt == null) {
                 unread = messageRepository.countByChatRoom_ChatRoomIdAndSender_UserIdNot(
-                        chatRoom.getChatRoomId(),
-                        userId
+                        chatRoom.getChatRoomId(), userId
                 );
             } else {
                 unread = messageRepository.countByChatRoom_ChatRoomIdAndCreatedAtAfterAndSender_UserIdNot(
-                        chatRoom.getChatRoomId(),
-                        lastReadAt,
-                        userId
+                        chatRoom.getChatRoomId(), lastReadAt, userId
                 );
             }
             dto.setUnreadCount(unread);
@@ -272,9 +278,7 @@ public class ChatRoomService {
     @Transactional
     public void renameChatRoom(UUID chatRoomId, String newRoomName, Long userId) {
         ChatRoom chatRoom = chatRoomRepository.findByChatRoomId(chatRoomId);
-        if (chatRoom == null) {
-            throw new RuntimeException("채팅방을 찾을 수 없습니다: " + chatRoomId);
-        }
+        if (chatRoom == null) throw new RuntimeException("채팅방을 찾을 수 없습니다: " + chatRoomId);
 
         if (!isMember(chatRoomId, userId)) {
             throw new RuntimeException("해당 유저는 이 채팅방에 속해 있지 않습니다.");
@@ -285,7 +289,7 @@ public class ChatRoomService {
     }
 
     // =========================
-    // 채팅방 나가기 (마지막이면 메시지/채팅방/S3 삭제)
+    // 채팅방 나가기
     // =========================
     @Transactional
     public void leaveChatRoom(UUID chatRoomId, Long userId) {
@@ -300,11 +304,11 @@ public class ChatRoomService {
         int remainingUsers = userChatRoomRepository.countByChatRoom(chatRoom);
 
         if (remainingUsers == 0) {
-            List<Message> messages = messageRepository.findAllByChatRoomId(chatRoomId);
+            List<com.example.kinover_backend.entity.Message> messages = messageRepository.findAllByChatRoomId(chatRoomId);
 
             List<String> s3KeysToDelete = new ArrayList<>();
 
-            for (Message message : messages) {
+            for (com.example.kinover_backend.entity.Message message : messages) {
                 MessageType type = message.getMessageType();
                 if (type == MessageType.image || type == MessageType.video) {
                     String content = message.getContent();
@@ -329,7 +333,7 @@ public class ChatRoomService {
     }
 
     // =========================
-    // Kino 채팅방 퍼스널리티 변경 (메시지 초기화 포함)
+    // Kino 채팅방 퍼스널리티 변경
     // =========================
     @Transactional
     public boolean updateChatBotPersonality(UUID chatRoomId, ChatBotPersonality personality) {
@@ -350,7 +354,6 @@ public class ChatRoomService {
 
     // =========================
     // 특정 채팅방 알림 설정
-    // - 유저 전체 채팅 알림이 true일 때만 유효
     // =========================
     @Transactional
     public boolean updateChatRoomNotificationSetting(Long userId, UUID chatRoomId, boolean isOn) {

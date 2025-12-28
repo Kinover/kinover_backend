@@ -1,3 +1,4 @@
+// src/main/java/com/example/kinover_backend/websocket/WebSocketMessageHandler.java
 package com.example.kinover_backend.websocket;
 
 import com.example.kinover_backend.JwtUtil;
@@ -30,7 +31,6 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
     private final OpenAiService openAiService;
     private final ChatRoomService chatRoomService;
 
-    // userId -> sessions
     private final Map<Long, Set<WebSocketSession>> sessions = new ConcurrentHashMap<>();
 
     @Override
@@ -83,12 +83,11 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
 
         String rawPayload = message.getPayload();
 
-        // ✅ 1) 먼저 type 분기
         Map<String, Object> map = objectMapper.readValue(rawPayload, Map.class);
         String type = map.get("type") != null ? String.valueOf(map.get("type")) : "message:new";
 
         // =========================
-        // ✅ A) 읽음 이벤트 처리
+        // A) 읽음 이벤트
         // =========================
         if ("room:read".equals(type)) {
             ReadWsRequestDTO dto = objectMapper.readValue(rawPayload, ReadWsRequestDTO.class);
@@ -98,52 +97,46 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
                 return;
             }
 
-            // 멤버 체크
             if (!chatRoomService.isMember(dto.getChatRoomId(), userId)) {
                 System.out.println("[WS DENY] not a member. userId=" + userId + ", chatRoomId=" + dto.getChatRoomId());
                 session.close(CloseStatus.NOT_ACCEPTABLE);
                 return;
             }
 
-            // ✅ DB에 읽음 포인터 업데이트 (역행 방지 max 처리 필수)
             chatRoomService.markRead(dto.getChatRoomId(), userId, dto.getLastReadAt());
 
-            // ✅ 같은 방 멤버들에게 브로드캐스트 (카톡처럼 숫자 줄어드는 핵심)
-            broadcastToRoomMembers(dto.getChatRoomId(), makeReadBroadcastPayload(dto.getChatRoomId(), userId, dto.getLastReadAt()));
+            broadcastToRoomMembers(
+                    dto.getChatRoomId(),
+                    makeReadBroadcastPayload(dto.getChatRoomId(), userId, dto.getLastReadAt())
+            );
             return;
         }
 
         // =========================
-        // ✅ B) 기존 메시지 처리
+        // B) 메시지 이벤트
         // =========================
         MessageDTO dto = objectMapper.readValue(rawPayload, MessageDTO.class);
 
-        // sender 검증
         if (dto.getSenderId() == null || !userId.equals(dto.getSenderId())) {
             session.close(CloseStatus.NOT_ACCEPTABLE);
             return;
         }
 
-        // chatRoomId 검증
         if (dto.getChatRoomId() == null) {
             session.close(CloseStatus.BAD_DATA);
             return;
         }
 
-        // 권한 체크
         if (!chatRoomService.isMember(dto.getChatRoomId(), userId)) {
             System.out.println("[WS DENY] not a member. userId=" + userId + ", chatRoomId=" + dto.getChatRoomId());
             session.close(CloseStatus.NOT_ACCEPTABLE);
             return;
         }
 
-        // merge 방지
         dto.setMessageId(null);
 
-        // 메시지 저장 + 브로드캐스트(기존 addMessage 내부에서 broadcast 한다면 OK)
         messageService.addMessage(dto);
 
-        // Kino 방이면 AI 응답
         if (chatRoomService.isKinoRoom(dto.getChatRoomId())) {
             String reply = openAiService.getKinoResponse(dto.getChatRoomId(), userId);
 
@@ -152,7 +145,7 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
             kinoReply.setChatRoomId(dto.getChatRoomId());
             kinoReply.setContent(reply);
             kinoReply.setMessageType(MessageType.text);
-            kinoReply.setSenderId(9999999999L); // Kino
+            kinoReply.setSenderId(9999999999L);
 
             messageService.addMessage(kinoReply);
         }
@@ -164,6 +157,8 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
         if (uri == null) return;
 
         String token = getQueryParam(uri, "token");
+        if (token == null) return;
+
         Long userId = jwtUtil.getUserIdFromToken(token);
         if (userId == null) return;
 
@@ -193,9 +188,8 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
         return null;
     }
 
-    // ✅ 방 멤버들에게 브로드캐스트
     private void broadcastToRoomMembers(UUID chatRoomId, String payload) {
-        List<Long> memberIds = chatRoomService.getMemberIds(chatRoomId); // ✅ 이 메서드 필요
+        List<Long> memberIds = chatRoomService.getMemberIds(chatRoomId);
         for (Long memberId : memberIds) {
             Set<WebSocketSession> ss = getSessionsByUserId(memberId);
             for (WebSocketSession s : ss) {

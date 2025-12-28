@@ -8,15 +8,16 @@ import com.example.kinover_backend.enums.MessageType;
 import com.example.kinover_backend.repository.ChatRoomRepository;
 import com.example.kinover_backend.repository.MessageRepository;
 import com.example.kinover_backend.repository.UserRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.domain.*;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -40,7 +41,6 @@ public class MessageService {
     @Value("${cloudfront.domain}")
     private String cloudFrontDomain;
 
-    @Transactional
     public void addMessage(MessageDTO dto) {
         var chatRoom = chatRoomRepository.findById(dto.getChatRoomId())
                 .orElseThrow(() -> new IllegalArgumentException("ChatRoom not found"));
@@ -58,26 +58,25 @@ public class MessageService {
         if (dto.getMessageType() == MessageType.image || dto.getMessageType() == MessageType.video) {
             List<String> fileNames = dto.getImageUrls();
             if (fileNames == null || fileNames.isEmpty()) {
-                throw new RuntimeException("이미지 파일명이 비어 있습니다.");
+                throw new RuntimeException("이미지/비디오 파일명이 비어 있습니다.");
             }
 
-            List<String> imageUrls = fileNames.stream()
-                    .map(fileName -> fileName.startsWith("http") ? fileName : cloudFrontDomain + fileName)
+            List<String> urls = fileNames.stream()
+                    .map(fn -> fn.startsWith("http") ? fn : cloudFrontDomain + fn)
                     .collect(Collectors.toList());
 
-            message.setContent(String.join(",", imageUrls));
+            message.setContent(String.join(",", urls));
         } else {
             message.setContent(dto.getContent());
         }
 
         Message saved = messageRepository.save(message);
 
-        // ✅ 보낸 사람은 자동 읽음 처리 (내가 보낸 건 내가 읽은 것)
-        chatRoomService.markRead(saved.getChatRoom().getChatRoomId(), saved.getSender().getUserId(), saved.getCreatedAt());
+        // ✅ 저장된 값 기반 DTO (createdAt 포함) -> 이걸로 Redis + Push 통일
+        MessageDTO responseDto = getMessageDTO(saved);
 
         // ✅ Redis 발행
         try {
-            MessageDTO responseDto = getMessageDTO(saved);
             String json = objectMapper.writeValueAsString(responseDto);
             redisTemplate.convertAndSend(channelTopic.getTopic(), json);
         } catch (Exception e) {
@@ -85,37 +84,43 @@ public class MessageService {
             throw new RuntimeException("Redis 발행 중 오류", e);
         }
 
-        // ✅ FCM 알림 (멘션 분기)
-        sendChatPushNotifications(dto);
+        // ✅ Push (저장된 createdAt 기준으로 '읽음이면 스킵' 가능)
+        sendChatPushNotifications(responseDto);
     }
 
-    private void sendChatPushNotifications(MessageDTO dto) {
-        List<UserDTO> users = chatRoomService.getUsersByChatRoom(dto.getChatRoomId());
+    private void sendChatPushNotifications(MessageDTO messageDtoFromDb) {
+        List<UserDTO> users = chatRoomService.getUsersByChatRoom(messageDtoFromDb.getChatRoomId());
 
-        Set<Long> mentionTargets = Optional.ofNullable(dto.getMentionUserIds())
+        // ✅ 멘션 대상 set
+        Set<Long> mentionTargets = Optional.ofNullable(messageDtoFromDb.getMentionUserIds())
                 .orElse(List.of())
                 .stream()
                 .filter(Objects::nonNull)
-                .filter(id -> !id.equals(dto.getSenderId()))
+                .filter(id -> !id.equals(messageDtoFromDb.getSenderId()))
                 .collect(Collectors.toSet());
 
-        // 1) 멘션 대상자: 무조건 멘션 알림
+        // ✅ 수신자별 "이미 읽음이면 푸시 스킵" (카톡 느낌)
+        // - 사용자가 지금 방에 들어와서 읽음 처리(room:read)가 이미 올라갔으면 푸시 안 가는 게 자연스러움
         for (UserDTO u : users) {
-            Long userId = u.getUserId();
-            if (mentionTargets.contains(userId)) {
-                fcmNotificationService.sendMentionChatNotification(userId, dto);
+            Long receiverId = u.getUserId();
+            if (receiverId.equals(messageDtoFromDb.getSenderId())) continue;
+
+            // ✅ lastReadAt >= message.createdAt 이면 이미 읽은 상태로 간주 -> 푸시 생략
+            LocalDateTime lastReadAt = chatRoomService.getLastReadAt(messageDtoFromDb.getChatRoomId(), receiverId);
+            if (lastReadAt != null && messageDtoFromDb.getCreatedAt() != null
+                    && !lastReadAt.isBefore(messageDtoFromDb.getCreatedAt())) {
+                continue;
             }
-        }
 
-        // 2) 나머지: 설정 ON일 때만
-        for (UserDTO u : users) {
-            Long userId = u.getUserId();
+            // ✅ 1) 멘션 대상자: 설정 무시하고 멘션 푸시
+            if (mentionTargets.contains(receiverId)) {
+                fcmNotificationService.sendMentionChatNotification(receiverId, messageDtoFromDb);
+                continue;
+            }
 
-            if (userId.equals(dto.getSenderId())) continue;
-            if (mentionTargets.contains(userId)) continue;
-
-            if (fcmNotificationService.isChatRoomNotificationOn(userId, dto.getChatRoomId())) {
-                fcmNotificationService.sendChatNotification(userId, dto);
+            // ✅ 2) 나머지: 설정 true일 때만 일반 푸시
+            if (fcmNotificationService.isChatRoomNotificationOn(receiverId, messageDtoFromDb.getChatRoomId())) {
+                fcmNotificationService.sendChatNotification(receiverId, messageDtoFromDb);
             }
         }
     }
@@ -143,7 +148,9 @@ public class MessageService {
             responseDto.setImageUrls(null);
         }
 
+        // ✅ 서버에서 멘션 리스트까지 내려주고 싶으면, 메시지 엔티티에 저장 구조를 추가해야 함
         responseDto.setMentionUserIds(null);
+
         return responseDto;
     }
 
