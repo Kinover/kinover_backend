@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.UUID;
 
@@ -26,4 +27,8 @@ public class UserChatRoom {
 
     @Column(columnDefinition = "DATE")
     private Date joinedAt; // 유저가 채팅방에 입장한 시간 등 추가 정보 가능
+
+    @Column(name="last_read_at")
+    private LocalDateTime lastReadAt;
+
 }

@@ -1,8 +1,7 @@
+// src/main/java/com/example/kinover_backend/service/ChatRoomService.java
 package com.example.kinover_backend.service;
 
-import com.example.kinover_backend.dto.ChatRoomDTO;
-import com.example.kinover_backend.dto.ChatRoomMapper;
-import com.example.kinover_backend.dto.UserDTO;
+import com.example.kinover_backend.dto.*;
 import com.example.kinover_backend.entity.*;
 import com.example.kinover_backend.enums.ChatBotPersonality;
 import com.example.kinover_backend.enums.KinoType;
@@ -14,6 +13,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -43,44 +43,84 @@ public class ChatRoomService {
         Family family = familyRepository.findById(familyId)
                 .orElseThrow(() -> new RuntimeException("Family not found"));
 
-        // creator 포함한 전체 유저 목록 확정
         List<Long> allUserIds = new ArrayList<>(userIds);
-        if (!allUserIds.contains(creatorId)) {
-            allUserIds.add(creatorId);
-        }
+        if (!allUserIds.contains(creatorId)) allUserIds.add(creatorId);
 
         ChatRoom chatRoom = new ChatRoom();
-        chatRoom.setRoomName(roomName); // ✅ roomName 반영 (Initial 하드코딩 제거)
+        chatRoom.setRoomName(roomName);
         chatRoom.setFamily(family);
-
-        // 참여 인원 기준: 2명=personal, 3명 이상=family (원하는 기준이면 여기서 변경)
         chatRoom.setFamilyType(allUserIds.size() > 2 ? "family" : "personal");
 
         chatRoomRepository.save(chatRoom);
+
+        LocalDateTime now = LocalDateTime.now();
 
         for (Long userId : allUserIds) {
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new RuntimeException("유저를 찾을 수 없습니다: " + userId));
 
-            UserChatRoom userChatRoom = new UserChatRoom();
-            userChatRoom.setUser(user);
-            userChatRoom.setChatRoom(chatRoom);
-            userChatRoomRepository.save(userChatRoom);
+            UserChatRoom ucr = new UserChatRoom();
+            ucr.setUser(user);
+            ucr.setChatRoom(chatRoom);
+
+            // ✅ 신규 참여 UX: 이전 메시지는 "읽음"으로 처리하고 들어오게
+            ucr.setLastReadAt(now);
+
+            userChatRoomRepository.save(ucr);
         }
 
         return chatRoomMapper.toDTO(chatRoom);
     }
 
-    // ✅ WebSocket 권한 체크용: 해당 유저가 채팅방 멤버인지 확인
+    // =========================
+    // ✅ 멤버 체크(최적화)
+    // =========================
     public boolean isMember(UUID chatRoomId, Long userId) {
-        if (chatRoomId == null || userId == null)
-            return false;
+        if (chatRoomId == null || userId == null) return false;
+        return userChatRoomRepository.existsByUser_UserIdAndChatRoom_ChatRoomId(userId, chatRoomId);
+    }
 
-        // 가장 안전한 방식: userChatRoom 테이블에서 존재 여부 확인
-        // (레포지토리에 exists 메서드가 있으면 그걸 쓰는게 제일 빠름)
-        return userChatRoomRepository.findByUserId(userId).stream()
-                .anyMatch(ucr -> ucr.getChatRoom() != null
-                        && chatRoomId.equals(ucr.getChatRoom().getChatRoomId()));
+    // =========================
+    // ✅ WS 브로드캐스트용: 방 멤버 ID 리스트
+    // =========================
+    @Transactional(readOnly = true)
+    public List<Long> getMemberIds(UUID chatRoomId) {
+        return userChatRoomRepository.findMemberIdsByChatRoomId(chatRoomId);
+    }
+
+    // =========================
+    // ✅ 읽음 처리 (lastReadAt 기준, 역행 방지)
+    // =========================
+    @Transactional
+    public void markRead(UUID chatRoomId, Long userId, LocalDateTime lastReadAt) {
+        if (chatRoomId == null || userId == null || lastReadAt == null) {
+            throw new IllegalArgumentException("chatRoomId/userId/lastReadAt는 필수입니다.");
+        }
+        if (!isMember(chatRoomId, userId)) {
+            throw new RuntimeException("해당 채팅방 멤버가 아닙니다.");
+        }
+
+        int updated = userChatRoomRepository.updateLastReadAtIfLater(chatRoomId, userId, lastReadAt);
+        if (updated == 0) {
+            throw new RuntimeException("읽음 처리 실패: user_chat_room row 없음");
+        }
+    }
+
+    // =========================
+    // ✅ readPointers 조회
+    // =========================
+    @Transactional(readOnly = true)
+    public ReadPointersResponseDTO getReadPointers(UUID chatRoomId) {
+        List<UserChatRoom> list = userChatRoomRepository.findByChatRoomIdWithUser(chatRoomId);
+
+        List<ReadPointersResponseDTO.Pointer> pointers = list.stream()
+                .map(ucr -> new ReadPointersResponseDTO.Pointer(
+                        ucr.getUser().getUserId(),
+                        ucr.getLastReadAt()
+                ))
+                .collect(Collectors.toList());
+
+        return new ReadPointersResponseDTO(chatRoomId, pointers);
     }
 
     // =========================
@@ -93,9 +133,7 @@ public class ChatRoomService {
             throw new RuntimeException("채팅방을 찾을 수 없습니다: " + chatRoomId);
         }
 
-        boolean isRequesterInChat = userChatRoomRepository.findByUserId(requesterId).stream()
-                .anyMatch(ucr -> ucr.getChatRoom().getChatRoomId().equals(chatRoomId));
-        if (!isRequesterInChat) {
+        if (!isMember(chatRoomId, requesterId)) {
             throw new RuntimeException("요청자가 채팅방에 속해 있지 않습니다");
         }
 
@@ -108,20 +146,25 @@ public class ChatRoomService {
                 .collect(Collectors.toList());
 
         List<Long> newUserIds = userIds.stream()
-                .filter(userId -> !existingUserIds.contains(userId))
+                .filter(id -> !existingUserIds.contains(id))
                 .collect(Collectors.toList());
+
+        LocalDateTime now = LocalDateTime.now();
 
         for (Long userId : newUserIds) {
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new RuntimeException("유저를 찾을 수 없습니다: " + userId));
 
-            UserChatRoom userChatRoom = new UserChatRoom();
-            userChatRoom.setUser(user);
-            userChatRoom.setChatRoom(chatRoom);
-            userChatRoomRepository.save(userChatRoom);
+            UserChatRoom ucr = new UserChatRoom();
+            ucr.setUser(user);
+            ucr.setChatRoom(chatRoom);
+
+            // ✅ 초대 시점 이전은 읽음 처리
+            ucr.setLastReadAt(now);
+
+            userChatRoomRepository.save(ucr);
         }
 
-        // 인원수로 familyType 재설정
         int memberCount = userChatRoomRepository.countByChatRoom(chatRoom);
         chatRoom.setFamilyType(memberCount > 2 ? "family" : "personal");
         chatRoomRepository.save(chatRoom);
@@ -130,12 +173,10 @@ public class ChatRoomService {
     }
 
     // =========================
-    // 특정 유저가 가진 채팅방 조회
-    // (컨트롤러 주석대로 familyId는 사용하지 않음)
+    // 특정 유저가 가진 채팅방 조회 (unreadCount 포함)
     // =========================
+    @Transactional(readOnly = true)
     public List<ChatRoomDTO> getAllChatRooms(Long userId, UUID familyId) {
-
-        // ✅ 여기서 끝: 해당 유저 + 해당 가족 채팅방만
         List<ChatRoom> chatRooms = chatRoomRepository.findByUserIdAndFamilyId(userId, familyId);
 
         return chatRooms.stream().map(chatRoom -> {
@@ -163,18 +204,14 @@ public class ChatRoomService {
             if (isKinoRoom(chatRoom.getChatRoomId())) {
                 String suffix;
                 ChatBotPersonality personality = chatRoom.getPersonality();
-                if (personality == ChatBotPersonality.SERENE) {
-                    suffix = "blueKino.png";
-                } else if (personality == ChatBotPersonality.SNUGGLE) {
-                    suffix = "pinkKino.png";
-                } else {
-                    suffix = "yellowKino.png";
-                }
+                if (personality == ChatBotPersonality.SERENE) suffix = "blueKino.png";
+                else if (personality == ChatBotPersonality.SNUGGLE) suffix = "pinkKino.png";
+                else suffix = "yellowKino.png";
                 images = List.of(cloudFrontDomain + suffix);
             } else {
                 images = chatRoom.getUserChatRooms().stream()
                         .map(UserChatRoom::getUser)
-                        .filter(user -> !user.getUserId().equals(userId))
+                        .filter(u -> !u.getUserId().equals(userId))
                         .map(User::getImage)
                         .filter(Objects::nonNull)
                         .collect(Collectors.toList());
@@ -186,8 +223,28 @@ public class ChatRoomService {
                     .findByUser_UserIdAndChatRoom_ChatRoomId(userId, chatRoom.getChatRoomId())
                     .map(ChatRoomNotificationSetting::isNotificationOn)
                     .orElse(true);
-
             dto.setNotificationOn(isNotificationOn);
+
+            // ✅ unreadCount 계산 (null 방어 포함)
+            LocalDateTime lastReadAt = userChatRoomRepository
+                    .findByUser_UserIdAndChatRoom_ChatRoomId(userId, chatRoom.getChatRoomId())
+                    .map(UserChatRoom::getLastReadAt)
+                    .orElse(null);
+
+            int unread;
+            if (lastReadAt == null) {
+                unread = messageRepository.countByChatRoom_ChatRoomIdAndSender_UserIdNot(
+                        chatRoom.getChatRoomId(),
+                        userId
+                );
+            } else {
+                unread = messageRepository.countByChatRoom_ChatRoomIdAndCreatedAtAfterAndSender_UserIdNot(
+                        chatRoom.getChatRoomId(),
+                        lastReadAt,
+                        userId
+                );
+            }
+            dto.setUnreadCount(unread);
 
             return dto;
         }).collect(Collectors.toList());
@@ -196,6 +253,7 @@ public class ChatRoomService {
     // =========================
     // 특정 채팅방의 유저 조회
     // =========================
+    @Transactional(readOnly = true)
     public List<UserDTO> getUsersByChatRoom(UUID chatRoomId) {
         return userChatRoomRepository.findUsersByChatRoomId(chatRoomId).stream()
                 .map(UserDTO::new)
@@ -218,9 +276,7 @@ public class ChatRoomService {
             throw new RuntimeException("채팅방을 찾을 수 없습니다: " + chatRoomId);
         }
 
-        boolean isParticipant = userChatRoomRepository.findByUserId(userId).stream()
-                .anyMatch(ucr -> ucr.getChatRoom().getChatRoomId().equals(chatRoomId));
-        if (!isParticipant) {
+        if (!isMember(chatRoomId, userId)) {
             throw new RuntimeException("해당 유저는 이 채팅방에 속해 있지 않습니다.");
         }
 
@@ -278,12 +334,10 @@ public class ChatRoomService {
     @Transactional
     public boolean updateChatBotPersonality(UUID chatRoomId, ChatBotPersonality personality) {
         Optional<ChatRoom> optionalChatRoom = chatRoomRepository.findById(chatRoomId);
-        if (optionalChatRoom.isEmpty())
-            return false;
+        if (optionalChatRoom.isEmpty()) return false;
 
         ChatRoom chatRoom = optionalChatRoom.get();
-        if (!Boolean.TRUE.equals(chatRoom.isKino()))
-            return false;
+        if (!Boolean.TRUE.equals(chatRoom.isKino())) return false;
 
         messageRepository.deleteByChatRoom(chatRoom);
 
@@ -303,14 +357,11 @@ public class ChatRoomService {
         Optional<User> userOpt = userRepository.findById(userId);
         Optional<ChatRoom> chatRoomOpt = chatRoomRepository.findById(chatRoomId);
 
-        if (userOpt.isEmpty() || chatRoomOpt.isEmpty())
-            return false;
+        if (userOpt.isEmpty() || chatRoomOpt.isEmpty()) return false;
 
         User user = userOpt.get();
         ChatRoom chatRoom = chatRoomOpt.get();
 
-        // ✅ User 엔티티 필드명이 Boolean isChatNotificationOn 이므로 getter는
-        // getIsChatNotificationOn()
         if (!Boolean.TRUE.equals(user.getIsChatNotificationOn())) {
             return false;
         }

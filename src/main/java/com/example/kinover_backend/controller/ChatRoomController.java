@@ -4,9 +4,9 @@ import com.example.kinover_backend.dto.ChatRoomDTO;
 import com.example.kinover_backend.dto.MessageDTO;
 import com.example.kinover_backend.dto.UpdatePersonalityRequestDTO;
 import com.example.kinover_backend.dto.UserDTO;
-import com.example.kinover_backend.entity.Message;
+import com.example.kinover_backend.dto.ReadRequestDTO;
+import com.example.kinover_backend.dto.ReadPointersResponseDTO;
 import com.example.kinover_backend.service.ChatRoomService;
-import com.example.kinover_backend.service.FamilyService;
 import com.example.kinover_backend.service.MessageService;
 import com.example.kinover_backend.JwtUtil;
 import com.example.kinover_backend.service.UserService;
@@ -21,7 +21,6 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -36,8 +35,10 @@ public class ChatRoomController {
     private final UserService userService;
     private final JwtUtil jwtUtil;
 
-    public ChatRoomController(ChatRoomService chatRoomService, MessageService messageService, UserService userService,
-            JwtUtil jwtUtil) {
+    public ChatRoomController(ChatRoomService chatRoomService,
+                              MessageService messageService,
+                              UserService userService,
+                              JwtUtil jwtUtil) {
         this.chatRoomService = chatRoomService;
         this.messageService = messageService;
         this.userService = userService;
@@ -51,8 +52,8 @@ public class ChatRoomController {
             @Parameter(description = "채팅방 이름", required = true) @PathVariable String roomName,
             @Parameter(description = "참여 유저 ID 리스트 (쉼표로 구분)", required = true) @PathVariable String userIds,
             @Parameter(description = "채팅방 소속된 가족", required = true) @PathVariable UUID familyId,
-
             @RequestHeader("Authorization") String authorizationHeader) {
+
         String token = authorizationHeader.replace("Bearer ", "");
         Long authenticatedUserId = jwtUtil.getUserIdFromToken(token);
 
@@ -60,8 +61,9 @@ public class ChatRoomController {
                 .map(Long::parseLong)
                 .collect(Collectors.toList());
 
-        ChatRoomDTO createdChatRoom = chatRoomService.createChatRoom(familyId, authenticatedUserId, roomName,
-                userIdList);
+        ChatRoomDTO createdChatRoom = chatRoomService.createChatRoom(
+                familyId, authenticatedUserId, roomName, userIdList);
+
         return new ResponseEntity<>(createdChatRoom, HttpStatus.CREATED);
     }
 
@@ -72,6 +74,7 @@ public class ChatRoomController {
             @Parameter(description = "채팅방 아이디", required = true) @PathVariable UUID chatRoomId,
             @Parameter(description = "추가할 유저 ID 리스트 (쉼표로 구분)", required = true) @PathVariable String userIds,
             @RequestHeader("Authorization") String authorizationHeader) {
+
         String token = authorizationHeader.replace("Bearer ", "");
         Long authenticatedUserId = jwtUtil.getUserIdFromToken(token);
 
@@ -92,29 +95,42 @@ public class ChatRoomController {
         return new ResponseEntity<>(updatedChatRoom, HttpStatus.OK);
     }
 
-    // 특정 유저가 가진 채팅방 조회 (familyId 추가, 사용하지 않음)
+    // 특정 유저가 가진 채팅방 조회
     @Operation(summary = "채팅방 조회", description = "특정 유저의 모든 채팅방을 조회합니다.")
     @PostMapping("/{familyId}/{userId}")
     public List<ChatRoomDTO> getAllChatRooms(
             @Parameter(description = "가족 아이디 (사용되지 않음)", required = true) @PathVariable UUID familyId,
             @Parameter(description = "유저 아이디", required = true) @PathVariable Long userId,
             @RequestHeader("Authorization") String authorizationHeader) {
+
         String token = authorizationHeader.replace("Bearer ", "");
         Long authenticatedUserId = jwtUtil.getUserIdFromToken(token);
         if (!authenticatedUserId.equals(userId)) {
             throw new RuntimeException("인증된 유저와 요청 유저가 일치하지 않습니다");
         }
-        return chatRoomService.getAllChatRooms(userId, familyId); // familyId는 사용하지 않음
+
+        // ✅ 여기서 unreadCount를 서버 계산해서 DTO에 포함시키는 걸 chatRoomService에서 처리해야 “정확”
+        return chatRoomService.getAllChatRooms(userId, familyId);
     }
 
     // 채팅방의 모든 메시지 조회
-    @Operation(summary = "메세지 불러오기", description = "채팅방의 모든 메세지를 가져옵니다.")
+    @Operation(summary = "메세지 불러오기", description = "채팅방의 메시지를 가져옵니다.")
     @GetMapping("/{chatRoomId}/messages/fetch")
     public List<MessageDTO> fetchMessages(
             @PathVariable UUID chatRoomId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime before,
             @RequestParam(defaultValue = "20") int limit,
             @RequestHeader("Authorization") String authorizationHeader) {
+
+        // ✅ 토큰 검증(최소)
+        String token = authorizationHeader.replace("Bearer ", "");
+        Long userId = jwtUtil.getUserIdFromToken(token);
+
+        // ✅ 멤버 검증(권장)
+        if (!chatRoomService.isMember(chatRoomId, userId)) {
+            throw new RuntimeException("해당 채팅방 멤버가 아닙니다.");
+        }
+
         return messageService.fetchMessagesBefore(chatRoomId, before, limit);
     }
 
@@ -138,14 +154,23 @@ public class ChatRoomController {
     public List<UserDTO> getUsersByChatRoom(
             @Parameter(description = "채팅방 아이디", required = true) @PathVariable UUID chatRoomId,
             @RequestHeader("Authorization") String authorizationHeader) {
+
+        String token = authorizationHeader.replace("Bearer ", "");
+        Long userId = jwtUtil.getUserIdFromToken(token);
+
+        if (!chatRoomService.isMember(chatRoomId, userId)) {
+            throw new RuntimeException("해당 채팅방 멤버가 아닙니다.");
+        }
+
         return chatRoomService.getUsersByChatRoom(chatRoomId);
     }
 
-    @Operation(summary = "채팅방 나가기", description = "사용자가 채팅방을 나갑니다. 채팅방에 마지막 사용자가 나갈 경우, 해당 채팅방과 메시지들이 함께 삭제됩니다.")
+    @Operation(summary = "채팅방 나가기", description = "사용자가 채팅방을 나갑니다. 마지막 사용자가 나가면 채팅방/메시지 삭제.")
     @DeleteMapping("/{chatRoomId}/leave")
     public ResponseEntity<Void> leaveChatRoom(
             @RequestHeader("Authorization") String authorizationHeader,
             @PathVariable UUID chatRoomId) {
+
         String token = authorizationHeader.replace("Bearer ", "");
         Long userId = jwtUtil.getUserIdFromToken(token);
 
@@ -157,6 +182,7 @@ public class ChatRoomController {
     public ResponseEntity<String> updateChatBotPersonality(
             @PathVariable UUID chatRoomId,
             @RequestBody UpdatePersonalityRequestDTO requestDTO) {
+
         boolean success = chatRoomService.updateChatBotPersonality(chatRoomId, requestDTO.getPersonality());
         if (success) {
             return ResponseEntity.ok("ChatBot personality updated successfully.");
@@ -165,33 +191,68 @@ public class ChatRoomController {
         }
     }
 
-    // 유저 전체 알림 설정 (UserService 사용)
+    // 유저 전체 알림 설정
     @PatchMapping("/notification/user")
-    @Operation(summary = "유저 전체 채팅 알림 ON/OFF", description = "유저 ID와 알림 상태(boolean)를 받아서, 해당 유저의 모든 채팅방에 대한 알림을 일괄적으로 설정합니다. "
-            +
-            "이 설정이 false일 경우, 채팅방 개별 설정과 무관하게 모든 알림이 전송되지 않습니다.")
+    @Operation(summary = "유저 전체 채팅 알림 ON/OFF", description = "유저 ID와 알림 상태(boolean)를 받아서 모든 채팅방 알림을 일괄 설정합니다.")
     public ResponseEntity<String> updateUserChatNotificationSetting(
             @RequestParam Long userId,
             @RequestParam boolean isOn) {
+
         boolean success = userService.updateChatNotificationSetting(userId, isOn);
         return success
                 ? ResponseEntity.ok("User-wide chat notification setting updated.")
                 : ResponseEntity.badRequest().body("Invalid userId");
     }
 
-    // 특정 채팅방 알림 설정 (ChatRoomService 사용)
+    // 특정 채팅방 알림 설정
     @PatchMapping("/notification/chatroom")
-    @Operation(summary = "특정 채팅방 알림 ON/OFF", description = "userId, chatRoomId, 알림 상태를 입력받아 해당 유저의 특정 채팅방 알림을 ON 또는 OFF로 설정합니다. "
-            +
-            "이 설정은 유저 전체 알림 설정이 true인 경우에만 유효합니다.")
+    @Operation(summary = "특정 채팅방 알림 ON/OFF", description = "userId, chatRoomId, 알림 상태를 입력받아 특정 채팅방 알림을 설정합니다.")
     public ResponseEntity<String> updateChatRoomNotificationSetting(
             @RequestParam Long userId,
             @RequestParam UUID chatRoomId,
             @RequestParam boolean isOn) {
+
         boolean success = chatRoomService.updateChatRoomNotificationSetting(userId, chatRoomId, isOn);
         return success
                 ? ResponseEntity.ok("Chat room-specific notification setting updated.")
                 : ResponseEntity.badRequest().body("Invalid userId or chatRoomId");
     }
 
+    /* =========================
+     * ✅ 읽음 처리 (카톡 핵심)
+     * ========================= */
+
+    @Operation(summary = "채팅방 읽음 처리", description = "해당 유저가 이 채팅방에서 lastReadAt까지 읽었음을 기록합니다.")
+    @PostMapping("/{chatRoomId}/read")
+    public ResponseEntity<Void> markRead(
+            @PathVariable UUID chatRoomId,
+            @RequestBody ReadRequestDTO body,
+            @RequestHeader("Authorization") String authorizationHeader) {
+
+        String token = authorizationHeader.replace("Bearer ", "");
+        Long userId = jwtUtil.getUserIdFromToken(token);
+
+        if (!chatRoomService.isMember(chatRoomId, userId)) {
+            throw new RuntimeException("해당 채팅방 멤버가 아닙니다.");
+        }
+
+        chatRoomService.markRead(chatRoomId, userId, body.getLastReadAt());
+        return ResponseEntity.ok().build();
+    }
+
+    @Operation(summary = "채팅방 readPointers 조회", description = "채팅방 참여자별 lastReadAt 포인터를 조회합니다.")
+    @GetMapping("/{chatRoomId}/readPointers")
+    public ResponseEntity<ReadPointersResponseDTO> getReadPointers(
+            @PathVariable UUID chatRoomId,
+            @RequestHeader("Authorization") String authorizationHeader) {
+
+        String token = authorizationHeader.replace("Bearer ", "");
+        Long userId = jwtUtil.getUserIdFromToken(token);
+
+        if (!chatRoomService.isMember(chatRoomId, userId)) {
+            throw new RuntimeException("해당 채팅방 멤버가 아닙니다.");
+        }
+
+        return ResponseEntity.ok(chatRoomService.getReadPointers(chatRoomId));
+    }
 }

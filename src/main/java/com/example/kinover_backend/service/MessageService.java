@@ -1,3 +1,4 @@
+// src/main/java/com/example/kinover_backend/service/MessageService.java
 package com.example.kinover_backend.service;
 
 import com.example.kinover_backend.dto.MessageDTO;
@@ -11,11 +12,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.*;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -31,7 +32,6 @@ public class MessageService {
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
 
-    // ✅ 추가 주입
     private final ChatRoomService chatRoomService;
     private final FcmNotificationService fcmNotificationService;
 
@@ -40,6 +40,7 @@ public class MessageService {
     @Value("${cloudfront.domain}")
     private String cloudFrontDomain;
 
+    @Transactional
     public void addMessage(MessageDTO dto) {
         var chatRoom = chatRoomRepository.findById(dto.getChatRoomId())
                 .orElseThrow(() -> new IllegalArgumentException("ChatRoom not found"));
@@ -71,7 +72,10 @@ public class MessageService {
 
         Message saved = messageRepository.save(message);
 
-        // ✅ Redis 발행 (기존)
+        // ✅ 보낸 사람은 자동 읽음 처리 (내가 보낸 건 내가 읽은 것)
+        chatRoomService.markRead(saved.getChatRoom().getChatRoomId(), saved.getSender().getUserId(), saved.getCreatedAt());
+
+        // ✅ Redis 발행
         try {
             MessageDTO responseDto = getMessageDTO(saved);
             String json = objectMapper.writeValueAsString(responseDto);
@@ -81,15 +85,13 @@ public class MessageService {
             throw new RuntimeException("Redis 발행 중 오류", e);
         }
 
-        // ✅ 여기서 FCM 알림 발송 (멘션 분기)
+        // ✅ FCM 알림 (멘션 분기)
         sendChatPushNotifications(dto);
     }
 
     private void sendChatPushNotifications(MessageDTO dto) {
-        // 채팅방 참여자 리스트 (UserDTO)
         List<UserDTO> users = chatRoomService.getUsersByChatRoom(dto.getChatRoomId());
 
-        // ✅ 멘션 대상 set (중복 제거 + null 제거 + 본인 제거)
         Set<Long> mentionTargets = Optional.ofNullable(dto.getMentionUserIds())
                 .orElse(List.of())
                 .stream()
@@ -97,7 +99,7 @@ public class MessageService {
                 .filter(id -> !id.equals(dto.getSenderId()))
                 .collect(Collectors.toSet());
 
-        // ✅ 1) 멘션 대상자: 설정 무시하고 무조건 멘션 알림
+        // 1) 멘션 대상자: 무조건 멘션 알림
         for (UserDTO u : users) {
             Long userId = u.getUserId();
             if (mentionTargets.contains(userId)) {
@@ -105,14 +107,13 @@ public class MessageService {
             }
         }
 
-        // ✅ 2) 나머지: 기존 로직(전체/채팅방 설정 true일 때만)
+        // 2) 나머지: 설정 ON일 때만
         for (UserDTO u : users) {
             Long userId = u.getUserId();
 
-            if (userId.equals(dto.getSenderId())) continue;      // 보낸 사람 제외
-            if (mentionTargets.contains(userId)) continue;       // 멘션은 중복 발송 방지
+            if (userId.equals(dto.getSenderId())) continue;
+            if (mentionTargets.contains(userId)) continue;
 
-            // 기존 체크 사용
             if (fcmNotificationService.isChatRoomNotificationOn(userId, dto.getChatRoomId())) {
                 fcmNotificationService.sendChatNotification(userId, dto);
             }
@@ -142,9 +143,7 @@ public class MessageService {
             responseDto.setImageUrls(null);
         }
 
-        // ✅ 서버에서 내려줄 때 멘션 리스트는 선택 (원하면 저장/전송 구조 더 늘려야 함)
         responseDto.setMentionUserIds(null);
-
         return responseDto;
     }
 
