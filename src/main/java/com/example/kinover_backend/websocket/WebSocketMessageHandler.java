@@ -17,6 +17,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
@@ -65,6 +66,7 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
         URI uri = session.getUri();
         if (uri == null) {
@@ -90,7 +92,7 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
         String type = map.get("type") != null ? String.valueOf(map.get("type")) : "message:new";
 
         // =========================
-        // A) 읽음 이벤트
+        // A) 읽음 이벤트 (클라이언트가 "방을 실제로 봤다"는 신호)
         // =========================
         if ("room:read".equals(type)) {
             ReadWsRequestDTO dto = objectMapper.readValue(rawPayload, ReadWsRequestDTO.class);
@@ -111,7 +113,8 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
             if (updated) {
                 broadcastToRoomMembers(
                         dto.getChatRoomId(),
-                        makeReadBroadcastPayload(dto.getChatRoomId(), userId, dto.getLastReadAt()));
+                        makeReadBroadcastPayload(dto.getChatRoomId(), userId, dto.getLastReadAt())
+                );
             }
             return;
         }
@@ -137,10 +140,29 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
             return;
         }
 
+        // 서버에서 messageId는 새로 생성되도록 강제
         dto.setMessageId(null);
 
+        // 1) 메시지 저장
         messageService.addMessage(dto);
 
+        // 2) ✅ "보낸 사람(sender)"은 본인이 보낸 메시지를 '읽음'으로 간주해도 되므로
+        //    서버에서 자동 read 처리 (프론트에서 -1 같은 트릭을 할 필요가 없어짐)
+        //
+        //    - 가장 좋은 건 "저장된 메시지 createdAt"으로 markRead 하는 것인데,
+        //      현재 addMessage(dto)가 반환값이 없어 여기서는 LocalDateTime.now()로 처리.
+        //    - Kino 자동응답은 아직 user가 안 읽었을 수 있으니, user 메시지 직후까지만 read를 올림.
+        LocalDateTime lastReadAt = LocalDateTime.now();
+        boolean updated = chatRoomService.markRead(dto.getChatRoomId(), userId, lastReadAt);
+
+        if (updated) {
+            broadcastToRoomMembers(
+                    dto.getChatRoomId(),
+                    makeReadBroadcastPayload(dto.getChatRoomId(), userId, lastReadAt)
+            );
+        }
+
+        // 3) 키노룸이면 키노 답장 저장 (여기서는 read 올리지 않음)
         if (chatRoomService.isKinoRoom(dto.getChatRoomId())) {
             String reply = openAiService.getKinoResponse(dto.getChatRoomId(), userId);
 
@@ -158,22 +180,18 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         URI uri = session.getUri();
-        if (uri == null)
-            return;
+        if (uri == null) return;
 
         String token = getQueryParam(uri, "token");
-        if (token == null)
-            return;
+        if (token == null) return;
 
         Long userId = jwtUtil.getUserIdFromToken(token);
-        if (userId == null)
-            return;
+        if (userId == null) return;
 
         Set<WebSocketSession> userSessions = sessions.get(userId);
         if (userSessions != null) {
             userSessions.remove(session);
-            if (userSessions.isEmpty())
-                sessions.remove(userId);
+            if (userSessions.isEmpty()) sessions.remove(userId);
         }
 
         System.out.println("[WS CLOSE] userId=" + userId + ", sessionId=" + session.getId());
@@ -185,8 +203,7 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
 
     private String getQueryParam(URI uri, String key) {
         String query = uri.getQuery();
-        if (query == null)
-            return null;
+        if (query == null) return null;
 
         for (String param : query.split("&")) {
             String[] pair = param.split("=", 2);
@@ -203,16 +220,14 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
             Set<WebSocketSession> ss = getSessionsByUserId(memberId);
             for (WebSocketSession s : ss) {
                 try {
-                    if (s.isOpen())
-                        s.sendMessage(new TextMessage(payload));
+                    if (s.isOpen()) s.sendMessage(new TextMessage(payload));
                 } catch (Exception ignored) {
                 }
             }
         }
     }
 
-    private String makeReadBroadcastPayload(UUID chatRoomId, Long userId, java.time.LocalDateTime lastReadAt)
-            throws Exception {
+    private String makeReadBroadcastPayload(UUID chatRoomId, Long userId, LocalDateTime lastReadAt) throws Exception {
         Map<String, Object> out = new HashMap<>();
         out.put("type", "room:read");
         out.put("chatRoomId", chatRoomId);
