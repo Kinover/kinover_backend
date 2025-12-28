@@ -57,7 +57,10 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
             sessions.computeIfAbsent(userId, k -> new CopyOnWriteArraySet<>()).add(session);
             System.out.println("[WS CONNECT] userId=" + userId + ", sessionId=" + session.getId());
         } catch (Exception e) {
-            try { session.close(CloseStatus.SERVER_ERROR); } catch (Exception ignored) {}
+            try {
+                session.close(CloseStatus.SERVER_ERROR);
+            } catch (Exception ignored) {
+            }
         }
     }
 
@@ -98,17 +101,18 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
             }
 
             if (!chatRoomService.isMember(dto.getChatRoomId(), userId)) {
-                System.out.println("[WS DENY] not a member. userId=" + userId + ", chatRoomId=" + dto.getChatRoomId());
                 session.close(CloseStatus.NOT_ACCEPTABLE);
                 return;
             }
 
-            chatRoomService.markRead(dto.getChatRoomId(), userId, dto.getLastReadAt());
+            boolean updated = chatRoomService.markRead(dto.getChatRoomId(), userId, dto.getLastReadAt());
 
-            broadcastToRoomMembers(
-                    dto.getChatRoomId(),
-                    makeReadBroadcastPayload(dto.getChatRoomId(), userId, dto.getLastReadAt())
-            );
+            // ✅ 실제로 forward 업데이트 된 경우에만 브로드캐스트
+            if (updated) {
+                broadcastToRoomMembers(
+                        dto.getChatRoomId(),
+                        makeReadBroadcastPayload(dto.getChatRoomId(), userId, dto.getLastReadAt()));
+            }
             return;
         }
 
@@ -154,18 +158,22 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         URI uri = session.getUri();
-        if (uri == null) return;
+        if (uri == null)
+            return;
 
         String token = getQueryParam(uri, "token");
-        if (token == null) return;
+        if (token == null)
+            return;
 
         Long userId = jwtUtil.getUserIdFromToken(token);
-        if (userId == null) return;
+        if (userId == null)
+            return;
 
         Set<WebSocketSession> userSessions = sessions.get(userId);
         if (userSessions != null) {
             userSessions.remove(session);
-            if (userSessions.isEmpty()) sessions.remove(userId);
+            if (userSessions.isEmpty())
+                sessions.remove(userId);
         }
 
         System.out.println("[WS CLOSE] userId=" + userId + ", sessionId=" + session.getId());
@@ -177,7 +185,8 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
 
     private String getQueryParam(URI uri, String key) {
         String query = uri.getQuery();
-        if (query == null) return null;
+        if (query == null)
+            return null;
 
         for (String param : query.split("&")) {
             String[] pair = param.split("=", 2);
@@ -194,13 +203,16 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
             Set<WebSocketSession> ss = getSessionsByUserId(memberId);
             for (WebSocketSession s : ss) {
                 try {
-                    if (s.isOpen()) s.sendMessage(new TextMessage(payload));
-                } catch (Exception ignored) {}
+                    if (s.isOpen())
+                        s.sendMessage(new TextMessage(payload));
+                } catch (Exception ignored) {
+                }
             }
         }
     }
 
-    private String makeReadBroadcastPayload(UUID chatRoomId, Long userId, java.time.LocalDateTime lastReadAt) throws Exception {
+    private String makeReadBroadcastPayload(UUID chatRoomId, Long userId, java.time.LocalDateTime lastReadAt)
+            throws Exception {
         Map<String, Object> out = new HashMap<>();
         out.put("type", "room:read");
         out.put("chatRoomId", chatRoomId);

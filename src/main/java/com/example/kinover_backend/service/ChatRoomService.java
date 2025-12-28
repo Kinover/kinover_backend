@@ -44,7 +44,8 @@ public class ChatRoomService {
                 .orElseThrow(() -> new RuntimeException("Family not found"));
 
         List<Long> allUserIds = new ArrayList<>(userIds);
-        if (!allUserIds.contains(creatorId)) allUserIds.add(creatorId);
+        if (!allUserIds.contains(creatorId))
+            allUserIds.add(creatorId);
 
         ChatRoom chatRoom = new ChatRoom();
         chatRoom.setRoomName(roomName);
@@ -74,7 +75,8 @@ public class ChatRoomService {
     // 멤버 체크
     // =========================
     public boolean isMember(UUID chatRoomId, Long userId) {
-        if (chatRoomId == null || userId == null) return false;
+        if (chatRoomId == null || userId == null)
+            return false;
         return userChatRoomRepository.existsByUser_UserIdAndChatRoom_ChatRoomId(userId, chatRoomId);
     }
 
@@ -100,8 +102,11 @@ public class ChatRoomService {
     // =========================
     // 읽음 처리 (역행 방지 max)
     // =========================
+    // =========================
+    // 읽음 처리 (역행 방지 max)
+    // =========================
     @Transactional
-    public void markRead(UUID chatRoomId, Long userId, LocalDateTime lastReadAt) {
+    public boolean markRead(UUID chatRoomId, Long userId, LocalDateTime lastReadAt) {
         if (chatRoomId == null || userId == null || lastReadAt == null) {
             throw new IllegalArgumentException("chatRoomId/userId/lastReadAt는 필수입니다.");
         }
@@ -110,12 +115,15 @@ public class ChatRoomService {
         }
 
         int updated = userChatRoomRepository.updateLastReadAtIfLater(chatRoomId, userId, lastReadAt);
+
         if (updated == 0) {
-            // row가 없거나, lastReadAt이 더 최신이라 업데이트 안 된 경우(=정상)일 수도 있으니
-            // row 존재는 한 번 확인해주는 게 안전
+            // row는 있어야 정상. 없으면 예외
             userChatRoomRepository.findByUser_UserIdAndChatRoom_ChatRoomId(userId, chatRoomId)
                     .orElseThrow(() -> new RuntimeException("읽음 처리 대상 row 없음"));
+            return false; // ✅ lastReadAt이 더 최신이라 갱신 안 됨(정상)
         }
+
+        return true; // ✅ 실제로 갱신됨
     }
 
     // =========================
@@ -128,8 +136,7 @@ public class ChatRoomService {
         List<ReadPointersResponseDTO.Pointer> pointers = list.stream()
                 .map(ucr -> new ReadPointersResponseDTO.Pointer(
                         ucr.getUser().getUserId(),
-                        ucr.getLastReadAt()
-                ))
+                        ucr.getLastReadAt()))
                 .collect(Collectors.toList());
 
         return new ReadPointersResponseDTO(chatRoomId, pointers);
@@ -141,7 +148,8 @@ public class ChatRoomService {
     @Transactional
     public ChatRoomDTO addUsersToChatRoom(UUID chatRoomId, List<Long> userIds, Long requesterId) {
         ChatRoom chatRoom = chatRoomRepository.findByChatRoomId(chatRoomId);
-        if (chatRoom == null) throw new RuntimeException("채팅방을 찾을 수 없습니다: " + chatRoomId);
+        if (chatRoom == null)
+            throw new RuntimeException("채팅방을 찾을 수 없습니다: " + chatRoomId);
 
         if (!isMember(chatRoomId, requesterId)) {
             throw new RuntimeException("요청자가 채팅방에 속해 있지 않습니다");
@@ -212,9 +220,12 @@ public class ChatRoomService {
             if (isKinoRoom(chatRoom.getChatRoomId())) {
                 String suffix;
                 ChatBotPersonality personality = chatRoom.getPersonality();
-                if (personality == ChatBotPersonality.SERENE) suffix = "blueKino.png";
-                else if (personality == ChatBotPersonality.SNUGGLE) suffix = "pinkKino.png";
-                else suffix = "yellowKino.png";
+                if (personality == ChatBotPersonality.SERENE)
+                    suffix = "blueKino.png";
+                else if (personality == ChatBotPersonality.SNUGGLE)
+                    suffix = "pinkKino.png";
+                else
+                    suffix = "yellowKino.png";
 
                 images = List.of(cloudFrontDomain + suffix);
             } else {
@@ -243,12 +254,10 @@ public class ChatRoomService {
             int unread;
             if (lastReadAt == null) {
                 unread = messageRepository.countByChatRoom_ChatRoomIdAndSender_UserIdNot(
-                        chatRoom.getChatRoomId(), userId
-                );
+                        chatRoom.getChatRoomId(), userId);
             } else {
                 unread = messageRepository.countByChatRoom_ChatRoomIdAndCreatedAtAfterAndSender_UserIdNot(
-                        chatRoom.getChatRoomId(), lastReadAt, userId
-                );
+                        chatRoom.getChatRoomId(), lastReadAt, userId);
             }
             dto.setUnreadCount(unread);
 
@@ -278,7 +287,8 @@ public class ChatRoomService {
     @Transactional
     public void renameChatRoom(UUID chatRoomId, String newRoomName, Long userId) {
         ChatRoom chatRoom = chatRoomRepository.findByChatRoomId(chatRoomId);
-        if (chatRoom == null) throw new RuntimeException("채팅방을 찾을 수 없습니다: " + chatRoomId);
+        if (chatRoom == null)
+            throw new RuntimeException("채팅방을 찾을 수 없습니다: " + chatRoomId);
 
         if (!isMember(chatRoomId, userId)) {
             throw new RuntimeException("해당 유저는 이 채팅방에 속해 있지 않습니다.");
@@ -304,7 +314,8 @@ public class ChatRoomService {
         int remainingUsers = userChatRoomRepository.countByChatRoom(chatRoom);
 
         if (remainingUsers == 0) {
-            List<com.example.kinover_backend.entity.Message> messages = messageRepository.findAllByChatRoomId(chatRoomId);
+            List<com.example.kinover_backend.entity.Message> messages = messageRepository
+                    .findAllByChatRoomId(chatRoomId);
 
             List<String> s3KeysToDelete = new ArrayList<>();
 
@@ -338,10 +349,12 @@ public class ChatRoomService {
     @Transactional
     public boolean updateChatBotPersonality(UUID chatRoomId, ChatBotPersonality personality) {
         Optional<ChatRoom> optionalChatRoom = chatRoomRepository.findById(chatRoomId);
-        if (optionalChatRoom.isEmpty()) return false;
+        if (optionalChatRoom.isEmpty())
+            return false;
 
         ChatRoom chatRoom = optionalChatRoom.get();
-        if (!Boolean.TRUE.equals(chatRoom.isKino())) return false;
+        if (!Boolean.TRUE.equals(chatRoom.isKino()))
+            return false;
 
         messageRepository.deleteByChatRoom(chatRoom);
 
@@ -360,7 +373,8 @@ public class ChatRoomService {
         Optional<User> userOpt = userRepository.findById(userId);
         Optional<ChatRoom> chatRoomOpt = chatRoomRepository.findById(chatRoomId);
 
-        if (userOpt.isEmpty() || chatRoomOpt.isEmpty()) return false;
+        if (userOpt.isEmpty() || chatRoomOpt.isEmpty())
+            return false;
 
         User user = userOpt.get();
         ChatRoom chatRoom = chatRoomOpt.get();
