@@ -21,4 +21,11 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
             List<UUID> familyIds,
             LocalDateTime createdAt
     );
+
+    // ✅ unreadCount 계산용 (lastCheckedAt 이후 + 본인 author 제외)
+    long countByFamilyIdInAndCreatedAtAfterAndAuthorIdNot(
+            List<UUID> familyIds,
+            LocalDateTime createdAt,
+            Long authorId
+    );
 }

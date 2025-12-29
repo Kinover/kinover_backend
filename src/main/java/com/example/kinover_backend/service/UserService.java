@@ -331,10 +331,50 @@ public class UserService {
 
         if (familyIds.isEmpty()) return false;
 
-        // lastCheckedAt이 null이면 "처음" -> 전부 안읽음 취급하려면 MIN으로
         LocalDateTime 기준 = (lastCheckedAt != null) ? lastCheckedAt : LocalDateTime.MIN;
 
         return notificationRepository.existsByFamilyIdInAndCreatedAtAfter(familyIds, 기준);
+    }
+
+    /**
+     * ✅ 뱃지 숫자(unreadCount)용: 안 읽은 알림 개수
+     * - lastNotificationCheckedAt 이후 생성된 알림 "개수"
+     * - 본인 author 알림 제외
+     */
+    @Transactional(readOnly = true)
+    public long getUnreadNotificationCount(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("사용자 없음"));
+
+        LocalDateTime lastCheckedAt = user.getLastNotificationCheckedAt();
+
+        List<UUID> familyIds = userFamilyRepository.findFamiliesByUserId(userId).stream()
+                .map(Family::getFamilyId)
+                .collect(Collectors.toList());
+
+        if (familyIds.isEmpty()) return 0L;
+
+        LocalDateTime 기준 = (lastCheckedAt != null) ? lastCheckedAt : LocalDateTime.MIN;
+
+        return notificationRepository.countByFamilyIdInAndCreatedAtAfterAndAuthorIdNot(
+                familyIds, 기준, userId
+        );
+    }
+
+    /**
+     * ✅ 알림 화면 안 가도 읽음 확정시키는 API용
+     * - 알림 클릭해서 바로 post/chat로 이동할 때도 서버 기준 읽음 정리 가능
+     */
+    @Transactional
+    public LocalDateTime markNotificationsRead(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("사용자 없음"));
+
+        LocalDateTime now = LocalDateTime.now();
+        user.setLastNotificationCheckedAt(now);
+        userRepository.save(user);
+
+        return now;
     }
 
     @Transactional
