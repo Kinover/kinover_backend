@@ -44,8 +44,7 @@ public class ChatRoomService {
                 .orElseThrow(() -> new RuntimeException("Family not found"));
 
         List<Long> allUserIds = new ArrayList<>(userIds);
-        if (!allUserIds.contains(creatorId))
-            allUserIds.add(creatorId);
+        if (!allUserIds.contains(creatorId)) allUserIds.add(creatorId);
 
         ChatRoom chatRoom = new ChatRoom();
         chatRoom.setRoomName(roomName);
@@ -62,7 +61,7 @@ public class ChatRoomService {
             ucr.setUser(user);
             ucr.setChatRoom(chatRoom);
 
-            // ✅ 신규 생성/초대 정책: 초대 시점 이전 메시지는 읽음 처리하는 게 보통 자연스러움
+            // ✅ 신규 생성/초대 정책: 초대 시점 이전 메시지는 읽음 처리
             ucr.setLastReadAt(LocalDateTime.now());
 
             userChatRoomRepository.save(ucr);
@@ -75,9 +74,94 @@ public class ChatRoomService {
     // 멤버 체크
     // =========================
     public boolean isMember(UUID chatRoomId, Long userId) {
-        if (chatRoomId == null || userId == null)
-            return false;
+        if (chatRoomId == null || userId == null) return false;
         return userChatRoomRepository.existsByUser_UserIdAndChatRoom_ChatRoomId(userId, chatRoomId);
+    }
+
+    // =========================
+    // ✅ 단건 조회 (푸시/딥링크 진입용)
+    // - 컨트롤러 GET /api/chatRoom/{chatRoomId}에서 호출
+    // - ChatRoomDTO에 최신메시지/시간, 멤버이미지, 알림ON, unreadCount까지 채워서 내려줌
+    // =========================
+    @Transactional(readOnly = true)
+    public ChatRoomDTO getChatRoom(UUID chatRoomId, Long userId) {
+        if (chatRoomId == null || userId == null) {
+            throw new IllegalArgumentException("chatRoomId/userId는 필수입니다.");
+        }
+        if (!isMember(chatRoomId, userId)) {
+            throw new RuntimeException("해당 채팅방 멤버가 아닙니다.");
+        }
+
+        ChatRoom chatRoom = chatRoomRepository.findById(chatRoomId)
+                .orElseThrow(() -> new RuntimeException("채팅방을 찾을 수 없습니다: " + chatRoomId));
+
+        ChatRoomDTO dto = chatRoomMapper.toDTO(chatRoom);
+
+        // ✅ 최신 메시지
+        messageRepository
+                .findTopByChatRoom_ChatRoomIdOrderByCreatedAtDesc(chatRoomId)
+                .ifPresent(message -> {
+                    if (message.getMessageType() == MessageType.text) {
+                        dto.setLatestMessageContent(message.getContent());
+                    } else if (message.getMessageType() == MessageType.image) {
+                        int count = (message.getContent() == null || message.getContent().isBlank())
+                                ? 0
+                                : message.getContent().split(",").length;
+                        dto.setLatestMessageContent("사진을 " + count + "장 보냈습니다.");
+                    } else if (message.getMessageType() == MessageType.video) {
+                        dto.setLatestMessageContent("동영상을 보냈습니다.");
+                    } else {
+                        dto.setLatestMessageContent("");
+                    }
+                    dto.setLatestMessageTime(message.getCreatedAt());
+                });
+
+        // ✅ 멤버 이미지
+        List<String> images;
+        if (isKinoRoom(chatRoomId)) {
+            String suffix;
+            ChatBotPersonality personality = chatRoom.getPersonality();
+            if (personality == ChatBotPersonality.SERENE) suffix = "blueKino.png";
+            else if (personality == ChatBotPersonality.SNUGGLE) suffix = "pinkKino.png";
+            else suffix = "yellowKino.png";
+
+            images = List.of(cloudFrontDomain + suffix);
+        } else {
+            // 기존 코드 그대로(주의: chatRoom.getUserChatRooms()가 LAZY면 N+1/세션 문제 날 수 있음)
+            // 가능하면 userChatRoomRepository로 users를 가져오는 방식으로 바꾸는 걸 권장.
+            images = chatRoom.getUserChatRooms().stream()
+                    .map(UserChatRoom::getUser)
+                    .filter(u -> !u.getUserId().equals(userId))
+                    .map(User::getImage)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+        }
+        dto.setMemberImages(images);
+
+        // ✅ 알림 설정
+        boolean isNotificationOn = chatRoomNotificationRepository
+                .findByUser_UserIdAndChatRoom_ChatRoomId(userId, chatRoomId)
+                .map(ChatRoomNotificationSetting::isNotificationOn)
+                .orElse(true);
+        dto.setNotificationOn(isNotificationOn);
+
+        // ✅ unreadCount
+        LocalDateTime lastReadAt = userChatRoomRepository
+                .findByUser_UserIdAndChatRoom_ChatRoomId(userId, chatRoomId)
+                .map(UserChatRoom::getLastReadAt)
+                .orElse(null);
+
+        int unread;
+        if (lastReadAt == null) {
+            unread = messageRepository.countByChatRoom_ChatRoomIdAndSender_UserIdNot(chatRoomId, userId);
+        } else {
+            unread = messageRepository.countByChatRoom_ChatRoomIdAndCreatedAtAfterAndSender_UserIdNot(
+                    chatRoomId, lastReadAt, userId
+            );
+        }
+        dto.setUnreadCount(Math.max(unread, 0));
+
+        return dto;
     }
 
     // =========================
@@ -102,9 +186,6 @@ public class ChatRoomService {
     // =========================
     // 읽음 처리 (역행 방지 max)
     // =========================
-    // =========================
-    // 읽음 처리 (역행 방지 max)
-    // =========================
     @Transactional
     public boolean markRead(UUID chatRoomId, Long userId, LocalDateTime lastReadAt) {
         if (chatRoomId == null || userId == null || lastReadAt == null) {
@@ -117,13 +198,12 @@ public class ChatRoomService {
         int updated = userChatRoomRepository.updateLastReadAtIfLater(chatRoomId, userId, lastReadAt);
 
         if (updated == 0) {
-            // row는 있어야 정상. 없으면 예외
             userChatRoomRepository.findByUser_UserIdAndChatRoom_ChatRoomId(userId, chatRoomId)
                     .orElseThrow(() -> new RuntimeException("읽음 처리 대상 row 없음"));
-            return false; // ✅ lastReadAt이 더 최신이라 갱신 안 됨(정상)
+            return false;
         }
 
-        return true; // ✅ 실제로 갱신됨
+        return true;
     }
 
     // =========================
@@ -220,12 +300,9 @@ public class ChatRoomService {
             if (isKinoRoom(chatRoom.getChatRoomId())) {
                 String suffix;
                 ChatBotPersonality personality = chatRoom.getPersonality();
-                if (personality == ChatBotPersonality.SERENE)
-                    suffix = "blueKino.png";
-                else if (personality == ChatBotPersonality.SNUGGLE)
-                    suffix = "pinkKino.png";
-                else
-                    suffix = "yellowKino.png";
+                if (personality == ChatBotPersonality.SERENE) suffix = "blueKino.png";
+                else if (personality == ChatBotPersonality.SNUGGLE) suffix = "pinkKino.png";
+                else suffix = "yellowKino.png";
 
                 images = List.of(cloudFrontDomain + suffix);
             } else {
@@ -259,7 +336,7 @@ public class ChatRoomService {
                 unread = messageRepository.countByChatRoom_ChatRoomIdAndCreatedAtAfterAndSender_UserIdNot(
                         chatRoom.getChatRoomId(), lastReadAt, userId);
             }
-            dto.setUnreadCount(unread);
+            dto.setUnreadCount(Math.max(unread, 0));
 
             return dto;
         }).collect(Collectors.toList());
@@ -349,12 +426,10 @@ public class ChatRoomService {
     @Transactional
     public boolean updateChatBotPersonality(UUID chatRoomId, ChatBotPersonality personality) {
         Optional<ChatRoom> optionalChatRoom = chatRoomRepository.findById(chatRoomId);
-        if (optionalChatRoom.isEmpty())
-            return false;
+        if (optionalChatRoom.isEmpty()) return false;
 
         ChatRoom chatRoom = optionalChatRoom.get();
-        if (!Boolean.TRUE.equals(chatRoom.isKino()))
-            return false;
+        if (!Boolean.TRUE.equals(chatRoom.isKino())) return false;
 
         messageRepository.deleteByChatRoom(chatRoom);
 
@@ -373,8 +448,7 @@ public class ChatRoomService {
         Optional<User> userOpt = userRepository.findById(userId);
         Optional<ChatRoom> chatRoomOpt = chatRoomRepository.findById(chatRoomId);
 
-        if (userOpt.isEmpty() || chatRoomOpt.isEmpty())
-            return false;
+        if (userOpt.isEmpty() || chatRoomOpt.isEmpty()) return false;
 
         User user = userOpt.get();
         ChatRoom chatRoom = chatRoomOpt.get();

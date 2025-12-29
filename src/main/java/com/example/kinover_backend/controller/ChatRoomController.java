@@ -1,14 +1,14 @@
 package com.example.kinover_backend.controller;
 
+import com.example.kinover_backend.JwtUtil;
 import com.example.kinover_backend.dto.ChatRoomDTO;
 import com.example.kinover_backend.dto.MessageDTO;
+import com.example.kinover_backend.dto.ReadPointersResponseDTO;
+import com.example.kinover_backend.dto.ReadRequestDTO;
 import com.example.kinover_backend.dto.UpdatePersonalityRequestDTO;
 import com.example.kinover_backend.dto.UserDTO;
-import com.example.kinover_backend.dto.ReadRequestDTO;
-import com.example.kinover_backend.dto.ReadPointersResponseDTO;
 import com.example.kinover_backend.service.ChatRoomService;
 import com.example.kinover_backend.service.MessageService;
-import com.example.kinover_backend.JwtUtil;
 import com.example.kinover_backend.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -43,6 +43,33 @@ public class ChatRoomController {
         this.messageService = messageService;
         this.userService = userService;
         this.jwtUtil = jwtUtil;
+    }
+
+    /* =========================
+     * ✅ 단건 조회 추가 (푸시/딥링크용 핵심)
+     * =========================
+     * - 프론트가 chatRoomId만 갖고 진입할 수 있게 해줌
+     * - 멤버 검증 필수
+     *
+     * ✅ ChatRoomService에 아래 메서드가 있어야 함(구현 필요):
+     *   ChatRoomDTO getChatRoom(UUID chatRoomId, Long userId);
+     */
+    @Operation(summary = "채팅방 단건 조회", description = "chatRoomId로 채팅방을 단건 조회합니다. (푸시/딥링크 진입용)")
+    @GetMapping("/{chatRoomId}")
+    public ResponseEntity<ChatRoomDTO> getChatRoom(
+            @Parameter(description = "채팅방 ID", required = true) @PathVariable UUID chatRoomId,
+            @RequestHeader("Authorization") String authorizationHeader
+    ) {
+        String token = authorizationHeader.replace("Bearer ", "");
+        Long userId = jwtUtil.getUserIdFromToken(token);
+
+        if (!chatRoomService.isMember(chatRoomId, userId)) {
+            throw new RuntimeException("해당 채팅방 멤버가 아닙니다.");
+        }
+
+        // ✅ 서비스에서 DTO 조립(권장: unreadCount/lastReadAt/roomName/users 등 필요한 값 포함)
+        ChatRoomDTO dto = chatRoomService.getChatRoom(chatRoomId, userId);
+        return ResponseEntity.ok(dto);
     }
 
     // 채팅방 생성
