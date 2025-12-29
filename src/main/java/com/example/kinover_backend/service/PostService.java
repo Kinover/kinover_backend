@@ -11,7 +11,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -33,8 +32,7 @@ public class PostService {
 
     @Transactional
     public void createPost(PostDTO postDTO) {
-        if (postDTO == null)
-            throw new IllegalArgumentException("postDTO is null");
+        if (postDTO == null) throw new IllegalArgumentException("postDTO is null");
 
         // 1) 작성자/가족 조회
         User author = userRepository.findById(postDTO.getAuthorId())
@@ -53,14 +51,15 @@ public class PostService {
                     .orElseThrow(() -> new RuntimeException("존재하지 않는 카테고리: " + categoryId));
         } else if (categoryTitle != null && !categoryTitle.isBlank()) {
             Category c = new Category();
-            // c.setCategoryId(...) 절대 금지 (@GeneratedValue 사용)
+            // c.setCategoryId(...) 금지(@GeneratedValue)
             c.setTitle(categoryTitle);
             c.setFamily(family);
-            category = categoryRepository.save(c); // ← save 반환 객체는 즉시 managed
+            category = categoryRepository.save(c);
 
+            // DTO에 생성된 categoryId 반영(FCM payload 등에서 쓰면 유용)
             postDTO.setCategoryId(category.getCategoryId());
         } else {
-            category = null; // 무카테고리 허용 정책
+            category = null; // 무카테고리 허용
         }
 
         // 3) Post 조립
@@ -80,9 +79,12 @@ public class PostService {
             if (s3ObjectKeys.size() != types.size()) {
                 throw new IllegalArgumentException("imageUrls와 postTypes의 개수가 일치하지 않습니다.");
             }
+
             for (int i = 0; i < s3ObjectKeys.size(); i++) {
                 String s3Key = s3ObjectKeys.get(i);
-                String cloudFrontUrl = s3Key.startsWith("http") ? s3Key : cloudFrontDomain + s3Key;
+                String cloudFrontUrl = (s3Key != null && s3Key.startsWith("http"))
+                        ? s3Key
+                        : cloudFrontDomain + s3Key;
 
                 PostImage img = new PostImage();
                 img.setPost(post);
@@ -94,34 +96,26 @@ public class PostService {
         }
         post.setImages(imageEntities);
 
-        // 5) Post 저장 (쓰기 경로 끝)
+        // 5) Post 저장
         postRepository.save(post);
 
-        // 6) 알림 저장
-        // Notification notification = Notification.builder()
-        // .notificationType(NotificationType.POST)
-        // .postId(post.getPostId())
-        // .commentId(null)
-        // .familyId(post.getFamily().getFamilyId())
-        // .authorId(post.getAuthor().getUserId())
-        // .build();
-        // notificationRepository.save(notification);
+        // 6) ✅ Notification 저장은 "항상" 한다.
+        //    - bell unreadCount는 countBy...AndAuthorIdNot(userId)로 "본인 제외" 처리
+        //    - 여기서 작성자 조건으로 막으면 알림 자체가 쌓이지 않아서 unread 계산이 틀어짐
+        Notification notification = Notification.builder()
+                .notificationType(NotificationType.POST)
+                .postId(post.getPostId())
+                .commentId(null)
+                .familyId(post.getFamily().getFamilyId())
+                .authorId(author.getUserId())
+                .build();
+        notificationRepository.save(notification);
 
-        // ✅ 작성자 본인 제외
-        if (!postDTO.getAuthorId().equals(author.getUserId())) {
-            Notification notification = Notification.builder()
-                    .notificationType(NotificationType.POST)
-                    .postId(post.getPostId())
-                    .commentId(null)
-                    .familyId(post.getFamily().getFamilyId())
-                    .authorId(author.getUserId())
-                    .build();
-            notificationRepository.save(notification);
-        }
-
-        // 7) FCM 전송 (읽기/외부 I/O는 여기서)
+        // 7) FCM 전송(작성자 본인 제외 + 설정 ON인 유저만)
         List<User> familyMembers = userFamilyRepository.findUsersByFamilyId(postDTO.getFamilyId());
         for (User member : familyMembers) {
+            if (member == null) continue;
+
             if (!member.getUserId().equals(postDTO.getAuthorId())
                     && Boolean.TRUE.equals(member.getIsPostNotificationOn())) {
                 fcmNotificationService.sendPostNotification(member.getUserId(), postDTO);
@@ -135,26 +129,26 @@ public class PostService {
                 .orElseThrow(() -> new RuntimeException("게시글 없음"));
 
         PostImage imageToDelete = post.getImages().stream()
-                .filter(img -> img.getImageUrl().equals(imageUrl))
+                .filter(img -> Objects.equals(img.getImageUrl(), imageUrl))
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("이미지 없음"));
 
-        // 1. S3에서 이미지 삭제
-        if (imageUrl.startsWith(cloudFrontDomain)) {
+        // 1) S3에서 이미지 삭제
+        if (imageUrl != null && imageUrl.startsWith(cloudFrontDomain)) {
             String s3Key = imageUrl.substring(cloudFrontDomain.length());
             s3Service.deleteImageFromS3(s3Key);
         }
 
-        // 2. 이미지 DB에서 삭제 (post.getImages().remove는 선택)
+        // 2) 이미지 DB에서 삭제
         postImageRepository.delete(imageToDelete);
-        post.getImages().remove(imageToDelete); // optional: 유지 일관성
+        post.getImages().remove(imageToDelete);
 
-        // 3. 이미지가 모두 제거된 경우 → 게시글 삭제
+        // 3) 이미지가 모두 제거된 경우 → 게시글 삭제
         if (post.getImages().isEmpty()) {
             commentRepository.deleteAllByPost(post);
             postRepository.delete(post);
         } else {
-            postRepository.save(post); // 이미지 수만 변경된 경우 업데이트
+            postRepository.save(post);
         }
     }
 
@@ -165,30 +159,26 @@ public class PostService {
 
         notificationRepository.deleteByPostId(postId);
 
-        // 1. S3 삭제용 key 추출
+        // 1) S3 삭제용 key 추출
         List<String> s3Keys = post.getImages().stream()
                 .map(PostImage::getImageUrl)
                 .filter(Objects::nonNull)
-                .map(imageUrl -> {
-                    if (imageUrl.startsWith(cloudFrontDomain)) {
-                        return imageUrl.substring(cloudFrontDomain.length());
-                    } else {
-                        return null;
-                    }
-                })
+                .map(imageUrl -> imageUrl.startsWith(cloudFrontDomain)
+                        ? imageUrl.substring(cloudFrontDomain.length())
+                        : null)
                 .filter(Objects::nonNull)
                 .toList();
 
-        // 2. 이미지 DB 삭제
+        // 2) 이미지 DB 삭제
         postImageRepository.deleteAllByPost(post);
 
-        // 3. 댓글 삭제
+        // 3) 댓글 삭제
         commentRepository.deleteAllByPost(post);
 
-        // 4. 게시글 삭제
+        // 4) 게시글 삭제
         postRepository.delete(post);
 
-        // 5. S3 삭제
+        // 5) S3 삭제
         for (String s3Key : s3Keys) {
             s3Service.deleteImageFromS3(s3Key);
         }
@@ -200,17 +190,15 @@ public class PostService {
         if (categoryId == null) {
             posts = postRepository.findAllByFamily_FamilyIdOrderByCreatedAtDesc(familyId);
         } else {
-            posts = postRepository.findAllByFamily_FamilyIdAndCategory_CategoryIdOrderByCreatedAtDesc(familyId,
-                    categoryId);
+            posts = postRepository.findAllByFamily_FamilyIdAndCategory_CategoryIdOrderByCreatedAtDesc(
+                    familyId, categoryId
+            );
         }
 
         List<PostDTO> result = new ArrayList<>();
         for (Post post : posts) {
-            PostDTO dto = PostDTO.from(post);
-            result.add(dto);
+            result.add(PostDTO.from(post));
         }
-
         return result;
     }
-
 }

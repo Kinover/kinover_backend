@@ -27,6 +27,9 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+// ✅ 추가: 분리된 enum
+import com.example.kinover_backend.enums.PushType;
+
 @Service
 @RequiredArgsConstructor
 public class FcmNotificationService {
@@ -110,6 +113,14 @@ public class FcmNotificationService {
         return Math.max(0L, bell + chat);
     }
 
+    // ✅ 공통: pushType / notificationType 둘 다 넣어주는 헬퍼 (레거시 호환)
+    private static void putPushType(Message.Builder mb, PushType pushType) {
+        if (pushType == null) return;
+        mb.putData("pushType", pushType.name());
+        // 레거시 호환(기존 프론트가 notificationType만 보고 있을 수 있음)
+        mb.putData("notificationType", pushType.name());
+    }
+
     public void sendChatNotification(Long userId, MessageDTO messageDTO) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
@@ -145,7 +156,7 @@ public class FcmNotificationService {
         Aps aps = Aps.builder()
                 .setAlert(apsAlert)
                 .setSound("default")
-                .setBadge((int) badgeCount) // ✅ 여기! (종이 아니라 "앱 배지")
+                .setBadge((int) badgeCount)
                 .setThreadId("chat_" + chatRoom.getChatRoomId())
                 .build();
 
@@ -160,7 +171,7 @@ public class FcmNotificationService {
                 .setSound("default")
                 .setChannelId("chat")
                 .setTag("chat_" + chatRoom.getChatRoomId())
-                .setNotificationCount((int) badgeCount) // ✅ 앱 배지 개념으로
+                .setNotificationCount((int) badgeCount)
                 .build();
 
         AndroidConfig androidConfig = AndroidConfig.builder()
@@ -177,7 +188,6 @@ public class FcmNotificationService {
                         .build())
                 .setApnsConfig(apnsConfig)
                 .setAndroidConfig(androidConfig)
-                .putData("notificationType", "CHAT")
                 .putData("chatRoomId", String.valueOf(chatRoom.getChatRoomId()))
                 .putData("messageType", messageType)
                 .putData("senderName", messageDTO.getSenderName())
@@ -185,8 +195,11 @@ public class FcmNotificationService {
                 .putData("roomName", chatRoom.getRoomName())
                 // ✅ 프론트 호환용: bell unread(기존 unreadCount)
                 .putData("unreadCount", String.valueOf(bellUnreadCount))
-                // ✅ 새로: 앱 배지(채팅 포함)
+                // ✅ 앱 배지(채팅 포함)
                 .putData("badgeCount", String.valueOf(badgeCount));
+
+        // ✅ 여기서 타입 세팅
+        putPushType(messageBuilder, PushType.CHAT);
 
         if (messageType.equals("image") || messageType.equals("video")) {
             try {
@@ -241,7 +254,7 @@ public class FcmNotificationService {
         Aps aps = Aps.builder()
                 .setAlert(apsAlert)
                 .setSound("default")
-                .setBadge((int) badgeCount) // ✅ 앱 배지
+                .setBadge((int) badgeCount)
                 .setThreadId("post_" + category.getCategoryId())
                 .setMutableContent(true)
                 .build();
@@ -263,7 +276,7 @@ public class FcmNotificationService {
                 .setSound("default")
                 .setChannelId("post")
                 .setTag("post_" + category.getCategoryId())
-                .setNotificationCount((int) badgeCount); // ✅ 앱 배지
+                .setNotificationCount((int) badgeCount);
 
         if (firstImageUrl != null && !firstImageUrl.isBlank()) {
             an.setImage(firstImageUrl);
@@ -287,14 +300,16 @@ public class FcmNotificationService {
                 .setNotification(notifBuilder.build())
                 .setApnsConfig(apnsConfig)
                 .setAndroidConfig(androidConfig)
-                .putData("notificationType", "POST")
                 .putData("postId", String.valueOf(postDTO.getPostId()))
                 .putData("authorName", nvl(author.getName()))
                 .putData("authorImage", nvl(author.getImage()))
                 .putData("categoryTitle", nvl(category.getTitle()))
                 .putData("contentPreview", nvl(trimContent(postDTO.getContent())))
-                .putData("unreadCount", String.valueOf(bellUnreadCount)) // ✅ 종 기준
-                .putData("badgeCount", String.valueOf(badgeCount));      // ✅ 앱 배지
+                .putData("unreadCount", String.valueOf(bellUnreadCount))
+                .putData("badgeCount", String.valueOf(badgeCount));
+
+        // ✅ 타입 세팅
+        putPushType(mb, PushType.POST);
 
         if (firstImageUrl != null && !firstImageUrl.isBlank()) {
             mb.putData("firstImageUrl", firstImageUrl);
@@ -347,7 +362,7 @@ public class FcmNotificationService {
         Aps aps = Aps.builder()
                 .setAlert(apsAlert)
                 .setSound("default")
-                .setBadge((int) badgeCount) // ✅ 앱 배지
+                .setBadge((int) badgeCount)
                 .setThreadId("comment_" + post.getPostId())
                 .build();
 
@@ -362,7 +377,7 @@ public class FcmNotificationService {
                 .setSound("default")
                 .setChannelId("comment")
                 .setTag("comment_" + post.getPostId())
-                .setNotificationCount((int) badgeCount); // ✅ 앱 배지
+                .setNotificationCount((int) badgeCount);
 
         if (firstImageUrl != null) {
             an.setImage(firstImageUrl);
@@ -381,14 +396,16 @@ public class FcmNotificationService {
                         .build())
                 .setApnsConfig(apnsConfig)
                 .setAndroidConfig(androidConfig)
-                .putData("notificationType", "COMMENT")
                 .putData("postId", String.valueOf(post.getPostId()))
                 .putData("authorName", author.getName())
                 .putData("authorImage", author.getImage())
                 .putData("categoryTitle", category.getTitle())
                 .putData("contentPreview", trimContent(commentDTO.getContent()))
-                .putData("unreadCount", String.valueOf(bellUnreadCount)) // ✅ 종 기준
-                .putData("badgeCount", String.valueOf(badgeCount));      // ✅ 앱 배지
+                .putData("unreadCount", String.valueOf(bellUnreadCount))
+                .putData("badgeCount", String.valueOf(badgeCount));
+
+        // ✅ 타입 세팅
+        putPushType(messageBuilder, PushType.COMMENT);
 
         if (firstImageUrl != null) {
             messageBuilder.putData("firstImageUrl", firstImageUrl);
@@ -532,7 +549,6 @@ public class FcmNotificationService {
                         .build())
                 .setApnsConfig(apnsConfig)
                 .setAndroidConfig(androidConfig)
-                .putData("notificationType", "MENTION_COMMENT")
                 .putData("postId", String.valueOf(post.getPostId()))
                 .putData("authorName", nvl(author.getName()))
                 .putData("authorImage", nvl(author.getImage()))
@@ -540,6 +556,9 @@ public class FcmNotificationService {
                 .putData("contentPreview", nvl(trimContent(commentDTO.getContent())))
                 .putData("unreadCount", String.valueOf(bellUnreadCount))
                 .putData("badgeCount", String.valueOf(badgeCount));
+
+        // ✅ 타입 세팅
+        putPushType(messageBuilder, PushType.MENTION_COMMENT);
 
         if (firstImageUrl != null) {
             messageBuilder.putData("firstImageUrl", firstImageUrl);
@@ -625,7 +644,6 @@ public class FcmNotificationService {
                         .build())
                 .setApnsConfig(apnsConfig)
                 .setAndroidConfig(androidConfig)
-                .putData("notificationType", "MENTION_CHAT")
                 .putData("chatRoomId", String.valueOf(chatRoom.getChatRoomId()))
                 .putData("messageType", messageType)
                 .putData("senderName", nvl(messageDTO.getSenderName()))
@@ -633,6 +651,9 @@ public class FcmNotificationService {
                 .putData("roomName", nvl(chatRoom.getRoomName()))
                 .putData("unreadCount", String.valueOf(bellUnreadCount))
                 .putData("badgeCount", String.valueOf(badgeCount));
+
+        // ✅ 타입 세팅
+        putPushType(mb, PushType.MENTION_CHAT);
 
         if ("image".equals(messageType) || "video".equals(messageType)) {
             try {
