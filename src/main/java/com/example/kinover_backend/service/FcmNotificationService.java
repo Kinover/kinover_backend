@@ -32,13 +32,17 @@ import java.util.stream.Collectors;
 public class FcmNotificationService {
 
     private final UserRepository userRepository;
-    private final UserFamilyRepository userFamilyRepository; // ✅ 추가
+    private final UserFamilyRepository userFamilyRepository;
     private final ChatRoomRepository chatRoomRepository;
     private final ChatRoomNotificationRepository chatRoomNotificationRepository;
     private final FcmTokenRepository fcmTokenRepository;
     private final CategoryRepository categoryRepository;
     private final PostRepository postRepository;
     private final NotificationRepository notificationRepository;
+
+    // ✅ 추가: 채팅 unread 계산용
+    private final UserChatRoomRepository userChatRoomRepository;
+    private final MessageRepository messageRepository;
 
     private static GoogleCredentials firebaseCreds;
 
@@ -56,8 +60,8 @@ public class FcmNotificationService {
                 .orElse(true);
     }
 
-    // ✅ 공통: unreadCount 계산 (bell 알림 기준: lastNotificationCheckedAt 이후 + 본인 author 제외)
-    private long calcUnreadCount(Long userId) {
+    // ✅ 벨(종) unreadCount: Notification 테이블 기준 (채팅 제외)
+    private long calcBellUnreadCount(Long userId) {
         User user = userRepository.findById(userId).orElseThrow();
 
         LocalDateTime lastCheckedAt = user.getLastNotificationCheckedAt();
@@ -72,6 +76,38 @@ public class FcmNotificationService {
         return notificationRepository.countByFamilyIdInAndCreatedAtAfterAndAuthorIdNot(
                 familyIds, 기준, userId
         );
+    }
+
+    // ✅ 채팅 unreadCount: UserChatRoom.lastReadAt + Message.createdAt 기준
+    private long calcChatUnreadCount(Long userId) {
+        List<UserChatRoom> links = userChatRoomRepository.findByUserId(userId);
+        if (links == null || links.isEmpty()) return 0L;
+
+        long total = 0L;
+
+        for (UserChatRoom ucr : links) {
+            UUID chatRoomId = ucr.getChatRoom().getChatRoomId();
+            LocalDateTime lastReadAt = ucr.getLastReadAt();
+
+            int cnt;
+            if (lastReadAt == null) {
+                cnt = messageRepository.countByChatRoom_ChatRoomIdAndSender_UserIdNot(chatRoomId, userId);
+            } else {
+                cnt = messageRepository.countByChatRoom_ChatRoomIdAndCreatedAtAfterAndSender_UserIdNot(
+                        chatRoomId, lastReadAt, userId
+                );
+            }
+            total += Math.max(cnt, 0);
+        }
+
+        return total;
+    }
+
+    // ✅ 앱 배지 = 종 + 채팅
+    private long calcBadgeCount(Long userId) {
+        long bell = calcBellUnreadCount(userId);
+        long chat = calcChatUnreadCount(userId);
+        return Math.max(0L, bell + chat);
     }
 
     public void sendChatNotification(Long userId, MessageDTO messageDTO) {
@@ -97,7 +133,8 @@ public class FcmNotificationService {
             default -> body = messageDTO.getSenderName() + ": 새로운 메시지가 도착했습니다.";
         }
 
-        long unreadCount = calcUnreadCount(userId);
+        long bellUnreadCount = calcBellUnreadCount(userId);   // ✅ 종용(채팅 제외)
+        long badgeCount = calcBadgeCount(userId);             // ✅ 앱 배지용(채팅 포함)
 
         // --- iOS(APNs) ---
         ApsAlert apsAlert = ApsAlert.builder()
@@ -108,7 +145,7 @@ public class FcmNotificationService {
         Aps aps = Aps.builder()
                 .setAlert(apsAlert)
                 .setSound("default")
-                .setBadge((int) unreadCount) // ✅ 여기!
+                .setBadge((int) badgeCount) // ✅ 여기! (종이 아니라 "앱 배지")
                 .setThreadId("chat_" + chatRoom.getChatRoomId())
                 .build();
 
@@ -123,7 +160,7 @@ public class FcmNotificationService {
                 .setSound("default")
                 .setChannelId("chat")
                 .setTag("chat_" + chatRoom.getChatRoomId())
-                .setNotificationCount((int) unreadCount) // ✅ 가능하면 표시
+                .setNotificationCount((int) badgeCount) // ✅ 앱 배지 개념으로
                 .build();
 
         AndroidConfig androidConfig = AndroidConfig.builder()
@@ -131,7 +168,7 @@ public class FcmNotificationService {
                 .setNotification(androidNotification)
                 .build();
 
-        // --- 공통 Notification + Data ---
+        // --- 공통 ---
         Message.Builder messageBuilder = Message.builder()
                 .setToken(token)
                 .setNotification(Notification.builder()
@@ -140,14 +177,16 @@ public class FcmNotificationService {
                         .build())
                 .setApnsConfig(apnsConfig)
                 .setAndroidConfig(androidConfig)
-                // ✅ 라우팅용 데이터 (프론트에서 눌렀을 때 해당 화면 이동)
                 .putData("notificationType", "CHAT")
                 .putData("chatRoomId", String.valueOf(chatRoom.getChatRoomId()))
                 .putData("messageType", messageType)
                 .putData("senderName", messageDTO.getSenderName())
                 .putData("senderImage", messageDTO.getSenderImage())
                 .putData("roomName", chatRoom.getRoomName())
-                .putData("unreadCount", String.valueOf(unreadCount));
+                // ✅ 프론트 호환용: bell unread(기존 unreadCount)
+                .putData("unreadCount", String.valueOf(bellUnreadCount))
+                // ✅ 새로: 앱 배지(채팅 포함)
+                .putData("badgeCount", String.valueOf(badgeCount));
 
         if (messageType.equals("image") || messageType.equals("video")) {
             try {
@@ -190,7 +229,8 @@ public class FcmNotificationService {
         final String body  = author.getName() + "님이 \"" + category.getTitle() + "\"에 \""
                 + trimContent(postDTO.getContent()) + "\" 글을 작성했습니다.";
 
-        long unreadCount = calcUnreadCount(userId);
+        long bellUnreadCount = calcBellUnreadCount(userId);
+        long badgeCount = calcBadgeCount(userId);
 
         // --- iOS(APNs) ---
         ApsAlert apsAlert = ApsAlert.builder()
@@ -201,7 +241,7 @@ public class FcmNotificationService {
         Aps aps = Aps.builder()
                 .setAlert(apsAlert)
                 .setSound("default")
-                .setBadge((int) unreadCount) // ✅
+                .setBadge((int) badgeCount) // ✅ 앱 배지
                 .setThreadId("post_" + category.getCategoryId())
                 .setMutableContent(true)
                 .build();
@@ -223,7 +263,7 @@ public class FcmNotificationService {
                 .setSound("default")
                 .setChannelId("post")
                 .setTag("post_" + category.getCategoryId())
-                .setNotificationCount((int) unreadCount); // ✅
+                .setNotificationCount((int) badgeCount); // ✅ 앱 배지
 
         if (firstImageUrl != null && !firstImageUrl.isBlank()) {
             an.setImage(firstImageUrl);
@@ -253,7 +293,8 @@ public class FcmNotificationService {
                 .putData("authorImage", nvl(author.getImage()))
                 .putData("categoryTitle", nvl(category.getTitle()))
                 .putData("contentPreview", nvl(trimContent(postDTO.getContent())))
-                .putData("unreadCount", String.valueOf(unreadCount));
+                .putData("unreadCount", String.valueOf(bellUnreadCount)) // ✅ 종 기준
+                .putData("badgeCount", String.valueOf(badgeCount));      // ✅ 앱 배지
 
         if (firstImageUrl != null && !firstImageUrl.isBlank()) {
             mb.putData("firstImageUrl", firstImageUrl);
@@ -294,7 +335,8 @@ public class FcmNotificationService {
         String body = author.getName() + "님이 \"" + category.getTitle() + "\"에 \"" +
                 trimContent(commentDTO.getContent()) + "\" 댓글을 작성했습니다.";
 
-        long unreadCount = calcUnreadCount(userId);
+        long bellUnreadCount = calcBellUnreadCount(userId);
+        long badgeCount = calcBadgeCount(userId);
 
         // --- iOS(APNs) ---
         ApsAlert apsAlert = ApsAlert.builder()
@@ -305,7 +347,7 @@ public class FcmNotificationService {
         Aps aps = Aps.builder()
                 .setAlert(apsAlert)
                 .setSound("default")
-                .setBadge((int) unreadCount) // ✅
+                .setBadge((int) badgeCount) // ✅ 앱 배지
                 .setThreadId("comment_" + post.getPostId())
                 .build();
 
@@ -320,7 +362,7 @@ public class FcmNotificationService {
                 .setSound("default")
                 .setChannelId("comment")
                 .setTag("comment_" + post.getPostId())
-                .setNotificationCount((int) unreadCount); // ✅
+                .setNotificationCount((int) badgeCount); // ✅ 앱 배지
 
         if (firstImageUrl != null) {
             an.setImage(firstImageUrl);
@@ -345,7 +387,8 @@ public class FcmNotificationService {
                 .putData("authorImage", author.getImage())
                 .putData("categoryTitle", category.getTitle())
                 .putData("contentPreview", trimContent(commentDTO.getContent()))
-                .putData("unreadCount", String.valueOf(unreadCount));
+                .putData("unreadCount", String.valueOf(bellUnreadCount)) // ✅ 종 기준
+                .putData("badgeCount", String.valueOf(badgeCount));      // ✅ 앱 배지
 
         if (firstImageUrl != null) {
             messageBuilder.putData("firstImageUrl", firstImageUrl);
@@ -445,7 +488,8 @@ public class FcmNotificationService {
         String body = author.getName() + "님이 댓글에서 당신을 언급했어요: \"" +
                 trimContent(commentDTO.getContent()) + "\"";
 
-        long unreadCount = calcUnreadCount(userId);
+        long bellUnreadCount = calcBellUnreadCount(userId);
+        long badgeCount = calcBadgeCount(userId);
 
         ApsAlert apsAlert = ApsAlert.builder()
                 .setTitle(title)
@@ -455,7 +499,7 @@ public class FcmNotificationService {
         Aps aps = Aps.builder()
                 .setAlert(apsAlert)
                 .setSound("default")
-                .setBadge((int) unreadCount) // ✅
+                .setBadge((int) badgeCount)
                 .setThreadId("mention_comment_" + post.getPostId())
                 .build();
 
@@ -469,7 +513,7 @@ public class FcmNotificationService {
                 .setSound("default")
                 .setChannelId("comment")
                 .setTag("mention_comment_" + post.getPostId())
-                .setNotificationCount((int) unreadCount); // ✅
+                .setNotificationCount((int) badgeCount);
 
         if (firstImageUrl != null) {
             an.setImage(firstImageUrl);
@@ -494,7 +538,8 @@ public class FcmNotificationService {
                 .putData("authorImage", nvl(author.getImage()))
                 .putData("categoryTitle", nvl(category.getTitle()))
                 .putData("contentPreview", nvl(trimContent(commentDTO.getContent())))
-                .putData("unreadCount", String.valueOf(unreadCount));
+                .putData("unreadCount", String.valueOf(bellUnreadCount))
+                .putData("badgeCount", String.valueOf(badgeCount));
 
         if (firstImageUrl != null) {
             messageBuilder.putData("firstImageUrl", firstImageUrl);
@@ -539,7 +584,8 @@ public class FcmNotificationService {
         String title = chatRoom.getRoomName();
         String mentionBody = "당신을 언급했어요 · " + body;
 
-        long unreadCount = calcUnreadCount(userId);
+        long bellUnreadCount = calcBellUnreadCount(userId);
+        long badgeCount = calcBadgeCount(userId);
 
         ApsAlert apsAlert = ApsAlert.builder()
                 .setTitle(title)
@@ -549,7 +595,7 @@ public class FcmNotificationService {
         Aps aps = Aps.builder()
                 .setAlert(apsAlert)
                 .setSound("default")
-                .setBadge((int) unreadCount) // ✅
+                .setBadge((int) badgeCount)
                 .setThreadId("mention_chat_" + chatRoom.getChatRoomId())
                 .build();
 
@@ -563,7 +609,7 @@ public class FcmNotificationService {
                 .setSound("default")
                 .setChannelId("chat")
                 .setTag("mention_chat_" + chatRoom.getChatRoomId())
-                .setNotificationCount((int) unreadCount) // ✅
+                .setNotificationCount((int) badgeCount)
                 .build();
 
         AndroidConfig androidConfig = AndroidConfig.builder()
@@ -585,7 +631,8 @@ public class FcmNotificationService {
                 .putData("senderName", nvl(messageDTO.getSenderName()))
                 .putData("senderImage", nvl(messageDTO.getSenderImage()))
                 .putData("roomName", nvl(chatRoom.getRoomName()))
-                .putData("unreadCount", String.valueOf(unreadCount));
+                .putData("unreadCount", String.valueOf(bellUnreadCount))
+                .putData("badgeCount", String.valueOf(badgeCount));
 
         if ("image".equals(messageType) || "video".equals(messageType)) {
             try {

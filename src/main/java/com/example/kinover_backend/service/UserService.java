@@ -43,6 +43,9 @@ public class UserService {
     private final ObjectProvider<WebSocketStatusHandler> statusHandlerProvider;
     private final UserChatRoomRepository userChatRoomRepository;
 
+    // ✅ 추가: 채팅 unread 계산용
+    private final MessageRepository messageRepository;
+
     @Autowired
     private EntityManager entityManager;
 
@@ -51,7 +54,6 @@ public class UserService {
     @Value("${cloudfront.domain}")
     private String cloudFrontDomain;
 
-    // 유저 아이디 통해서 유저 조회 (DTO 반환)
     @Transactional
     public UserDTO getUserById(Long userId) {
         User user = userRepository.findByUserId(userId)
@@ -163,15 +165,18 @@ public class UserService {
         User user = userRepository.findById(userDTO.getUserId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        if (userDTO.getName() != null) user.setName(userDTO.getName());
-        if (userDTO.getBirth() != null) user.setBirth(userDTO.getBirth());
+        if (userDTO.getName() != null)
+            user.setName(userDTO.getName());
+        if (userDTO.getBirth() != null)
+            user.setBirth(userDTO.getBirth());
 
         if (userDTO.getImage() != null) {
             String imagePath = userDTO.getImage();
             user.setImage(imagePath.startsWith("http") ? imagePath : cloudFrontDomain + imagePath);
         }
 
-        if (userDTO.getTrait() != null) user.setTrait(userDTO.getTrait());
+        if (userDTO.getTrait() != null)
+            user.setTrait(userDTO.getTrait());
 
         if (userDTO.getEmotion() != null) {
             if (user.getEmotion() == null || !user.getEmotion().equals(userDTO.getEmotion())) {
@@ -231,10 +236,6 @@ public class UserService {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * ✅ 알림 조회 (알림 화면 진입 = 즉시 읽음 처리)
-     * - 호출 시점(now)으로 lastNotificationCheckedAt 갱신해서 "읽음 확정"
-     */
     @Transactional
     public NotificationResponseDTO getUserNotifications(Long userId) {
         User user = userRepository.findById(userId)
@@ -242,7 +243,6 @@ public class UserService {
 
         LocalDateTime now = LocalDateTime.now();
 
-        // ✅ 알림 화면 들어오면 즉시 읽음 처리 확정
         user.setLastNotificationCheckedAt(now);
         userRepository.save(user);
 
@@ -257,11 +257,10 @@ public class UserService {
                     .build();
         }
 
-        List<Notification> notifications =
-                notificationRepository.findByFamilyIdInOrderByCreatedAtDesc(familyIds);
+        List<Notification> notifications = notificationRepository.findByFamilyIdInOrderByCreatedAtDesc(familyIds);
 
         List<NotificationDTO> dtoList = notifications.stream()
-                .filter(n -> !Objects.equals(n.getAuthorId(), userId)) // 자기 알림 제외
+                .filter(n -> !Objects.equals(n.getAuthorId(), userId))
                 .map(n -> {
                     User author = userRepository.findById(n.getAuthorId())
                             .orElseThrow(() -> new RuntimeException("작성자 정보 없음"));
@@ -314,10 +313,6 @@ public class UserService {
                 .build();
     }
 
-    /**
-     * ✅ 벨 아이콘 빨간점용: 안 읽은 알림 존재 여부
-     * - lastNotificationCheckedAt 이후 생성된 알림이 있으면 true
-     */
     @Transactional(readOnly = true)
     public boolean hasUnreadNotifications(Long userId) {
         User user = userRepository.findById(userId)
@@ -329,18 +324,14 @@ public class UserService {
                 .map(Family::getFamilyId)
                 .collect(Collectors.toList());
 
-        if (familyIds.isEmpty()) return false;
+        if (familyIds.isEmpty())
+            return false;
 
         LocalDateTime 기준 = (lastCheckedAt != null) ? lastCheckedAt : LocalDateTime.MIN;
 
         return notificationRepository.existsByFamilyIdInAndCreatedAtAfter(familyIds, 기준);
     }
 
-    /**
-     * ✅ 뱃지 숫자(unreadCount)용: 안 읽은 알림 개수
-     * - lastNotificationCheckedAt 이후 생성된 알림 "개수"
-     * - 본인 author 알림 제외
-     */
     @Transactional(readOnly = true)
     public long getUnreadNotificationCount(Long userId) {
         User user = userRepository.findById(userId)
@@ -352,19 +343,50 @@ public class UserService {
                 .map(Family::getFamilyId)
                 .collect(Collectors.toList());
 
-        if (familyIds.isEmpty()) return 0L;
+        if (familyIds.isEmpty())
+            return 0L;
 
         LocalDateTime 기준 = (lastCheckedAt != null) ? lastCheckedAt : LocalDateTime.MIN;
 
         return notificationRepository.countByFamilyIdInAndCreatedAtAfterAndAuthorIdNot(
-                familyIds, 기준, userId
-        );
+                familyIds, 기준, userId);
     }
 
-    /**
-     * ✅ 알림 화면 안 가도 읽음 확정시키는 API용
-     * - 알림 클릭해서 바로 post/chat로 이동할 때도 서버 기준 읽음 정리 가능
-     */
+    // ✅ 추가: 채팅 unread 합계 (종과 분리)
+    @Transactional(readOnly = true)
+    public long getChatUnreadCount(Long userId) {
+        List<UserChatRoom> links = userChatRoomRepository.findByUserId(userId);
+        if (links == null || links.isEmpty())
+            return 0L;
+
+        long total = 0L;
+
+        for (UserChatRoom ucr : links) {
+            UUID chatRoomId = ucr.getChatRoom().getChatRoomId();
+            LocalDateTime lastReadAt = ucr.getLastReadAt();
+
+            int cnt;
+            if (lastReadAt == null) {
+                cnt = messageRepository.countByChatRoom_ChatRoomIdAndSender_UserIdNot(chatRoomId, userId);
+            } else {
+                cnt = messageRepository.countByChatRoom_ChatRoomIdAndCreatedAtAfterAndSender_UserIdNot(
+                        chatRoomId, lastReadAt, userId);
+            }
+
+            total += Math.max(cnt, 0);
+        }
+
+        return total;
+    }
+
+    // ✅ 추가: 앱 배지 합계 = 종 unread + 채팅 unread
+    @Transactional(readOnly = true)
+    public long getBadgeCount(Long userId) {
+        long bell = getUnreadNotificationCount(userId);
+        long chat = getChatUnreadCount(userId);
+        return Math.max(0L, bell + chat);
+    }
+
     @Transactional
     public LocalDateTime markNotificationsRead(Long userId) {
         User user = userRepository.findById(userId)
@@ -380,7 +402,8 @@ public class UserService {
     @Transactional
     public boolean updatePostNotificationSetting(Long userId, boolean isOn) {
         Optional<User> optionalUser = userRepository.findById(userId);
-        if (optionalUser.isEmpty()) return false;
+        if (optionalUser.isEmpty())
+            return false;
 
         User user = optionalUser.get();
         user.setIsPostNotificationOn(isOn);
@@ -391,7 +414,8 @@ public class UserService {
     @Transactional
     public boolean updateCommentNotificationSetting(Long userId, boolean isOn) {
         Optional<User> optionalUser = userRepository.findById(userId);
-        if (optionalUser.isEmpty()) return false;
+        if (optionalUser.isEmpty())
+            return false;
 
         User user = optionalUser.get();
         user.setIsCommentNotificationOn(isOn);
@@ -402,7 +426,8 @@ public class UserService {
     @Transactional
     public boolean updateChatNotificationSetting(Long userId, boolean isOn) {
         Optional<User> userOpt = userRepository.findById(userId);
-        if (userOpt.isEmpty()) return false;
+        if (userOpt.isEmpty())
+            return false;
 
         User user = userOpt.get();
         user.setIsChatNotificationOn(isOn);
@@ -419,7 +444,8 @@ public class UserService {
     }
 
     private Date parseDateTime(String birth) {
-        if (birth == null || birth.isEmpty()) return null;
+        if (birth == null || birth.isEmpty())
+            return null;
 
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
@@ -435,16 +461,25 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        if (req.getName() != null && !req.getName().isBlank()) user.setName(req.getName());
-        if (req.getBirth() != null && !req.getBirth().isBlank()) user.setBirth(parseDate(req.getBirth()));
+        if (req.getName() != null && !req.getName().isBlank())
+            user.setName(req.getName());
+        if (req.getBirth() != null && !req.getBirth().isBlank())
+            user.setBirth(parseDate(req.getBirth()));
 
-        if (req.getTermsAgreed() != null) user.setTermsAgreed(req.getTermsAgreed());
-        if (req.getPrivacyAgreed() != null) user.setPrivacyAgreed(req.getPrivacyAgreed());
-        if (req.getMarketingAgreed() != null) user.setMarketingAgreed(req.getMarketingAgreed());
-        if (req.getTermsVersion() != null) user.setTermsVersion(req.getTermsVersion());
-        if (req.getPrivacyVersion() != null) user.setPrivacyVersion(req.getPrivacyVersion());
-        if (req.getAgreedAt() != null) user.setAgreedAt(parseDateTime(req.getAgreedAt()));
-        if (req.getMarketingAgreedAt() != null) user.setMarketingAgreedAt(parseDateTime(req.getMarketingAgreedAt()));
+        if (req.getTermsAgreed() != null)
+            user.setTermsAgreed(req.getTermsAgreed());
+        if (req.getPrivacyAgreed() != null)
+            user.setPrivacyAgreed(req.getPrivacyAgreed());
+        if (req.getMarketingAgreed() != null)
+            user.setMarketingAgreed(req.getMarketingAgreed());
+        if (req.getTermsVersion() != null)
+            user.setTermsVersion(req.getTermsVersion());
+        if (req.getPrivacyVersion() != null)
+            user.setPrivacyVersion(req.getPrivacyVersion());
+        if (req.getAgreedAt() != null)
+            user.setAgreedAt(parseDateTime(req.getAgreedAt()));
+        if (req.getMarketingAgreedAt() != null)
+            user.setMarketingAgreedAt(parseDateTime(req.getMarketingAgreedAt()));
 
         userRepository.save(user);
         return new UserDTO(user);

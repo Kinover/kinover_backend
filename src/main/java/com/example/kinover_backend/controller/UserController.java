@@ -81,8 +81,7 @@ public class UserController {
         return Collections.singletonMap("hasUnread", hasUnread);
     }
 
-    // ✅ 추가: unreadCount 조회
-    @Operation(summary = "안읽은 알림 개수", description = "뱃지 숫자(unreadCount) 표시용")
+    @Operation(summary = "안읽은 알림 개수", description = "벨(종) 뱃지 숫자(unreadCount) 표시용 (채팅 제외)")
     @GetMapping("/notifications/unread-count")
     public Map<String, Long> getUnreadCount(@RequestHeader("Authorization") String authorizationHeader) {
         String jwt = authorizationHeader.replace("Bearer ", "");
@@ -92,7 +91,6 @@ public class UserController {
         return Collections.singletonMap("unreadCount", unreadCount);
     }
 
-    // ✅ 추가: 알림 읽음 확정 (알림 화면 안 들어가도 처리 가능)
     @Operation(summary = "알림 읽음 처리", description = "lastNotificationCheckedAt을 now로 갱신(읽음 확정)")
     @PostMapping("/notifications/mark-read")
     public Map<String, Object> markRead(@RequestHeader("Authorization") String authorizationHeader) {
@@ -102,10 +100,32 @@ public class UserController {
         LocalDateTime lastCheckedAt = userService.markNotificationsRead(userId);
 
         Map<String, Object> res = new HashMap<>();
-        res.put("lastCheckedAt", lastCheckedAt.toString()); // ISO 문자열
+        res.put("lastCheckedAt", lastCheckedAt.toString());
         res.put("hasUnread", false);
         res.put("unreadCount", 0);
         return res;
+    }
+
+    // ✅ 추가: 채팅 안읽음 합계 (종과 분리)
+    @Operation(summary = "채팅 안읽음 합계", description = "채팅 뱃지 표시용 (종과 분리)")
+    @GetMapping("/chat/unread-count")
+    public Map<String, Long> getChatUnreadCount(@RequestHeader("Authorization") String authorizationHeader) {
+        String jwt = authorizationHeader.replace("Bearer ", "");
+        Long userId = jwtUtil.getUserIdFromToken(jwt);
+
+        long chatUnreadCount = userService.getChatUnreadCount(userId);
+        return Collections.singletonMap("chatUnreadCount", chatUnreadCount);
+    }
+
+    // ✅ 추가: 앱 아이콘 배지 합계 = (종 unread + 채팅 unread)
+    @Operation(summary = "앱 아이콘 배지 개수", description = "badgeCount = (종 unread + 채팅 unread)")
+    @GetMapping("/badge-count")
+    public Map<String, Long> getBadgeCount(@RequestHeader("Authorization") String authorizationHeader) {
+        String jwt = authorizationHeader.replace("Bearer ", "");
+        Long userId = jwtUtil.getUserIdFromToken(jwt);
+
+        long badgeCount = userService.getBadgeCount(userId);
+        return Collections.singletonMap("badgeCount", badgeCount);
     }
 
     @Operation(summary = "전체 프로필 업데이트", description = "JWT 기반으로 사용자 프로필을 업데이트합니다.")
