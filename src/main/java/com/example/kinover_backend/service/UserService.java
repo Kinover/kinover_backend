@@ -43,7 +43,7 @@ public class UserService {
     private final ObjectProvider<WebSocketStatusHandler> statusHandlerProvider;
     private final UserChatRoomRepository userChatRoomRepository;
 
-    // ✅ 추가: 채팅 unread 계산용
+    // ✅ 채팅 unread 계산용
     private final MessageRepository messageRepository;
 
     @Autowired
@@ -236,15 +236,18 @@ public class UserService {
                 .collect(Collectors.toList());
     }
 
-    @Transactional
+    /**
+     * ✅ 변경 핵심 1) 알림 목록 조회는 "조회만" 한다.
+     * - 여기서 lastNotificationCheckedAt 업데이트(읽음 처리) 절대 하지 않음.
+     * - 읽음 확정은 markNotificationsRead(userId)에서만 한다.
+     */
+    @Transactional(readOnly = true)
     public NotificationResponseDTO getUserNotifications(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("사용자 없음"));
 
-        LocalDateTime now = LocalDateTime.now();
-
-        user.setLastNotificationCheckedAt(now);
-        userRepository.save(user);
+        // ✅ now로 갱신하지 않고, 현재 저장되어 있는 lastCheckedAt을 그대로 내려준다.
+        LocalDateTime lastCheckedAt = user.getLastNotificationCheckedAt();
 
         List<UUID> familyIds = userFamilyRepository.findFamiliesByUserId(userId).stream()
                 .map(Family::getFamilyId)
@@ -252,7 +255,7 @@ public class UserService {
 
         if (familyIds.isEmpty()) {
             return NotificationResponseDTO.builder()
-                    .lastCheckedAt(now)
+                    .lastCheckedAt(lastCheckedAt)
                     .notifications(Collections.emptyList())
                     .build();
         }
@@ -260,7 +263,7 @@ public class UserService {
         List<Notification> notifications = notificationRepository.findByFamilyIdInOrderByCreatedAtDesc(familyIds);
 
         List<NotificationDTO> dtoList = notifications.stream()
-                .filter(n -> !Objects.equals(n.getAuthorId(), userId))
+                .filter(n -> !Objects.equals(n.getAuthorId(), userId)) // ✅ 내 알림은 리스트에서 제외
                 .map(n -> {
                     User author = userRepository.findById(n.getAuthorId())
                             .orElseThrow(() -> new RuntimeException("작성자 정보 없음"));
@@ -308,11 +311,15 @@ public class UserService {
                 .collect(Collectors.toList());
 
         return NotificationResponseDTO.builder()
-                .lastCheckedAt(now)
+                .lastCheckedAt(lastCheckedAt)
                 .notifications(dtoList)
                 .build();
     }
 
+    /**
+     * ✅ 변경 핵심 2) hasUnread도 "내가 만든 알림은 제외"해야 함.
+     * - 안 그러면 내가 글 쓰면 내 알림 때문에 hasUnread=true가 될 수 있음.
+     */
     @Transactional(readOnly = true)
     public boolean hasUnreadNotifications(Long userId) {
         User user = userRepository.findById(userId)
@@ -329,7 +336,10 @@ public class UserService {
 
         LocalDateTime 기준 = (lastCheckedAt != null) ? lastCheckedAt : LocalDateTime.MIN;
 
-        return notificationRepository.existsByFamilyIdInAndCreatedAtAfter(familyIds, 기준);
+        // ✅ AuthorIdNot 조건 추가(중요)
+        return notificationRepository.existsByFamilyIdInAndCreatedAtAfterAndAuthorIdNot(
+                familyIds, 기준, userId
+        );
     }
 
     @Transactional(readOnly = true)
@@ -352,7 +362,7 @@ public class UserService {
                 familyIds, 기준, userId);
     }
 
-    // ✅ 추가: 채팅 unread 합계 (종과 분리)
+    // ✅ 채팅 unread 합계 (종과 분리)
     @Transactional(readOnly = true)
     public long getChatUnreadCount(Long userId) {
         List<UserChatRoom> links = userChatRoomRepository.findByUserId(userId);
@@ -379,7 +389,7 @@ public class UserService {
         return total;
     }
 
-    // ✅ 추가: 앱 배지 합계 = 종 unread + 채팅 unread
+    // ✅ 앱 배지 합계 = 종 unread + 채팅 unread
     @Transactional(readOnly = true)
     public long getBadgeCount(Long userId) {
         long bell = getUnreadNotificationCount(userId);
@@ -387,6 +397,9 @@ public class UserService {
         return Math.max(0L, bell + chat);
     }
 
+    /**
+     * ✅ 변경 핵심 3) 읽음 확정은 여기서만 한다.
+     */
     @Transactional
     public LocalDateTime markNotificationsRead(Long userId) {
         User user = userRepository.findById(userId)

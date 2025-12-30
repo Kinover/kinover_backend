@@ -6,6 +6,7 @@ import com.example.kinover_backend.dto.PostDTO;
 import com.example.kinover_backend.entity.*;
 import com.example.kinover_backend.repository.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.auth.oauth2.AccessToken;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.auth.oauth2.ServiceAccountCredentials;
 import com.google.firebase.FirebaseApp;
@@ -17,17 +18,12 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import com.google.auth.oauth2.AccessToken;
-
 import java.io.IOException;
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
-// ✅ 추가: 분리된 enum
+// ✅ 분리된 enum
 import com.example.kinover_backend.enums.PushType;
 
 @Service
@@ -43,11 +39,14 @@ public class FcmNotificationService {
     private final PostRepository postRepository;
     private final NotificationRepository notificationRepository;
 
-    // ✅ 추가: 채팅 unread 계산용
+    // ✅ 채팅 unread 계산용
     private final UserChatRoomRepository userChatRoomRepository;
     private final MessageRepository messageRepository;
 
     private static GoogleCredentials firebaseCreds;
+
+    // ✅ ObjectMapper는 매번 new 하지 말고 주입/재사용 (GC 줄이고 일관성)
+    private final ObjectMapper objectMapper;
 
     public boolean isChatRoomNotificationOn(Long userId, UUID chatRoomId) {
         User user = userRepository.findById(userId).orElseThrow();
@@ -76,6 +75,7 @@ public class FcmNotificationService {
 
         if (familyIds.isEmpty()) return 0L;
 
+        // ✅ 내 알림 제외
         return notificationRepository.countByFamilyIdInAndCreatedAtAfterAndAuthorIdNot(
                 familyIds, 기준, userId
         );
@@ -131,17 +131,21 @@ public class FcmNotificationService {
         if (fcmTokenOpt.isEmpty()) return;
 
         String token = fcmTokenOpt.get().getToken();
-        String messageType = messageDTO.getMessageType().name();
+
+        // ✅ messageType은 name()이 enum 대문자일 가능성이 큼 -> lower로 통일
+        String messageType = (messageDTO.getMessageType() == null)
+                ? "text"
+                : messageDTO.getMessageType().name().toLowerCase();
 
         String body;
         switch (messageType) {
-            case "text" -> body = messageDTO.getSenderName() + ": " + messageDTO.getContent();
+            case "text" -> body = nvl(messageDTO.getSenderName()) + ": " + nvl(messageDTO.getContent());
             case "image" -> {
                 int imageCount = messageDTO.getImageUrls() != null ? messageDTO.getImageUrls().size() : 0;
-                body = messageDTO.getSenderName() + ": 사진 " + imageCount + "장을 보냈습니다.";
+                body = nvl(messageDTO.getSenderName()) + ": 사진 " + imageCount + "장을 보냈습니다.";
             }
-            case "video" -> body = messageDTO.getSenderName() + ": 동영상을 보냈습니다.";
-            default -> body = messageDTO.getSenderName() + ": 새로운 메시지가 도착했습니다.";
+            case "video" -> body = nvl(messageDTO.getSenderName()) + ": 동영상을 보냈습니다.";
+            default -> body = nvl(messageDTO.getSenderName()) + ": 새로운 메시지가 도착했습니다.";
         }
 
         long bellUnreadCount = calcBellUnreadCount(userId);   // ✅ 종용(채팅 제외)
@@ -149,7 +153,7 @@ public class FcmNotificationService {
 
         // --- iOS(APNs) ---
         ApsAlert apsAlert = ApsAlert.builder()
-                .setTitle(chatRoom.getRoomName())
+                .setTitle(nvl(chatRoom.getRoomName()))
                 .setBody(body)
                 .build();
 
@@ -183,31 +187,29 @@ public class FcmNotificationService {
         Message.Builder messageBuilder = Message.builder()
                 .setToken(token)
                 .setNotification(Notification.builder()
-                        .setTitle(chatRoom.getRoomName())
+                        .setTitle(nvl(chatRoom.getRoomName()))
                         .setBody(body)
                         .build())
                 .setApnsConfig(apnsConfig)
                 .setAndroidConfig(androidConfig)
                 .putData("chatRoomId", String.valueOf(chatRoom.getChatRoomId()))
                 .putData("messageType", messageType)
-                .putData("senderName", messageDTO.getSenderName())
-                .putData("senderImage", messageDTO.getSenderImage())
-                .putData("roomName", chatRoom.getRoomName())
+                .putData("senderName", nvl(messageDTO.getSenderName()))
+                .putData("senderImage", nvl(messageDTO.getSenderImage()))
+                .putData("roomName", nvl(chatRoom.getRoomName()))
                 // ✅ 프론트 호환용: bell unread(기존 unreadCount)
                 .putData("unreadCount", String.valueOf(bellUnreadCount))
                 // ✅ 앱 배지(채팅 포함)
                 .putData("badgeCount", String.valueOf(badgeCount));
 
-        // ✅ 여기서 타입 세팅
+        // ✅ 타입 세팅
         putPushType(messageBuilder, PushType.CHAT);
 
-        if (messageType.equals("image") || messageType.equals("video")) {
+        if ("image".equals(messageType) || "video".equals(messageType)) {
             try {
-                String imageUrlJson = new ObjectMapper().writeValueAsString(messageDTO.getImageUrls());
+                String imageUrlJson = objectMapper.writeValueAsString(messageDTO.getImageUrls());
                 messageBuilder.putData("imageUrls", imageUrlJson);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            } catch (Exception ignore) {}
         }
 
         try {
@@ -239,7 +241,7 @@ public class FcmNotificationService {
                 : null;
 
         final String title = "새 게시물 알림";
-        final String body  = author.getName() + "님이 \"" + category.getTitle() + "\"에 \""
+        final String body = nvl(author.getName()) + "님이 \"" + nvl(category.getTitle()) + "\"에 \""
                 + trimContent(postDTO.getContent()) + "\" 글을 작성했습니다.";
 
         long bellUnreadCount = calcBellUnreadCount(userId);
@@ -347,7 +349,7 @@ public class FcmNotificationService {
                 : null;
 
         String title = "새 댓글 알림";
-        String body = author.getName() + "님이 \"" + category.getTitle() + "\"에 \"" +
+        String body = nvl(author.getName()) + "님이 \"" + nvl(category.getTitle()) + "\"에 \"" +
                 trimContent(commentDTO.getContent()) + "\" 댓글을 작성했습니다.";
 
         long bellUnreadCount = calcBellUnreadCount(userId);
@@ -379,7 +381,7 @@ public class FcmNotificationService {
                 .setTag("comment_" + post.getPostId())
                 .setNotificationCount((int) badgeCount);
 
-        if (firstImageUrl != null) {
+        if (firstImageUrl != null && !firstImageUrl.isBlank()) {
             an.setImage(firstImageUrl);
         }
 
@@ -397,17 +399,17 @@ public class FcmNotificationService {
                 .setApnsConfig(apnsConfig)
                 .setAndroidConfig(androidConfig)
                 .putData("postId", String.valueOf(post.getPostId()))
-                .putData("authorName", author.getName())
-                .putData("authorImage", author.getImage())
-                .putData("categoryTitle", category.getTitle())
-                .putData("contentPreview", trimContent(commentDTO.getContent()))
+                .putData("authorName", nvl(author.getName()))
+                .putData("authorImage", nvl(author.getImage()))
+                .putData("categoryTitle", nvl(category.getTitle()))
+                .putData("contentPreview", nvl(trimContent(commentDTO.getContent())))
                 .putData("unreadCount", String.valueOf(bellUnreadCount))
                 .putData("badgeCount", String.valueOf(badgeCount));
 
         // ✅ 타입 세팅
         putPushType(messageBuilder, PushType.COMMENT);
 
-        if (firstImageUrl != null) {
+        if (firstImageUrl != null && !firstImageUrl.isBlank()) {
             messageBuilder.putData("firstImageUrl", firstImageUrl);
         }
 
@@ -470,9 +472,16 @@ public class FcmNotificationService {
         Optional<ChatRoomNotificationSetting> settingOpt =
                 chatRoomNotificationRepository.findByUserAndChatRoom(user, chatRoom);
 
-        if (settingOpt.isEmpty()) return false;
+        // ✅ 없으면 기본 true로 동작하고 있었으니, 없을 때는 만들어주는 게 안전
+        ChatRoomNotificationSetting setting;
+        if (settingOpt.isEmpty()) {
+            setting = new ChatRoomNotificationSetting();
+            setting.setUser(user);
+            setting.setChatRoom(chatRoom);
+        } else {
+            setting = settingOpt.get();
+        }
 
-        ChatRoomNotificationSetting setting = settingOpt.get();
         setting.setNotificationOn(isOn);
         chatRoomNotificationRepository.save(setting);
 
@@ -502,7 +511,7 @@ public class FcmNotificationService {
                 : null;
 
         String title = "멘션 알림";
-        String body = author.getName() + "님이 댓글에서 당신을 언급했어요: \"" +
+        String body = nvl(author.getName()) + "님이 댓글에서 당신을 언급했어요: \"" +
                 trimContent(commentDTO.getContent()) + "\"";
 
         long bellUnreadCount = calcBellUnreadCount(userId);
@@ -532,7 +541,7 @@ public class FcmNotificationService {
                 .setTag("mention_comment_" + post.getPostId())
                 .setNotificationCount((int) badgeCount);
 
-        if (firstImageUrl != null) {
+        if (firstImageUrl != null && !firstImageUrl.isBlank()) {
             an.setImage(firstImageUrl);
         }
 
@@ -560,7 +569,7 @@ public class FcmNotificationService {
         // ✅ 타입 세팅
         putPushType(messageBuilder, PushType.MENTION_COMMENT);
 
-        if (firstImageUrl != null) {
+        if (firstImageUrl != null && !firstImageUrl.isBlank()) {
             messageBuilder.putData("firstImageUrl", firstImageUrl);
         }
 
@@ -587,20 +596,22 @@ public class FcmNotificationService {
 
         String token = fcmTokenOpt.get().getToken();
 
-        String body;
-        String messageType = messageDTO.getMessageType().name();
+        String messageType = (messageDTO.getMessageType() == null)
+                ? "text"
+                : messageDTO.getMessageType().name().toLowerCase();
 
+        String body;
         switch (messageType) {
-            case "text" -> body = messageDTO.getSenderName() + ": " + nvl(messageDTO.getContent());
+            case "text" -> body = nvl(messageDTO.getSenderName()) + ": " + nvl(messageDTO.getContent());
             case "image" -> {
                 int imageCount = messageDTO.getImageUrls() != null ? messageDTO.getImageUrls().size() : 0;
-                body = messageDTO.getSenderName() + ": 사진 " + imageCount + "장을 보냈습니다.";
+                body = nvl(messageDTO.getSenderName()) + ": 사진 " + imageCount + "장을 보냈습니다.";
             }
-            case "video" -> body = messageDTO.getSenderName() + ": 동영상을 보냈습니다.";
-            default -> body = messageDTO.getSenderName() + ": 새로운 메시지가 도착했습니다.";
+            case "video" -> body = nvl(messageDTO.getSenderName()) + ": 동영상을 보냈습니다.";
+            default -> body = nvl(messageDTO.getSenderName()) + ": 새로운 메시지가 도착했습니다.";
         }
 
-        String title = chatRoom.getRoomName();
+        String title = nvl(chatRoom.getRoomName());
         String mentionBody = "당신을 언급했어요 · " + body;
 
         long bellUnreadCount = calcBellUnreadCount(userId);
@@ -657,7 +668,7 @@ public class FcmNotificationService {
 
         if ("image".equals(messageType) || "video".equals(messageType)) {
             try {
-                String imageUrlJson = new ObjectMapper().writeValueAsString(messageDTO.getImageUrls());
+                String imageUrlJson = objectMapper.writeValueAsString(messageDTO.getImageUrls());
                 mb.putData("imageUrls", imageUrlJson);
             } catch (Exception ignore) {}
         }
