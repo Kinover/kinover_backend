@@ -255,17 +255,23 @@ public class ChatRoomController {
             @PathVariable UUID chatRoomId,
             @RequestBody ReadRequestDTO body,
             @RequestHeader("Authorization") String authorizationHeader) {
-
+    
         String token = authorizationHeader.replace("Bearer ", "");
         Long userId = jwtUtil.getUserIdFromToken(token);
-
+    
         if (!chatRoomService.isMember(chatRoomId, userId)) {
             throw new RuntimeException("해당 채팅방 멤버가 아닙니다.");
         }
-
-        chatRoomService.markRead(chatRoomId, userId, body.getLastReadAt());
+    
+        LocalDateTime lastReadAt =
+                (body != null && body.getLastReadAt() != null)
+                        ? body.getLastReadAt()
+                        : LocalDateTime.now();
+    
+        chatRoomService.markRead(chatRoomId, userId, lastReadAt);
         return ResponseEntity.ok().build();
     }
+    
 
     @Operation(summary = "채팅방 readPointers 조회", description = "채팅방 참여자별 lastReadAt 포인터를 조회합니다.")
     @GetMapping("/{chatRoomId}/readPointers")
