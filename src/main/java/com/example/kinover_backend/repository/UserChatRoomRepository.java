@@ -60,4 +60,5 @@ public interface UserChatRoomRepository extends JpaRepository<UserChatRoom, UUID
            )
     """)
     void deleteCommonChatRoomWithBot(@Param("userId") Long userId, @Param("botId") Long botId);
-}
+
+  }
