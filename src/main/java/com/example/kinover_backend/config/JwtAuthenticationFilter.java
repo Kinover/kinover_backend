@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 
 @Component
@@ -23,37 +24,66 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-            throws ServletException, IOException {
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain
+    ) throws ServletException, IOException {
 
-        // 🔥 로그인 요청이면 필터 실행 안 함
-        if (request.getRequestURI().equals("/api/login/kakao")) {
+        final String uri = request.getRequestURI();
+
+        // ✅ 로그인 요청은 패스
+        if ("/api/login/kakao".equals(uri)) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        String token = extractToken(request); // 요청 헤더에서 JWT 토큰 추출
+        // ✅ 토큰 추출
+        String token = extractToken(request);
 
-        if (token != null && jwtUtil.isTokenValid(token)) {
-            Long userId = jwtUtil.getUserIdFromToken(token); // 토큰에서 유저 ID 추출 (Long으로 변경)
+        // ✅ Authorization 헤더가 있는데 토큰이 비어있으면(예: "Bearer " or "Bearer null") -> 401
+        if (token != null) {
+            token = token.trim();
 
-            // 사용자 아이디만을 사용하여 인증 객체 생성
+            if (token.isEmpty() || "null".equalsIgnoreCase(token) || "undefined".equalsIgnoreCase(token)) {
+                sendUnauthorized(response, "TOKEN_MISSING");
+                return;
+            }
+
+            // ✅ 토큰이 있는데 유효하지 않으면(만료/위조/파싱불가) -> 401
+            if (!jwtUtil.isTokenValid(token)) {
+                sendUnauthorized(response, "TOKEN_EXPIRED");
+                return;
+            }
+
+            // ✅ 유효한 토큰이면 인증 세팅
+            Long userId = jwtUtil.getUserIdFromToken(token);
+
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(userId, null, new ArrayList<>());
-
-            System.out.println(authentication);
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
         }
 
-        filterChain.doFilter(request, response); // 다음 필터로 요청 전달
+        // ✅ 토큰이 아예 없으면 여기서는 그냥 통과 (최종적으로 /api/**는 SecurityConfig가 막음)
+        filterChain.doFilter(request, response);
     }
 
     private String extractToken(HttpServletRequest request) {
         String authorizationHeader = request.getHeader("Authorization");
-        if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
-            return authorizationHeader.substring(7); // "Bearer "를 제외한 토큰 부분만 반환
+        if (authorizationHeader == null) return null;
+
+        if (authorizationHeader.startsWith("Bearer ")) {
+            return authorizationHeader.substring(7);
         }
+
         return null;
+    }
+
+    private void sendUnauthorized(HttpServletResponse response, String code) throws IOException {
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setContentType("text/plain;charset=UTF-8");
+        response.getWriter().write(code);
     }
 }
