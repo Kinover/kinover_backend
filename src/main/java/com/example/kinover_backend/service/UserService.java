@@ -236,17 +236,26 @@ public class UserService {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * ✅ 변경 핵심 1) 알림 목록 조회는 "조회만" 한다.
-     * - 여기서 lastNotificationCheckedAt 업데이트(읽음 처리) 절대 하지 않음.
-     * - 읽음 확정은 markNotificationsRead(userId)에서만 한다.
+    /*
+     * =========================================================
+     * ✅ 알림 조회 (수정본)
+     * - 조회에서 절대 터지지 않게(orElseThrow 금지)
+     * - 참조(작성자/게시물/댓글) 깨져도 DTO는 만들고, 비워서 내려주기
+     * - N+1 방지 벌크 조회(Map)
+     * =========================================================
      */
     @Transactional(readOnly = true)
     public NotificationResponseDTO getUserNotifications(Long userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("사용자 없음"));
+        User user = userRepository.findById(userId).orElse(null);
+        if (user == null) {
+            // 여기서 throw하면 프론트가 “주원/은재만” 같은 케이스에서 또 죽을 수 있음
+            // (토큰은 맞는데 DB에서 유저 조회가 꼬이는 상황도 방어)
+            return NotificationResponseDTO.builder()
+                    .lastCheckedAt(null)
+                    .notifications(Collections.emptyList())
+                    .build();
+        }
 
-        // ✅ now로 갱신하지 않고, 현재 저장되어 있는 lastCheckedAt을 그대로 내려준다.
         LocalDateTime lastCheckedAt = user.getLastNotificationCheckedAt();
 
         List<UUID> familyIds = userFamilyRepository.findFamiliesByUserId(userId).stream()
@@ -261,54 +270,67 @@ public class UserService {
         }
 
         List<Notification> notifications = notificationRepository.findByFamilyIdInOrderByCreatedAtDesc(familyIds);
+        if (notifications == null || notifications.isEmpty()) {
+            return NotificationResponseDTO.builder()
+                    .lastCheckedAt(lastCheckedAt)
+                    .notifications(Collections.emptyList())
+                    .build();
+        }
 
-        List<NotificationDTO> dtoList = notifications.stream()
-                .filter(n -> !Objects.equals(n.getAuthorId(), userId)) // ✅ 내 알림은 리스트에서 제외
-                .map(n -> {
-                    User author = userRepository.findById(n.getAuthorId())
-                            .orElseThrow(() -> new RuntimeException("작성자 정보 없음"));
-
-                    String categoryTitle = "";
-                    String contentPreview = "";
-                    String firstImageUrl = null;
-
-                    if (n.getNotificationType() == NotificationType.POST) {
-                        Post post = postRepository.findById(n.getPostId())
-                                .orElseThrow(() -> new RuntimeException("게시물 없음"));
-                        categoryTitle = post.getCategory().getTitle();
-                        contentPreview = post.getContent() != null && post.getContent().length() > 30
-                                ? post.getContent().substring(0, 30) + "..."
-                                : post.getContent();
-                        firstImageUrl = post.getImages().isEmpty()
-                                ? null
-                                : post.getImages().get(0).getImageUrl();
-
-                    } else if (n.getNotificationType() == NotificationType.COMMENT) {
-                        Comment comment = commentRepository.findById(n.getCommentId())
-                                .orElseThrow(() -> new RuntimeException("댓글 없음"));
-                        Post post = comment.getPost();
-                        categoryTitle = post.getCategory().getTitle();
-                        contentPreview = comment.getContent() != null && comment.getContent().length() > 30
-                                ? comment.getContent().substring(0, 30) + "..."
-                                : comment.getContent();
-                        firstImageUrl = post.getImages().isEmpty()
-                                ? null
-                                : post.getImages().get(0).getImageUrl();
-                    }
-
-                    return NotificationDTO.builder()
-                            .notificationType(n.getNotificationType())
-                            .postId(n.getPostId())
-                            .commentId(n.getCommentId())
-                            .createdAt(n.getCreatedAt())
-                            .authorName(author.getName())
-                            .authorImage(author.getImage())
-                            .categoryTitle(categoryTitle)
-                            .contentPreview(contentPreview)
-                            .firstImageUrl(firstImageUrl)
-                            .build();
-                })
+        // ✅ 내 알림 제외(서버에서 DTO 생성 전에 필터)
+        List<Notification> filtered = notifications.stream()
+                .filter(n -> !Objects.equals(n.getAuthorId(), userId))
                 .collect(Collectors.toList());
+
+        if (filtered.isEmpty()) {
+            return NotificationResponseDTO.builder()
+                    .lastCheckedAt(lastCheckedAt)
+                    .notifications(Collections.emptyList())
+                    .build();
+        }
+
+        // ✅ 벌크 조회 준비
+        Set<Long> authorIds = new HashSet<>();
+        Set<UUID> postIds = new HashSet<>();
+        Set<UUID> commentIds = new HashSet<>();
+
+        for (Notification n : filtered) {
+            if (n.getAuthorId() != null)
+                authorIds.add(n.getAuthorId());
+            if (n.getPostId() != null)
+                postIds.add(n.getPostId());
+            if (n.getCommentId() != null)
+                commentIds.add(n.getCommentId());
+        }
+
+        Map<Long, User> authorMap = authorIds.isEmpty()
+                ? Collections.emptyMap()
+                : userRepository.findAllById(authorIds).stream()
+                        .collect(Collectors.toMap(User::getUserId, u -> u, (a, b) -> a));
+
+        Map<UUID, Post> postMap = postIds.isEmpty()
+                ? Collections.emptyMap()
+                : postRepository.findAllById(postIds).stream()
+                        .collect(Collectors.toMap(Post::getPostId, p -> p, (a, b) -> a));
+
+        Map<UUID, Comment> commentMap = commentIds.isEmpty()
+                ? Collections.emptyMap()
+                : commentRepository.findAllById(commentIds).stream()
+                        .collect(Collectors.toMap(Comment::getCommentId, c -> c, (a, b) -> a));
+
+        List<NotificationDTO> dtoList = new ArrayList<>();
+
+        for (Notification n : filtered) {
+            try {
+                NotificationDTO dto = buildNotificationDTO(n, authorMap, postMap, commentMap);
+                if (dto != null)
+                    dtoList.add(dto);
+            } catch (Exception e) {
+                // ✅ 한 건 터져도 전체 응답은 살림
+                logger.warn("[NOTI_SKIP] userId={}, notificationId={}, type={}, err={}",
+                        userId, n.getNotificationId(), n.getNotificationType(), e.toString());
+            }
+        }
 
         return NotificationResponseDTO.builder()
                 .lastCheckedAt(lastCheckedAt)
@@ -316,9 +338,106 @@ public class UserService {
                 .build();
     }
 
+    private NotificationDTO buildNotificationDTO(
+            Notification n,
+            Map<Long, User> authorMap,
+            Map<UUID, Post> postMap,
+            Map<UUID, Comment> commentMap) {
+        NotificationType type = n.getNotificationType();
+
+        User author = (n.getAuthorId() == null) ? null : authorMap.get(n.getAuthorId());
+        String authorName = safe(author != null ? author.getName() : null, "알 수 없음");
+        String authorImage = safe(author != null ? author.getImage() : null, "");
+
+        String categoryTitle = "";
+        String contentPreview = "";
+        String firstImageUrl = null;
+
+        UUID postId = n.getPostId();
+        UUID commentId = n.getCommentId();
+
+        Post post = (postId == null) ? null : postMap.get(postId);
+        Comment comment = (commentId == null) ? null : commentMap.get(commentId);
+
+        // ✅ 타입별로 필요한 정보 채우기 (없으면 그냥 빈 값)
+        if (type == NotificationType.POST) {
+            if (post != null) {
+                categoryTitle = safe(getCategoryTitleSafe(post), "");
+                contentPreview = safe(trimContentSafe(post.getContent()), "");
+                firstImageUrl = getFirstImageUrlSafe(post);
+            }
+        } else if (type == NotificationType.COMMENT) {
+            if (comment != null) {
+                // comment -> post 로 타고 들어가는데, 이게 LAZY/삭제로 터질 수 있어서 보호
+                Post p = null;
+                try {
+                    p = comment.getPost();
+                } catch (Exception ignore) {
+                }
+
+                if (p != null) {
+                    categoryTitle = safe(getCategoryTitleSafe(p), "");
+                    firstImageUrl = getFirstImageUrlSafe(p);
+                } else if (post != null) {
+                    // 혹시 notification.postId도 같이 저장되어 있다면 이걸로라도 복구
+                    categoryTitle = safe(getCategoryTitleSafe(post), "");
+                    firstImageUrl = getFirstImageUrlSafe(post);
+                }
+
+                contentPreview = safe(trimContentSafe(comment.getContent()), "");
+            }
+        }
+
+        return NotificationDTO.builder()
+                .notificationType(type)
+                .postId(postId)
+                .commentId(commentId)
+                .createdAt(n.getCreatedAt())
+                .authorName(authorName)
+                .authorImage(authorImage)
+                .categoryTitle(categoryTitle)
+                .contentPreview(contentPreview)
+                .firstImageUrl(firstImageUrl)
+                .build();
+    }
+
+    private String getCategoryTitleSafe(Post post) {
+        try {
+            if (post == null)
+                return "";
+            Category c = post.getCategory();
+            if (c == null)
+                return "";
+            return safe(c.getTitle(), "");
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private String getFirstImageUrlSafe(Post post) {
+        try {
+            if (post == null)
+                return null;
+            if (post.getImages() == null || post.getImages().isEmpty())
+                return null;
+            return post.getImages().get(0).getImageUrl();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String trimContentSafe(String content) {
+        if (content == null)
+            return "";
+        return content.length() > 30 ? content.substring(0, 30) + "..." : content;
+    }
+
+    private String safe(String s, String fallback) {
+        return (s == null) ? fallback : s;
+    }
+
     /**
      * ✅ 변경 핵심 2) hasUnread도 "내가 만든 알림은 제외"해야 함.
-     * - 안 그러면 내가 글 쓰면 내 알림 때문에 hasUnread=true가 될 수 있음.
      */
     @Transactional(readOnly = true)
     public boolean hasUnreadNotifications(Long userId) {
@@ -336,10 +455,8 @@ public class UserService {
 
         LocalDateTime 기준 = (lastCheckedAt != null) ? lastCheckedAt : LocalDateTime.MIN;
 
-        // ✅ AuthorIdNot 조건 추가(중요)
         return notificationRepository.existsByFamilyIdInAndCreatedAtAfterAndAuthorIdNot(
-                familyIds, 기준, userId
-        );
+                familyIds, 기준, userId);
     }
 
     @Transactional(readOnly = true)
@@ -398,7 +515,7 @@ public class UserService {
     }
 
     /**
-     * ✅ 변경 핵심 3) 읽음 확정은 여기서만 한다.
+     * ✅ 읽음 확정은 여기서만 한다.
      */
     @Transactional
     public LocalDateTime markNotificationsRead(Long userId) {
