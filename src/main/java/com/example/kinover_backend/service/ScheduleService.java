@@ -61,8 +61,9 @@ public class ScheduleService {
             schedule.setCreatedBy(createdBy);
         }
 
-        // ✅ 여기 그대로 두고
-        schedule.setParticipants(resolveParticipants(dto.getType(), dto.getParticipantIds()));
+        // ✅ FAMILY에서 participantIds가 비면 ALL로 처리
+        schedule.setParticipants(
+                resolveParticipants(dto.getFamilyId(), dto.getType(), dto.getParticipantIds()));
 
         scheduleRepository.save(schedule);
         return schedule.getScheduleId();
@@ -83,8 +84,19 @@ public class ScheduleService {
         schedule.setDate(dto.getDate());
         schedule.setType(dto.getType());
 
-        schedule.setParticipants(resolveParticipants(dto.getType(), dto.getParticipantIds()));
+        // ✅ 수정 시 familyId가 dto에 안 올 수도 있으니 schedule에서 보완
+        UUID familyId = dto.getFamilyId();
+        if (familyId == null && schedule.getFamily() != null) {
+            familyId = schedule.getFamily().getFamilyId();
+        }
+        if (familyId == null) {
+            throw new IllegalArgumentException("familyId는 필수입니다. (수정 시에도 필요)");
+        }
 
+        schedule.setParticipants(
+                resolveParticipants(familyId, dto.getType(), dto.getParticipantIds()));
+
+        // JPA dirty checking으로 save 생략 가능
         return schedule.getScheduleId();
     }
 
@@ -135,34 +147,64 @@ public class ScheduleService {
         if (dto.getType() == null)
             throw new IllegalArgumentException("type은 필수입니다.");
 
-        // ✅ participantIds 타입이 애매할 수 있으니, 변환 결과 기준으로 검증
+        // ✅ 변환 결과 기준으로 검증
         List<Long> ids = coerceToLongList(dto.getParticipantIds());
 
+        // ✅ 규칙:
+        // - ANNIVERSARY: participantIds 금지
+        // - INDIVIDUAL: 1명 이상 필수
+        // - FAMILY: 빈 배열/미전송 허용(=ALL)
         if (dto.getType() == ScheduleType.ANNIVERSARY) {
             if (!ids.isEmpty()) {
                 throw new IllegalArgumentException("ANNIVERSARY는 participantIds를 보낼 수 없습니다.");
             }
-        } else {
+            return;
+        }
+
+        if (dto.getType() == ScheduleType.INDIVIDUAL) {
             if (ids.isEmpty()) {
-                throw new IllegalArgumentException(dto.getType() + "는 participantIds가 1명 이상 필요합니다.");
+                throw new IllegalArgumentException("INDIVIDUAL은 participantIds가 1명 이상 필요합니다.");
             }
+            return;
+        }
+
+        if (dto.getType() == ScheduleType.FAMILY) {
+            // ✅ ALL 허용: ids가 비어도 OK
+            return;
+        }
+
+        // 혹시 enum이 늘어날 미래 대비
+        if (ids.isEmpty()) {
+            throw new IllegalArgumentException(dto.getType() + "는 participantIds가 1명 이상 필요합니다.");
         }
     }
 
     /**
-     * ✅ 핵심 수정:
-     * - List<Long>가 아니라 List<?>로 받아서
-     * - Long / Integer / String 등 뭐가 와도 Long으로 변환
+     * ✅ 핵심:
+     * - ANNIVERSARY: 참여자 없음
+     * - INDIVIDUAL: participantIds로 지정(빈 값 불가)
+     * - FAMILY:
+     * - participantIds 비어있으면 ALL => 해당 family의 모든 구성원으로 세팅
+     * - 아니면 participantIds로 지정
      */
-    private Set<User> resolveParticipants(ScheduleType type, List<?> participantIds) {
+    private Set<User> resolveParticipants(UUID familyId, ScheduleType type, List<?> participantIds) {
         if (type == ScheduleType.ANNIVERSARY) {
             return new HashSet<>();
         }
 
         List<Long> ids = coerceToLongList(participantIds);
 
-        if (ids.isEmpty())
+        if (type == ScheduleType.FAMILY && ids.isEmpty()) {
+            // ✅ ALL: 가족 전체 구성원
+            // 아래 메서드는 네 프로젝트에 맞게 repository 메서드명만 맞춰주면 됨
+            List<User> familyUsers = userRepository.findByFamilyId(familyId);
+            return new HashSet<>(familyUsers);
+        }
+
+        // INDIVIDUAL은 validateUpsert에서 이미 비었으면 막힘
+        if (ids.isEmpty()) {
             return new HashSet<>();
+        }
 
         List<User> users = userRepository.findAllById(ids);
         if (users.size() != ids.size()) {
@@ -193,7 +235,6 @@ public class ScheduleService {
                             return null;
                         return Long.parseLong(t);
                     }
-                    // 여기 걸리면 프론트/DTO가 이상하게 보내는 거
                     throw new IllegalArgumentException("participantIds 타입이 올바르지 않습니다: " + v.getClass());
                 })
                 .filter(Objects::nonNull)
