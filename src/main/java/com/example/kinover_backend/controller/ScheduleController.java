@@ -1,3 +1,4 @@
+// src/main/java/com/example/kinover_backend/controller/ScheduleController.java
 package com.example.kinover_backend.controller;
 
 import com.example.kinover_backend.dto.ScheduleDTO;
@@ -27,33 +28,29 @@ public class ScheduleController {
 
     private final ScheduleService scheduleService;
 
-    @Operation(summary = "일정 조회", description = "일정을 조회합니다.")
+    @Operation(summary = "일정 조회", description = "일정을 조회합니다. (userId 있으면 해당 유저 기준으로 보이는 일정만)")
     @ApiResponse(responseCode = "200", description = "일정 목록 반환 성공",
-            content = @Content(array = @ArraySchema(schema = @Schema(implementation = ScheduleDTO.class))))
+        content = @Content(array = @ArraySchema(schema = @Schema(implementation = ScheduleDTO.class))))
     @PostMapping("/get")
-        public ResponseEntity<List<ScheduleDTO>> getSchedules(@RequestBody ScheduleDTO requestDTO) {
+    public ResponseEntity<List<ScheduleDTO>> getSchedules(@RequestBody ScheduleDTO requestDTO) {
         List<ScheduleDTO> schedules = scheduleService.getSchedulesByFilter(requestDTO);
         return ResponseEntity.ok(schedules);
-        }
+    }
 
     @Operation(summary = "일정 추가", description = "새로운 일정을 추가합니다.")
     @ApiResponse(responseCode = "200", description = "일정 생성 성공",
-            content = @Content(schema = @Schema(implementation = UUID.class)))
+        content = @Content(schema = @Schema(implementation = UUID.class)))
     @PostMapping("/add")
-    public UUID addSchedule(
-            @RequestBody ScheduleDTO scheduleDTO) {
-                System.out.println(">>> [ScheduleDTO 수신]: " + scheduleDTO.toString()); // 또는 log.info()
-
+    public UUID addSchedule(@RequestBody ScheduleDTO scheduleDTO) {
+        System.out.println(">>> [ScheduleDTO 수신]: " + scheduleDTO.toString());
         return scheduleService.addSchedule(scheduleDTO);
     }
 
     @Operation(summary = "일정 수정", description = "기존 일정을 수정합니다.")
     @ApiResponse(responseCode = "200", description = "일정 수정 성공",
-            content = @Content(schema = @Schema(implementation = UUID.class)))
+        content = @Content(schema = @Schema(implementation = UUID.class)))
     @PutMapping("/modify")
-    public UUID modifySchedule(
-            @RequestBody ScheduleDTO scheduleDTO) {
-
+    public UUID modifySchedule(@RequestBody ScheduleDTO scheduleDTO) {
         return scheduleService.modifySchedule(scheduleDTO);
     }
 
@@ -61,25 +58,24 @@ public class ScheduleController {
     @ApiResponse(responseCode = "200", description = "일정 삭제 성공")
     @DeleteMapping("/remove/{scheduleId}")
     public void removeSchedule(
-            @Parameter(description = "삭제할 일정 ID", required = true)
-            @PathVariable UUID scheduleId) {
-
+        @Parameter(description = "삭제할 일정 ID", required = true)
+        @PathVariable UUID scheduleId
+    ) {
         scheduleService.removeSchedule(scheduleId);
     }
 
     @Operation(
         summary = "Get monthly schedule count",
-        description = "가족 ID와 연도, 월을 기반으로 해당 월의 각 날짜(LocalDate 형식)의 일정 개수를 반환합니다."
+        description = "가족 ID와 연도, 월을 기반으로 해당 월의 각 날짜별 일정 개수(타입별 포함)를 반환합니다."
     )
     @GetMapping("/count-per-day")
-    public ResponseEntity<Map<LocalDate, Long>> getScheduleCountPerDay(
-            @RequestParam UUID familyId,
-            @RequestParam int year,
-            @RequestParam int month) {
-
-        Map<LocalDate, Long> countPerDay = scheduleService.getScheduleCountPerDay(familyId, year, month);
+    public ResponseEntity<Map<LocalDate, Map<String, Long>>> getScheduleCountPerDay(
+        @RequestParam UUID familyId,
+        @RequestParam int year,
+        @RequestParam int month
+    ) {
+        Map<LocalDate, Map<String, Long>> countPerDay =
+            scheduleService.getScheduleCountPerDay(familyId, year, month);
         return ResponseEntity.ok(countPerDay);
     }
-
-
 }

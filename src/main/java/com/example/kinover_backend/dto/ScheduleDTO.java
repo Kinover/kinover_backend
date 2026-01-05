@@ -1,13 +1,13 @@
+// src/main/java/com/example/kinover_backend/dto/ScheduleDTO.java
 package com.example.kinover_backend.dto;
 
 import com.example.kinover_backend.entity.Schedule;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-import lombok.ToString;
+import com.example.kinover_backend.entity.User;
+import com.example.kinover_backend.enums.ScheduleType;
+import lombok.*;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -21,22 +21,34 @@ public class ScheduleDTO {
     private String title;
     private String memo;
     private LocalDate date;
-    private boolean Personal;
+
+    // ✅ 필수
+    private ScheduleType type;
+
+    // ✅ 참여자(다중)
+    private List<Long> participantIds;
+    private List<String> participantNames;
+
+    // ✅ 조회 필터용(선택): userId가 있으면 "그 유저 기준으로 보이는 일정" 조회
     private Long userId;
-    private String userName;
+
     private UUID familyId;
 
-    // 엔티티 → DTO 변환용 생성자
     public ScheduleDTO(Schedule schedule) {
         this.scheduleId = schedule.getScheduleId();
         this.title = schedule.getTitle();
         this.memo = schedule.getMemo();
         this.date = schedule.getDate();
-        this.Personal = schedule.isPersonal();
+        this.type = schedule.getType();
 
-        if (schedule.getUser() != null) {
-            this.userId = schedule.getUser().getUserId();
-            this.userName = schedule.getUser().getName();
+        if (schedule.getParticipants() != null) {
+            this.participantIds = schedule.getParticipants().stream()
+                .map(User::getUserId)
+                .toList();
+
+            this.participantNames = schedule.getParticipants().stream()
+                .map(u -> u.getName() != null ? u.getName() : u.getName())
+                .toList();
         }
 
         if (schedule.getFamily() != null) {
