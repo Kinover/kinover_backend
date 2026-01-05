@@ -38,6 +38,8 @@ public class Schedule {
      * ✅ 참여 구성원(다중 선택)
      * - INDIVIDUAL / FAMILY: 1명 이상 가능
      * - ANNIVERSARY: 비워야 함
+     *
+     * ✅ JoinTable은 Schedule 쪽에서 소유(Owner)로 유지
      */
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
@@ -48,8 +50,7 @@ public class Schedule {
     private Set<User> participants = new HashSet<>();
 
     /**
-     * (선택) 작성자/생성자 기록이 필요하면 유지
-     * 지금 요구사항엔 필수는 아니라서 nullable로 둠.
+     * (선택) 작성자/생성자 기록
      */
     @ManyToOne(optional = true, fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by_user_id", referencedColumnName = "userId")

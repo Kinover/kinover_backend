@@ -72,8 +72,13 @@ public class User {
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
     private List<UserChatRoom> userChatRooms;
 
-    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
-    private List<Schedule> scheduleList;
+    /**
+     * ✅ 참여 중인 일정 목록
+     * - Schedule.participants (ManyToMany) 와 양방향 매핑
+     * - 기존 mappedBy="user"는 Schedule에 user 필드가 없어서 서버가 죽었음
+     */
+    @ManyToMany(mappedBy = "participants", fetch = FetchType.LAZY)
+    private List<Schedule> scheduleList = new ArrayList<>();
 
     @Column(nullable = false)
     private Boolean isPostNotificationOn = true;
