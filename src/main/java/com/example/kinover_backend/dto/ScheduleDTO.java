@@ -29,7 +29,7 @@ public class ScheduleDTO {
     private List<Long> participantIds;
     private List<String> participantNames;
 
-    // ✅ 조회 필터용(선택): userId가 있으면 "그 유저 기준으로 보이는 일정" 조회
+    // ✅ 조회 필터용(선택)
     private Long userId;
 
     private UUID familyId;
@@ -47,7 +47,7 @@ public class ScheduleDTO {
                 .toList();
 
             this.participantNames = schedule.getParticipants().stream()
-                .map(u -> u.getName() != null ? u.getName() : u.getName())
+                .map(u -> u.getName() == null ? "" : u.getName())
                 .toList();
         }
 
