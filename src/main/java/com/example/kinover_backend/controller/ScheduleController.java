@@ -11,7 +11,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
-
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -28,27 +27,64 @@ public class ScheduleController {
 
     private final ScheduleService scheduleService;
 
-    @Operation(summary = "일정 조회", description = "일정을 조회합니다. (userId 있으면 해당 유저 기준으로 보이는 일정만)")
-    @ApiResponse(responseCode = "200", description = "일정 목록 반환 성공",
-        content = @Content(array = @ArraySchema(schema = @Schema(implementation = ScheduleDTO.class))))
+    @Operation(
+        summary = "일정 조회",
+        description = """
+            일정을 조회합니다.
+            - familyId, date는 필수
+            - (선택) userId가 있으면:
+              * FAMILY/ANNIVERSARY는 모두 노출
+              * INDIVIDUAL은 participants에 userId가 포함된 일정만 노출
+              
+            ⚠️ 참고:
+            - 이 userId는 '조회 필터' 용도이며, 배열(List)을 받지 않습니다.
+            - '한 일정에 여러 유저 포함'은 add/modify의 participantIds(List<Long>)로 처리합니다.
+            """
+    )
+    @ApiResponse(
+        responseCode = "200",
+        description = "일정 목록 반환 성공",
+        content = @Content(array = @ArraySchema(schema = @Schema(implementation = ScheduleDTO.class)))
+    )
     @PostMapping("/get")
     public ResponseEntity<List<ScheduleDTO>> getSchedules(@RequestBody ScheduleDTO requestDTO) {
         List<ScheduleDTO> schedules = scheduleService.getSchedulesByFilter(requestDTO);
         return ResponseEntity.ok(schedules);
     }
 
-    @Operation(summary = "일정 추가", description = "새로운 일정을 추가합니다.")
-    @ApiResponse(responseCode = "200", description = "일정 생성 성공",
-        content = @Content(schema = @Schema(implementation = UUID.class)))
+    @Operation(
+        summary = "일정 추가",
+        description = """
+            새로운 일정을 추가합니다.
+            ✅ 한 일정에 여러 유저(참여자) 포함 가능:
+            - participantIds: [1,2,3] 처럼 배열로 전달
+            - type이 ANNIVERSARY면 participantIds는 비워야 합니다.
+            """
+    )
+    @ApiResponse(
+        responseCode = "200",
+        description = "일정 생성 성공",
+        content = @Content(schema = @Schema(implementation = UUID.class))
+    )
     @PostMapping("/add")
     public UUID addSchedule(@RequestBody ScheduleDTO scheduleDTO) {
-        System.out.println(">>> [ScheduleDTO 수신]: " + scheduleDTO.toString());
+        System.out.println(">>> [ScheduleDTO 수신]: " + scheduleDTO);
         return scheduleService.addSchedule(scheduleDTO);
     }
 
-    @Operation(summary = "일정 수정", description = "기존 일정을 수정합니다.")
-    @ApiResponse(responseCode = "200", description = "일정 수정 성공",
-        content = @Content(schema = @Schema(implementation = UUID.class)))
+    @Operation(
+        summary = "일정 수정",
+        description = """
+            기존 일정을 수정합니다.
+            ✅ participantIds를 배열로 보내면 참여자(다중)가 갱신됩니다.
+            - type이 ANNIVERSARY면 participantIds는 비워야 합니다.
+            """
+    )
+    @ApiResponse(
+        responseCode = "200",
+        description = "일정 수정 성공",
+        content = @Content(schema = @Schema(implementation = UUID.class))
+    )
     @PutMapping("/modify")
     public UUID modifySchedule(@RequestBody ScheduleDTO scheduleDTO) {
         return scheduleService.modifySchedule(scheduleDTO);
