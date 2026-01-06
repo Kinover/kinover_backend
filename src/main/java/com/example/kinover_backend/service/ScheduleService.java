@@ -10,6 +10,8 @@ import com.example.kinover_backend.repository.FamilyRepository;
 import com.example.kinover_backend.repository.ScheduleRepository;
 import com.example.kinover_backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,19 +31,21 @@ public class ScheduleService {
     public List<ScheduleDTO> getSchedulesByFilter(ScheduleDTO dto) {
         UUID familyId = dto.getFamilyId();
         LocalDate date = dto.getDate();
-        Long userId = dto.getUserId();
+        Long userId = dto.getUserId(); // ✅ 조회 필터용(선택) - 프론트가 필요하면 보내도 됨
 
         if (familyId == null || date == null) {
             throw new IllegalArgumentException("familyId, date는 필수입니다.");
         }
 
-        List<Schedule> schedules = scheduleRepository.findVisibleSchedulesByFilter(familyId, date, userId);
+        List<Schedule> schedules =
+                scheduleRepository.findVisibleSchedulesByFilter(familyId, date, userId);
 
         return schedules.stream().map(ScheduleDTO::new).toList();
     }
 
     @Transactional
     public UUID addSchedule(ScheduleDTO dto) {
+        // ✅ DTO 기반 검증(ANNIVERSARY participantIds 금지 / 그 외 1명 이상)
         validateUpsert(dto);
 
         Family family = familyRepository.findById(dto.getFamilyId())
@@ -55,13 +59,13 @@ public class ScheduleService {
         schedule.setDate(dto.getDate());
         schedule.setType(dto.getType());
 
-        if (dto.getUserId() != null) {
-            User createdBy = userRepository.findById(dto.getUserId())
-                    .orElseThrow(() -> new RuntimeException("작성자(userId)를 찾을 수 없습니다."));
-            schedule.setCreatedBy(createdBy);
-        }
+        // ✅ 작성자는 "프론트 userId"가 아니라 "JWT(SecurityContext)"에서 가져온다
+        Long loginUserId = getAuthenticatedUserIdOrThrow();
+        User createdBy = userRepository.findById(loginUserId)
+                .orElseThrow(() -> new RuntimeException("작성자(userId)를 찾을 수 없습니다."));
+        schedule.setCreatedBy(createdBy);
 
-        // ✅ 여기 그대로 두고
+        // ✅ 참여자 세팅
         schedule.setParticipants(resolveParticipants(dto.getType(), dto.getParticipantIds()));
 
         scheduleRepository.save(schedule);
@@ -73,6 +77,7 @@ public class ScheduleService {
         if (dto.getScheduleId() == null) {
             throw new IllegalArgumentException("scheduleId는 필수입니다.");
         }
+
         validateUpsert(dto);
 
         Schedule schedule = scheduleRepository.findById(dto.getScheduleId())
@@ -84,6 +89,9 @@ public class ScheduleService {
         schedule.setType(dto.getType());
 
         schedule.setParticipants(resolveParticipants(dto.getType(), dto.getParticipantIds()));
+
+        // (선택) 수정자 기록이 필요하면 여기서 updatedBy 같은 필드에 세팅
+        // Long loginUserId = getAuthenticatedUserIdOrThrow();
 
         return schedule.getScheduleId();
     }
@@ -98,9 +106,11 @@ public class ScheduleService {
         LocalDate startDate = LocalDate.of(year, month, 1);
         LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
 
-        List<Schedule> schedules = scheduleRepository.findByFamily_FamilyIdAndDateBetween(familyId, startDate, endDate);
+        List<Schedule> schedules =
+                scheduleRepository.findByFamily_FamilyIdAndDateBetween(familyId, startDate, endDate);
 
-        Map<LocalDate, List<Schedule>> grouped = schedules.stream().collect(Collectors.groupingBy(Schedule::getDate));
+        Map<LocalDate, List<Schedule>> grouped =
+                schedules.stream().collect(Collectors.groupingBy(Schedule::getDate));
 
         Map<LocalDate, Map<String, Long>> result = new HashMap<>();
 
@@ -125,6 +135,39 @@ public class ScheduleService {
     // -------------------------
     // 내부 유틸
     // -------------------------
+
+    /**
+     * ✅ JWT 인증 principal에서 userId(Long)를 꺼낸다.
+     * - JwtAuthenticationFilter에서 principal로 userId(Long)를 넣어주는 구조에 맞춤
+     */
+    private Long getAuthenticatedUserIdOrThrow() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) {
+            throw new RuntimeException("인증 정보가 없습니다. (Authentication null)");
+        }
+
+        Object principal = auth.getPrincipal();
+        if (principal == null) {
+            throw new RuntimeException("인증 principal이 없습니다. (principal null)");
+        }
+
+        // ✅ 너는 principal에 Long userId를 넣고 있음
+        if (principal instanceof Long userId) {
+            return userId;
+        }
+
+        // ✅ 혹시 String으로 들어오는 경우 대비 (예: "4207548229")
+        if (principal instanceof String s) {
+            try {
+                return Long.parseLong(s.trim());
+            } catch (Exception e) {
+                throw new RuntimeException("principal String을 userId로 파싱 실패: " + s);
+            }
+        }
+
+        throw new RuntimeException("principal 타입이 예상과 다릅니다: " + principal.getClass());
+    }
+
     private void validateUpsert(ScheduleDTO dto) {
         if (dto.getFamilyId() == null)
             throw new IllegalArgumentException("familyId는 필수입니다.");
@@ -150,9 +193,9 @@ public class ScheduleService {
     }
 
     /**
-     * ✅ 핵심 수정:
-     * - List<Long>가 아니라 List<?>로 받아서
-     * - Long / Integer / String 등 뭐가 와도 Long으로 변환
+     * ✅ 핵심:
+     * - ANNIVERSARY면 참여자 없음
+     * - 그 외는 participantIds를 Long 리스트로 정규화해서 User 조회
      */
     private Set<User> resolveParticipants(ScheduleType type, List<?> participantIds) {
         if (type == ScheduleType.ANNIVERSARY) {
@@ -193,7 +236,6 @@ public class ScheduleService {
                             return null;
                         return Long.parseLong(t);
                     }
-                    // 여기 걸리면 프론트/DTO가 이상하게 보내는 거
                     throw new IllegalArgumentException("participantIds 타입이 올바르지 않습니다: " + v.getClass());
                 })
                 .filter(Objects::nonNull)
