@@ -22,17 +22,16 @@ public class ScheduleDTO {
     private String memo;
     private LocalDate date;
 
-    // ✅ 필수
     private ScheduleType type;
 
-    // ✅ 참여자(다중)
     private List<Long> participantIds;
     private List<String> participantNames;
 
-    // ✅ 조회 필터용(선택)
-    private Long userId;
-
+    private Long userId;     // 조회 필터용(선택)
     private UUID familyId;
+
+    // ✅ 추가
+    private Boolean personal;
 
     public ScheduleDTO(Schedule schedule) {
         this.scheduleId = schedule.getScheduleId();
@@ -40,6 +39,9 @@ public class ScheduleDTO {
         this.memo = schedule.getMemo();
         this.date = schedule.getDate();
         this.type = schedule.getType();
+
+        // ✅ 추가: 응답 포함
+        this.personal = schedule.isPersonal();
 
         if (schedule.getParticipants() != null) {
             this.participantIds = schedule.getParticipants().stream()

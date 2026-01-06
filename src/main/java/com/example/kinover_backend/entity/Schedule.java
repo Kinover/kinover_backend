@@ -29,18 +29,14 @@ public class Schedule {
     @Column(nullable = false)
     private LocalDate date;
 
-    // ✅ 필수 type
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private ScheduleType type;
 
-    /**
-     * ✅ 참여 구성원(다중 선택)
-     * - INDIVIDUAL / FAMILY: 1명 이상 가능
-     * - ANNIVERSARY: 비워야 함
-     *
-     * ✅ JoinTable은 Schedule 쪽에서 소유(Owner)로 유지
-     */
+    // ✅ 추가: 개인 여부 (DB not null 대응: primitive boolean 사용)
+    @Column(nullable = false)
+    private boolean personal = false;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "schedule_participants",
@@ -49,9 +45,6 @@ public class Schedule {
     )
     private Set<User> participants = new HashSet<>();
 
-    /**
-     * (선택) 작성자/생성자 기록
-     */
     @ManyToOne(optional = true, fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by_user_id", referencedColumnName = "userId")
     private User createdBy;

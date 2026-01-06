@@ -31,7 +31,7 @@ public class ScheduleService {
     public List<ScheduleDTO> getSchedulesByFilter(ScheduleDTO dto) {
         UUID familyId = dto.getFamilyId();
         LocalDate date = dto.getDate();
-        Long userId = dto.getUserId(); // ✅ 조회 필터용(선택) - 프론트가 필요하면 보내도 됨
+        Long userId = dto.getUserId(); // 조회 필터용(선택)
 
         if (familyId == null || date == null) {
             throw new IllegalArgumentException("familyId, date는 필수입니다.");
@@ -45,8 +45,11 @@ public class ScheduleService {
 
     @Transactional
     public UUID addSchedule(ScheduleDTO dto) {
-        // ✅ DTO 기반 검증(ANNIVERSARY participantIds 금지 / 그 외 1명 이상)
-        validateUpsert(dto);
+        // ✅ participantIds 타입 정규화
+        List<Long> normalizedIds = coerceToLongList(dto.getParticipantIds());
+
+        // ✅ 검증(정규화된 값 기준)
+        validateUpsert(dto, normalizedIds);
 
         Family family = familyRepository.findById(dto.getFamilyId())
                 .orElseThrow(() -> new RuntimeException("가족(familyId)를 찾을 수 없습니다."));
@@ -59,14 +62,25 @@ public class ScheduleService {
         schedule.setDate(dto.getDate());
         schedule.setType(dto.getType());
 
-        // ✅ 작성자는 "프론트 userId"가 아니라 "JWT(SecurityContext)"에서 가져온다
+        // ✅ personal 계산 규칙:
+        // - "유저를 한명만 선택" && type=INDIVIDUAL -> personal=true
+        // - 그 외 -> false
+        boolean computedPersonal =
+                dto.getType() == ScheduleType.INDIVIDUAL && normalizedIds.size() == 1;
+
+        // ✅ 프론트가 personal을 보내면 그 값을 우선, 안 보내면 computed 사용
+        // (entity가 boolean이면 null 못 들어가니 최종 boolean으로 결정)
+        boolean finalPersonal = dto.getPersonal() != null ? dto.getPersonal() : computedPersonal;
+        schedule.setPersonal(finalPersonal);
+
+        // ✅ 작성자는 JWT(SecurityContext)에서 가져온다
         Long loginUserId = getAuthenticatedUserIdOrThrow();
         User createdBy = userRepository.findById(loginUserId)
                 .orElseThrow(() -> new RuntimeException("작성자(userId)를 찾을 수 없습니다."));
         schedule.setCreatedBy(createdBy);
 
-        // ✅ 참여자 세팅
-        schedule.setParticipants(resolveParticipants(dto.getType(), dto.getParticipantIds()));
+        // ✅ 참여자 세팅(정규화된 ids 사용)
+        schedule.setParticipants(resolveParticipants(dto.getType(), normalizedIds));
 
         scheduleRepository.save(schedule);
         return schedule.getScheduleId();
@@ -78,7 +92,11 @@ public class ScheduleService {
             throw new IllegalArgumentException("scheduleId는 필수입니다.");
         }
 
-        validateUpsert(dto);
+        // ✅ participantIds 타입 정규화
+        List<Long> normalizedIds = coerceToLongList(dto.getParticipantIds());
+
+        // ✅ 검증(정규화된 값 기준)
+        validateUpsert(dto, normalizedIds);
 
         Schedule schedule = scheduleRepository.findById(dto.getScheduleId())
                 .orElseThrow(() -> new RuntimeException("수정할 일정을 찾을 수 없습니다."));
@@ -88,7 +106,13 @@ public class ScheduleService {
         schedule.setDate(dto.getDate());
         schedule.setType(dto.getType());
 
-        schedule.setParticipants(resolveParticipants(dto.getType(), dto.getParticipantIds()));
+        // ✅ personal 계산 규칙 동일 적용
+        boolean computedPersonal =
+                dto.getType() == ScheduleType.INDIVIDUAL && normalizedIds.size() == 1;
+        boolean finalPersonal = dto.getPersonal() != null ? dto.getPersonal() : computedPersonal;
+        schedule.setPersonal(finalPersonal);
+
+        schedule.setParticipants(resolveParticipants(dto.getType(), normalizedIds));
 
         // (선택) 수정자 기록이 필요하면 여기서 updatedBy 같은 필드에 세팅
         // Long loginUserId = getAuthenticatedUserIdOrThrow();
@@ -151,12 +175,10 @@ public class ScheduleService {
             throw new RuntimeException("인증 principal이 없습니다. (principal null)");
         }
 
-        // ✅ 너는 principal에 Long userId를 넣고 있음
         if (principal instanceof Long userId) {
             return userId;
         }
 
-        // ✅ 혹시 String으로 들어오는 경우 대비 (예: "4207548229")
         if (principal instanceof String s) {
             try {
                 return Long.parseLong(s.trim());
@@ -168,7 +190,10 @@ public class ScheduleService {
         throw new RuntimeException("principal 타입이 예상과 다릅니다: " + principal.getClass());
     }
 
-    private void validateUpsert(ScheduleDTO dto) {
+    /**
+     * ✅ 검증은 "정규화된 participantIds" 기준으로 한다.
+     */
+    private void validateUpsert(ScheduleDTO dto, List<Long> normalizedIds) {
         if (dto.getFamilyId() == null)
             throw new IllegalArgumentException("familyId는 필수입니다.");
         if (dto.getDate() == null)
@@ -178,15 +203,12 @@ public class ScheduleService {
         if (dto.getType() == null)
             throw new IllegalArgumentException("type은 필수입니다.");
 
-        // ✅ participantIds 타입이 애매할 수 있으니, 변환 결과 기준으로 검증
-        List<Long> ids = coerceToLongList(dto.getParticipantIds());
-
         if (dto.getType() == ScheduleType.ANNIVERSARY) {
-            if (!ids.isEmpty()) {
+            if (!normalizedIds.isEmpty()) {
                 throw new IllegalArgumentException("ANNIVERSARY는 participantIds를 보낼 수 없습니다.");
             }
         } else {
-            if (ids.isEmpty()) {
+            if (normalizedIds.isEmpty()) {
                 throw new IllegalArgumentException(dto.getType() + "는 participantIds가 1명 이상 필요합니다.");
             }
         }
@@ -195,45 +217,42 @@ public class ScheduleService {
     /**
      * ✅ 핵심:
      * - ANNIVERSARY면 참여자 없음
-     * - 그 외는 participantIds를 Long 리스트로 정규화해서 User 조회
+     * - 그 외는 participantIds(Long[])로 User 조회
      */
-    private Set<User> resolveParticipants(ScheduleType type, List<?> participantIds) {
+    private Set<User> resolveParticipants(ScheduleType type, List<Long> participantIds) {
         if (type == ScheduleType.ANNIVERSARY) {
             return new HashSet<>();
         }
 
-        List<Long> ids = coerceToLongList(participantIds);
-
-        if (ids.isEmpty())
+        if (participantIds == null || participantIds.isEmpty()) {
             return new HashSet<>();
+        }
 
-        List<User> users = userRepository.findAllById(ids);
-        if (users.size() != ids.size()) {
+        List<User> users = userRepository.findAllById(participantIds);
+        if (users.size() != participantIds.size()) {
             Set<Long> found = users.stream().map(User::getUserId).collect(Collectors.toSet());
-            List<Long> missing = ids.stream().filter(id -> !found.contains(id)).toList();
+            List<Long> missing = participantIds.stream().filter(id -> !found.contains(id)).toList();
             throw new IllegalArgumentException("존재하지 않는 participantIds가 포함되어 있습니다: " + missing);
         }
 
         return new HashSet<>(users);
     }
 
+    /**
+     * ✅ participantIds를 Long 리스트로 정규화
+     */
     private List<Long> coerceToLongList(List<?> raw) {
-        if (raw == null)
-            return List.of();
+        if (raw == null) return List.of();
 
         return raw.stream()
                 .filter(Objects::nonNull)
                 .map(v -> {
-                    if (v instanceof Long l)
-                        return l;
-                    if (v instanceof Integer i)
-                        return i.longValue();
-                    if (v instanceof Number n)
-                        return n.longValue();
+                    if (v instanceof Long l) return l;
+                    if (v instanceof Integer i) return i.longValue();
+                    if (v instanceof Number n) return n.longValue();
                     if (v instanceof String s) {
                         String t = s.trim();
-                        if (t.isEmpty())
-                            return null;
+                        if (t.isEmpty()) return null;
                         return Long.parseLong(t);
                     }
                     throw new IllegalArgumentException("participantIds 타입이 올바르지 않습니다: " + v.getClass());
