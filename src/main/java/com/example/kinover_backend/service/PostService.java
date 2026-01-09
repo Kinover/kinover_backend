@@ -32,7 +32,8 @@ public class PostService {
 
     @Transactional
     public void createPost(PostDTO postDTO) {
-        if (postDTO == null) throw new IllegalArgumentException("postDTO is null");
+        if (postDTO == null)
+            throw new IllegalArgumentException("postDTO is null");
 
         // 1) 작성자/가족 조회
         User author = userRepository.findById(postDTO.getAuthorId())
@@ -51,12 +52,9 @@ public class PostService {
                     .orElseThrow(() -> new RuntimeException("존재하지 않는 카테고리: " + categoryId));
         } else if (categoryTitle != null && !categoryTitle.isBlank()) {
             Category c = new Category();
-            // c.setCategoryId(...) 금지(@GeneratedValue)
             c.setTitle(categoryTitle);
             c.setFamily(family);
             category = categoryRepository.save(c);
-
-            // DTO에 생성된 categoryId 반영(FCM payload 등에서 쓰면 유용)
             postDTO.setCategoryId(category.getCategoryId());
         } else {
             category = null; // 무카테고리 허용
@@ -99,9 +97,7 @@ public class PostService {
         // 5) Post 저장
         postRepository.save(post);
 
-        // 6) ✅ Notification 저장은 "항상" 한다.
-        //    - bell unreadCount는 countBy...AndAuthorIdNot(userId)로 "본인 제외" 처리
-        //    - 여기서 작성자 조건으로 막으면 알림 자체가 쌓이지 않아서 unread 계산이 틀어짐
+        // 6) Notification 저장(항상)
         Notification notification = Notification.builder()
                 .notificationType(NotificationType.POST)
                 .postId(post.getPostId())
@@ -114,7 +110,8 @@ public class PostService {
         // 7) FCM 전송(작성자 본인 제외 + 설정 ON인 유저만)
         List<User> familyMembers = userFamilyRepository.findUsersByFamilyId(postDTO.getFamilyId());
         for (User member : familyMembers) {
-            if (member == null) continue;
+            if (member == null)
+                continue;
 
             if (!member.getUserId().equals(postDTO.getAuthorId())
                     && Boolean.TRUE.equals(member.getIsPostNotificationOn())) {
@@ -191,8 +188,7 @@ public class PostService {
             posts = postRepository.findAllByFamily_FamilyIdOrderByCreatedAtDesc(familyId);
         } else {
             posts = postRepository.findAllByFamily_FamilyIdAndCategory_CategoryIdOrderByCreatedAtDesc(
-                    familyId, categoryId
-            );
+                    familyId, categoryId);
         }
 
         List<PostDTO> result = new ArrayList<>();
@@ -200,5 +196,124 @@ public class PostService {
             result.add(PostDTO.from(post));
         }
         return result;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* ✅ 게시글 수정: 글 내용 / 카테고리 / 이미지 전부 수정 가능 */
+    /* ------------------------------------------------------------------ */
+    @Transactional
+    public void updatePost(UUID postId, Long authenticatedUserId, PostDTO postDTO) {
+        if (postDTO == null)
+            throw new IllegalArgumentException("postDTO is null");
+
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new RuntimeException("게시글 없음"));
+
+        // ✅ 작성자 검증(컨트롤러에서도 했더라도 서비스에서 한번 더 안전하게)
+        Long authorId = post.getAuthor() != null ? post.getAuthor().getUserId() : null;
+        if (authorId == null || !authorId.equals(authenticatedUserId)) {
+            throw new RuntimeException("작성자만 수정할 수 있습니다.");
+        }
+
+        // ✅ 가족(카테고리 생성에 필요)
+        Family family = post.getFamily();
+        if (family == null) {
+            throw new RuntimeException("가족 정보 없음");
+        }
+
+        /* 1) 글 내용 수정 */
+        if (postDTO.getContent() != null) {
+            post.setContent(postDTO.getContent());
+        }
+
+        /*
+         * 2) 카테고리 수정
+         * - categoryId 있으면 그걸로 변경
+         * - categoryId 없고 categoryTitle 있으면 생성 후 변경
+         * - 둘 다 null/blank면 "카테고리 제거(null)"로 처리 (원치 않으면 이 줄만 막아줘)
+         */
+        UUID categoryId = postDTO.getCategoryId();
+        String categoryTitle = postDTO.getCategoryTitle();
+
+        if (categoryId != null) {
+            Category category = categoryRepository.findById(categoryId)
+                    .orElseThrow(() -> new RuntimeException("존재하지 않는 카테고리: " + categoryId));
+            post.setCategory(category);
+
+        } else if (categoryTitle != null && !categoryTitle.isBlank()) {
+            Category c = new Category();
+            c.setTitle(categoryTitle);
+            c.setFamily(family);
+            Category saved = categoryRepository.save(c);
+            post.setCategory(saved);
+
+        }
+
+        /*
+         * 3) 이미지 전체 수정(최종 리스트로 replace)
+         * - DTO: imageUrls(List<String>) + postTypes(List<PostType>) 길이 동일 가정
+         * - 기존 이미지 중 "새 리스트에 없는 것"은 S3에서도 삭제
+         * - 남는 것/새로 추가되는 것은 DB를 새로 구성(순서/타입 반영)
+         */
+        List<String> incomingUrls = postDTO.getImageUrls();
+        List<PostType> incomingTypes = postDTO.getPostTypes();
+
+        if (incomingUrls == null || incomingTypes == null) {
+            // 이미지 수정 요청이 아예 없으면 그대로 유지
+            postRepository.save(post);
+            return;
+        }
+
+        if (incomingUrls.size() != incomingTypes.size()) {
+            throw new IllegalArgumentException("imageUrls와 postTypes의 개수가 일치하지 않습니다.");
+        }
+
+        // 기존 이미지 URL set
+        Set<String> oldUrlSet = new HashSet<>();
+        if (post.getImages() != null) {
+            for (PostImage pi : post.getImages()) {
+                if (pi != null && pi.getImageUrl() != null)
+                    oldUrlSet.add(pi.getImageUrl());
+            }
+        }
+
+        // 새 이미지 URL list(CloudFront normalize)
+        List<String> newUrlList = new ArrayList<>();
+        for (String raw : incomingUrls) {
+            if (raw == null)
+                continue;
+            String normalized = raw.startsWith("http") ? raw : cloudFrontDomain + raw;
+            newUrlList.add(normalized);
+        }
+
+        // 새 set
+        Set<String> newUrlSet = new HashSet<>(newUrlList);
+
+        // (A) 삭제된 이미지 S3 삭제
+        for (String oldUrl : oldUrlSet) {
+            if (!newUrlSet.contains(oldUrl)) {
+                if (oldUrl.startsWith(cloudFrontDomain)) {
+                    String s3Key = oldUrl.substring(cloudFrontDomain.length());
+                    s3Service.deleteImageFromS3(s3Key);
+                }
+            }
+        }
+
+        // (B) DB 이미지 전부 replace
+        postImageRepository.deleteAllByPost(post);
+
+        List<PostImage> newImages = new ArrayList<>();
+        for (int i = 0; i < newUrlList.size(); i++) {
+            PostImage img = new PostImage();
+            img.setPost(post);
+            img.setImageUrl(newUrlList.get(i));
+            img.setPostType(incomingTypes.get(i));
+            img.setImageOrder(i);
+            newImages.add(img);
+        }
+        post.setImages(newImages);
+
+        // ✅ 최종 저장
+        postRepository.save(post);
     }
 }
