@@ -1,3 +1,4 @@
+// src/main/java/com/example/kinover_backend/entity/PostImage.java
 package com.example.kinover_backend.entity;
 
 import com.example.kinover_backend.enums.PostType;
@@ -31,5 +32,4 @@ public class PostImage {
 
     @Column(nullable = false)
     private int imageOrder;
-
 }

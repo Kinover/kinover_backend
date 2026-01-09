@@ -71,11 +71,6 @@ public class PostService {
     /**
      * ✅ CloudFront URL -> S3 key로 변환
      * - 선행 "/" 제거해서 "media_x.jpg" 형태로 반환
-     *
-     * ⚠️ startsWith(base)만 하면
-     * 예) base가 https://xxx.cloudfront.net 인데
-     * url이 https://xxx.cloudfront.net.evil.com/... 같은 것도 true가 될 수 있어서
-     * 반드시 base + "/" 로 검사해야 안전함.
      */
     private String toS3KeyIfCloudFront(String url) {
         if (isBlank(url)) return null;
@@ -86,12 +81,10 @@ public class PostService {
 
         String prefix = base + "/";
 
-        // ✅ CloudFront URL로 인정할 조건을 더 엄격하게
         if (!u.startsWith(prefix)) return null;
 
-        String key = u.substring(prefix.length()); // 이미 / 포함해서 잘라서 바로 key가 됨
+        String key = u.substring(prefix.length());
 
-        // 혹시 남아있으면 제거
         while (key.startsWith("/")) key = key.substring(1);
 
         return isBlank(key) ? null : key;
@@ -101,7 +94,6 @@ public class PostService {
         boolean hasUrls = urls != null;
         boolean hasTypes = types != null;
 
-        // 둘 중 하나만 오면 에러
         if (hasUrls ^ hasTypes) {
             throw new IllegalArgumentException("이미지 수정 시 imageUrls와 postTypes를 함께 보내야 합니다.");
         }
@@ -157,22 +149,20 @@ public class PostService {
 
         validateMediaLists(s3ObjectKeys, types);
 
-        List<PostImage> imageEntities = new ArrayList<>();
-
         if (s3ObjectKeys != null) {
             for (int i = 0; i < s3ObjectKeys.size(); i++) {
                 String cloudFrontUrl = normalizeToCloudFrontUrl(s3ObjectKeys.get(i));
 
                 PostImage img = new PostImage();
-                img.setPost(post);
                 img.setImageUrl(cloudFrontUrl);
                 img.setPostType(types.get(i));
                 img.setImageOrder(i);
-                imageEntities.add(img);
+
+                // ✅ addImage로 양방향 세팅 + 컬렉션 유지
+                post.addImage(img);
             }
         }
 
-        post.setImages(imageEntities);
         postRepository.save(post);
 
         Notification notification = Notification.builder()
@@ -215,7 +205,7 @@ public class PostService {
         String s3Key = toS3KeyIfCloudFront(imageToDelete.getImageUrl());
         if (!isBlank(s3Key)) s3Service.deleteImageFromS3(s3Key);
 
-        postImageRepository.delete(imageToDelete);
+        // ✅ orphanRemoval이라 images.remove만 해도 삭제됨 (repo delete는 있어도 되지만 중복)
         images.remove(imageToDelete);
 
         if (images.isEmpty()) {
@@ -241,6 +231,7 @@ public class PostService {
                 .filter(Objects::nonNull)
                 .toList();
 
+        // ✅ orphanRemoval/cascade로도 되지만, 명시적으로 지우는 기존 흐름 유지
         postImageRepository.deleteAllByPost(post);
         commentRepository.deleteAllByPost(post);
         postRepository.delete(post);
@@ -297,7 +288,7 @@ public class PostService {
         if (wantsImageUpdate) {
             validateMediaLists(incomingUrls, incomingTypes);
 
-            // ✅ 들어온 url들을 CloudFront full url로 통일
+            // ✅ CloudFront full url로 통일
             List<String> newUrlList = new ArrayList<>();
             for (String raw : incomingUrls) {
                 String normalized = normalizeToCloudFrontUrl(raw);
@@ -308,6 +299,7 @@ public class PostService {
                 throw new IllegalArgumentException("정규화 후 imageUrls와 postTypes 길이가 달라졌습니다.");
             }
 
+            // ✅ old/new 비교를 위해 기존 url set 만들기
             List<PostImage> oldImages = post.getImages() == null ? new ArrayList<>() : post.getImages();
 
             Set<String> oldUrlSet = new HashSet<>();
@@ -325,23 +317,18 @@ public class PostService {
                 }
             }
 
-            // (B) DB replace
-            // ✅ 연관관계 안전하게 비우고, repo로도 제거
-            if (post.getImages() != null) {
-                post.getImages().clear();
-            }
-            postImageRepository.deleteAllByPost(post);
+            // (B) ✅ JPA orphanRemoval 안전 업데이트
+            // - 컬렉션 "참조 유지" + clear/add만
+            post.clearImages();
 
-            List<PostImage> newImages = new ArrayList<>();
             for (int i = 0; i < newUrlList.size(); i++) {
                 PostImage img = new PostImage();
-                img.setPost(post);
                 img.setImageUrl(newUrlList.get(i));
                 img.setPostType(incomingTypes.get(i));
                 img.setImageOrder(i);
-                newImages.add(img);
+
+                post.addImage(img);
             }
-            post.setImages(newImages);
         }
 
         postRepository.save(post);
@@ -412,21 +399,17 @@ public class PostService {
             }
         }
 
-        if (post.getImages() != null) {
-            post.getImages().clear();
-        }
-        postImageRepository.deleteAllByPost(post);
+        // ✅ orphanRemoval 안전 업데이트
+        post.clearImages();
 
-        List<PostImage> newImages = new ArrayList<>();
         for (int i = 0; i < newUrlList.size(); i++) {
             PostImage img = new PostImage();
-            img.setPost(post);
             img.setImageUrl(newUrlList.get(i));
             img.setPostType(incomingTypes.get(i));
             img.setImageOrder(i);
-            newImages.add(img);
+
+            post.addImage(img);
         }
-        post.setImages(newImages);
 
         postRepository.save(post);
     }
