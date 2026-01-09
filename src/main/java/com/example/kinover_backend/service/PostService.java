@@ -36,22 +36,58 @@ public class PostService {
         return s == null || s.trim().isEmpty();
     }
 
-    private String normalizeToCloudFrontUrl(String raw) {
-        if (isBlank(raw)) return null;
-        String v = raw.trim();
-        if (v.startsWith("http")) return v;
-        // cloudFrontDomain 끝에 / 없으면 붙여주기(설정에 따라 안전)
-        if (!cloudFrontDomain.endsWith("/") && !v.startsWith("/")) {
-            return cloudFrontDomain + "/" + v;
-        }
-        return cloudFrontDomain + v;
+    /**
+     * ✅ CloudFront 도메인을 항상 "끝 슬래시 없는 형태"로 정규화해서 사용
+     * 예) https://xxx.cloudfront.net/  -> https://xxx.cloudfront.net
+     */
+    private String cfBase() {
+        if (isBlank(cloudFrontDomain)) return "";
+        String v = cloudFrontDomain.trim();
+        while (v.endsWith("/")) v = v.substring(0, v.length() - 1);
+        return v;
     }
 
+    /**
+     * ✅ raw가 파일명(media_x.jpg) 이든, /media_x.jpg 이든, full url 이든
+     * 최종적으로 "CloudFront full url"로 통일
+     */
+    private String normalizeToCloudFrontUrl(String raw) {
+        if (isBlank(raw)) return null;
+
+        String v = raw.trim();
+
+        // 이미 URL이면 그대로
+        if (v.startsWith("http://") || v.startsWith("https://")) return v;
+
+        // 파일명/경로 앞에 / 있으면 제거해서 중복 슬래시 방지
+        while (v.startsWith("/")) v = v.substring(1);
+
+        String base = cfBase();
+        if (isBlank(base)) return v; // 설정이 비어있으면 원본 반환(방어)
+
+        return base + "/" + v;
+    }
+
+    /**
+     * ✅ CloudFront URL -> S3 key로 변환
+     * - 선행 "/" 제거해서 "media_x.jpg" 형태로 반환
+     */
     private String toS3KeyIfCloudFront(String url) {
         if (isBlank(url)) return null;
+
         String u = url.trim();
-        if (!u.startsWith(cloudFrontDomain)) return null;
-        return u.substring(cloudFrontDomain.length());
+        String base = cfBase();
+        if (isBlank(base)) return null;
+
+        // base로 시작하지 않으면 CloudFront URL이 아니라고 판단
+        if (!u.startsWith(base)) return null;
+
+        String key = u.substring(base.length());
+
+        // substring 결과가 "/media.jpg" 처럼 올 수 있어서 정리
+        while (key.startsWith("/")) key = key.substring(1);
+
+        return isBlank(key) ? null : key;
     }
 
     private void validateMediaLists(List<String> urls, List<PostType> types) {
@@ -114,7 +150,6 @@ public class PostService {
         List<String> s3ObjectKeys = postDTO.getImageUrls();
         List<PostType> types = postDTO.getPostTypes();
 
-        // ✅ 생성도 검증 강화
         validateMediaLists(s3ObjectKeys, types);
 
         if (s3ObjectKeys != null) {
@@ -158,21 +193,20 @@ public class PostService {
     public void deleteImage(UUID postId, String imageUrl) {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("게시글 없음"));
-    
-        // ✅ filename만 와도 CloudFront URL로 맞춰서 비교
+
         String normalized = normalizeToCloudFrontUrl(imageUrl);
-    
+
         PostImage imageToDelete = post.getImages().stream()
                 .filter(img -> Objects.equals(img.getImageUrl(), normalized))
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("이미지 없음"));
-    
+
         String s3Key = toS3KeyIfCloudFront(imageToDelete.getImageUrl());
         if (!isBlank(s3Key)) s3Service.deleteImageFromS3(s3Key);
-    
+
         postImageRepository.delete(imageToDelete);
         post.getImages().remove(imageToDelete);
-    
+
         if (post.getImages().isEmpty()) {
             commentRepository.deleteAllByPost(post);
             postRepository.delete(post);
@@ -180,7 +214,7 @@ public class PostService {
             postRepository.save(post);
         }
     }
-    
+
     @Transactional
     public void deletePost(UUID postId) {
         Post post = postRepository.findById(postId)
@@ -220,9 +254,6 @@ public class PostService {
         return result;
     }
 
-    /* ------------------------------------------------------------------ */
-    /* ✅ 게시글 수정(UpdatePostRequest): content/categoryId/imageUrls/postTypes 부분 수정 */
-    /* ------------------------------------------------------------------ */
     @Transactional
     public void updatePost(UUID postId, Long authenticatedUserId, UpdatePostRequest request) {
         if (request == null) throw new IllegalArgumentException("request is null");
@@ -238,42 +269,34 @@ public class PostService {
         Family family = post.getFamily();
         if (family == null) throw new RuntimeException("가족 정보 없음");
 
-        // 1) content (선택)
         if (request.getContent() != null) {
             post.setContent(request.getContent());
         }
 
-        // 2) categoryId (선택)
         if (request.getCategoryId() != null) {
             Category category = categoryRepository.findById(request.getCategoryId())
                     .orElseThrow(() -> new RuntimeException("존재하지 않는 카테고리: " + request.getCategoryId()));
             post.setCategory(category);
         }
 
-        // 3) imageUrls/postTypes (선택)
         List<String> incomingUrls = request.getImageUrls();
         List<PostType> incomingTypes = request.getPostTypes();
 
         boolean wantsImageUpdate = (incomingUrls != null || incomingTypes != null);
 
         if (wantsImageUpdate) {
-            // ✅ (핵심) null/길이/빈값/타입 검증
             validateMediaLists(incomingUrls, incomingTypes);
 
-            // ✅ 서버 내에서 URL을 "CloudFront full url"로 통일
             List<String> newUrlList = new ArrayList<>();
             for (String raw : incomingUrls) {
                 String normalized = normalizeToCloudFrontUrl(raw);
                 if (normalized != null) newUrlList.add(normalized);
             }
 
-            // ✅ newUrlList 길이와 incomingTypes 길이가 달라지면 위험(빈값 제거로)
-            // -> 위 validate에서 빈값 막았으니 여기서는 동일 길이 보장됨.
             if (newUrlList.size() != incomingTypes.size()) {
                 throw new IllegalArgumentException("정규화 후 imageUrls와 postTypes 길이가 달라졌습니다.");
             }
 
-            // 기존 URL set
             Set<String> oldUrlSet = new HashSet<>();
             if (post.getImages() != null) {
                 for (PostImage pi : post.getImages()) {
@@ -283,7 +306,6 @@ public class PostService {
 
             Set<String> newUrlSet = new HashSet<>(newUrlList);
 
-            // (A) 삭제된 이미지 S3 삭제
             for (String oldUrl : oldUrlSet) {
                 if (!newUrlSet.contains(oldUrl)) {
                     String s3Key = toS3KeyIfCloudFront(oldUrl);
@@ -291,8 +313,6 @@ public class PostService {
                 }
             }
 
-            // (B) DB replace
-            // ✅ 안전: 연관 데이터 제거는 먼저 clear -> delete (orphan/cascade 설정에 따라 충돌 방지)
             if (post.getImages() != null) {
                 post.getImages().clear();
             }
@@ -313,9 +333,6 @@ public class PostService {
         postRepository.save(post);
     }
 
-    /* ------------------------------------------------------------------ */
-    /* (기존) PostDTO 기반 수정 메서드 - 기존 호출처 있으면 유지 */
-    /* ------------------------------------------------------------------ */
     @Transactional
     public void updatePost(UUID postId, Long authenticatedUserId, PostDTO postDTO) {
         if (postDTO == null) throw new IllegalArgumentException("postDTO is null");
@@ -356,7 +373,6 @@ public class PostService {
             return;
         }
 
-        // ✅ 검증 강화(둘 중 하나만 오면 400 대상)
         validateMediaLists(incomingUrls, incomingTypes);
 
         List<String> newUrlList = new ArrayList<>();
