@@ -71,6 +71,11 @@ public class PostService {
     /**
      * ✅ CloudFront URL -> S3 key로 변환
      * - 선행 "/" 제거해서 "media_x.jpg" 형태로 반환
+     *
+     * ⚠️ startsWith(base)만 하면
+     * 예) base가 https://xxx.cloudfront.net 인데
+     * url이 https://xxx.cloudfront.net.evil.com/... 같은 것도 true가 될 수 있어서
+     * 반드시 base + "/" 로 검사해야 안전함.
      */
     private String toS3KeyIfCloudFront(String url) {
         if (isBlank(url)) return null;
@@ -79,12 +84,14 @@ public class PostService {
         String base = cfBase();
         if (isBlank(base)) return null;
 
-        // base로 시작하지 않으면 CloudFront URL이 아니라고 판단
-        if (!u.startsWith(base)) return null;
+        String prefix = base + "/";
 
-        String key = u.substring(base.length());
+        // ✅ CloudFront URL로 인정할 조건을 더 엄격하게
+        if (!u.startsWith(prefix)) return null;
 
-        // substring 결과가 "/media.jpg" 처럼 올 수 있어서 정리
+        String key = u.substring(prefix.length()); // 이미 / 포함해서 잘라서 바로 key가 됨
+
+        // 혹시 남아있으면 제거
         while (key.startsWith("/")) key = key.substring(1);
 
         return isBlank(key) ? null : key;
@@ -94,6 +101,7 @@ public class PostService {
         boolean hasUrls = urls != null;
         boolean hasTypes = types != null;
 
+        // 둘 중 하나만 오면 에러
         if (hasUrls ^ hasTypes) {
             throw new IllegalArgumentException("이미지 수정 시 imageUrls와 postTypes를 함께 보내야 합니다.");
         }
@@ -135,8 +143,6 @@ public class PostService {
             c.setFamily(family);
             category = categoryRepository.save(c);
             postDTO.setCategoryId(category.getCategoryId());
-        } else {
-            category = null;
         }
 
         Post post = new Post();
@@ -146,16 +152,16 @@ public class PostService {
         post.setContent(postDTO.getContent());
         post.setCommentCount(0);
 
-        List<PostImage> imageEntities = new ArrayList<>();
         List<String> s3ObjectKeys = postDTO.getImageUrls();
         List<PostType> types = postDTO.getPostTypes();
 
         validateMediaLists(s3ObjectKeys, types);
 
+        List<PostImage> imageEntities = new ArrayList<>();
+
         if (s3ObjectKeys != null) {
             for (int i = 0; i < s3ObjectKeys.size(); i++) {
-                String raw = s3ObjectKeys.get(i);
-                String cloudFrontUrl = normalizeToCloudFrontUrl(raw);
+                String cloudFrontUrl = normalizeToCloudFrontUrl(s3ObjectKeys.get(i));
 
                 PostImage img = new PostImage();
                 img.setPost(post);
@@ -165,8 +171,8 @@ public class PostService {
                 imageEntities.add(img);
             }
         }
-        post.setImages(imageEntities);
 
+        post.setImages(imageEntities);
         postRepository.save(post);
 
         Notification notification = Notification.builder()
@@ -196,7 +202,12 @@ public class PostService {
 
         String normalized = normalizeToCloudFrontUrl(imageUrl);
 
-        PostImage imageToDelete = post.getImages().stream()
+        List<PostImage> images = post.getImages();
+        if (images == null || images.isEmpty()) {
+            throw new RuntimeException("이미지 없음");
+        }
+
+        PostImage imageToDelete = images.stream()
                 .filter(img -> Objects.equals(img.getImageUrl(), normalized))
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("이미지 없음"));
@@ -205,9 +216,9 @@ public class PostService {
         if (!isBlank(s3Key)) s3Service.deleteImageFromS3(s3Key);
 
         postImageRepository.delete(imageToDelete);
-        post.getImages().remove(imageToDelete);
+        images.remove(imageToDelete);
 
-        if (post.getImages().isEmpty()) {
+        if (images.isEmpty()) {
             commentRepository.deleteAllByPost(post);
             postRepository.delete(post);
         } else {
@@ -222,7 +233,9 @@ public class PostService {
 
         notificationRepository.deleteByPostId(postId);
 
-        List<String> s3Keys = post.getImages().stream()
+        List<PostImage> images = post.getImages() == null ? List.of() : post.getImages();
+
+        List<String> s3Keys = images.stream()
                 .map(PostImage::getImageUrl)
                 .map(this::toS3KeyIfCloudFront)
                 .filter(Objects::nonNull)
@@ -266,9 +279,6 @@ public class PostService {
             throw new RuntimeException("작성자만 수정할 수 있습니다.");
         }
 
-        Family family = post.getFamily();
-        if (family == null) throw new RuntimeException("가족 정보 없음");
-
         if (request.getContent() != null) {
             post.setContent(request.getContent());
         }
@@ -287,6 +297,7 @@ public class PostService {
         if (wantsImageUpdate) {
             validateMediaLists(incomingUrls, incomingTypes);
 
+            // ✅ 들어온 url들을 CloudFront full url로 통일
             List<String> newUrlList = new ArrayList<>();
             for (String raw : incomingUrls) {
                 String normalized = normalizeToCloudFrontUrl(raw);
@@ -297,15 +308,16 @@ public class PostService {
                 throw new IllegalArgumentException("정규화 후 imageUrls와 postTypes 길이가 달라졌습니다.");
             }
 
+            List<PostImage> oldImages = post.getImages() == null ? new ArrayList<>() : post.getImages();
+
             Set<String> oldUrlSet = new HashSet<>();
-            if (post.getImages() != null) {
-                for (PostImage pi : post.getImages()) {
-                    if (pi != null && pi.getImageUrl() != null) oldUrlSet.add(pi.getImageUrl());
-                }
+            for (PostImage pi : oldImages) {
+                if (pi != null && pi.getImageUrl() != null) oldUrlSet.add(pi.getImageUrl());
             }
 
             Set<String> newUrlSet = new HashSet<>(newUrlList);
 
+            // (A) 삭제된 이미지 S3 삭제
             for (String oldUrl : oldUrlSet) {
                 if (!newUrlSet.contains(oldUrl)) {
                     String s3Key = toS3KeyIfCloudFront(oldUrl);
@@ -313,6 +325,8 @@ public class PostService {
                 }
             }
 
+            // (B) DB replace
+            // ✅ 연관관계 안전하게 비우고, repo로도 제거
             if (post.getImages() != null) {
                 post.getImages().clear();
             }
@@ -345,9 +359,6 @@ public class PostService {
             throw new RuntimeException("작성자만 수정할 수 있습니다.");
         }
 
-        Family family = post.getFamily();
-        if (family == null) throw new RuntimeException("가족 정보 없음");
-
         if (postDTO.getContent() != null) post.setContent(postDTO.getContent());
 
         UUID categoryId = postDTO.getCategoryId();
@@ -360,7 +371,7 @@ public class PostService {
         } else if (!isBlank(categoryTitle)) {
             Category c = new Category();
             c.setTitle(categoryTitle);
-            c.setFamily(family);
+            c.setFamily(post.getFamily());
             Category saved = categoryRepository.save(c);
             post.setCategory(saved);
         }
@@ -380,15 +391,16 @@ public class PostService {
             String normalized = normalizeToCloudFrontUrl(raw);
             if (normalized != null) newUrlList.add(normalized);
         }
+
         if (newUrlList.size() != incomingTypes.size()) {
             throw new IllegalArgumentException("정규화 후 imageUrls와 postTypes 길이가 달라졌습니다.");
         }
 
+        List<PostImage> oldImages = post.getImages() == null ? new ArrayList<>() : post.getImages();
+
         Set<String> oldUrlSet = new HashSet<>();
-        if (post.getImages() != null) {
-            for (PostImage pi : post.getImages()) {
-                if (pi != null && pi.getImageUrl() != null) oldUrlSet.add(pi.getImageUrl());
-            }
+        for (PostImage pi : oldImages) {
+            if (pi != null && pi.getImageUrl() != null) oldUrlSet.add(pi.getImageUrl());
         }
 
         Set<String> newUrlSet = new HashSet<>(newUrlList);

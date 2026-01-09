@@ -1,5 +1,4 @@
-// package com.example.kinover_backend.service;
-
+// src/main/java/com/example/kinover_backend/service/S3Service.java
 package com.example.kinover_backend.service;
 
 import lombok.RequiredArgsConstructor;
@@ -21,11 +20,11 @@ import java.util.Set;
 public class S3Service {
 
     private final S3Presigner s3Presigner;
+    private final S3Client s3Client;
 
     @Value("${s3.bucket}")
     private String bucketName;
 
-    // ✅ 허용 타입(원하는 타입 있으면 여기 추가)
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
             "image/jpeg",
             "image/png",
@@ -40,10 +39,8 @@ public class S3Service {
             throw new IllegalArgumentException("fileName is blank");
         }
 
-        // ✅ contentType이 비어있으면 "파일 확장자"로 추론해서 presign
         String ct = normalizeContentType(fileName, contentType);
 
-        // ✅ 보안상: 허용 타입만
         if (!ALLOWED_CONTENT_TYPES.contains(ct)) {
             throw new IllegalArgumentException("허용되지 않는 contentType: " + ct);
         }
@@ -64,15 +61,13 @@ public class S3Service {
     }
 
     /** S3 객체 삭제 */
-    public void deleteImageFromS3(String fileName) {
-        if (fileName == null || fileName.isBlank()) return;
+    public void deleteImageFromS3(String key) {
+        if (key == null || key.isBlank()) return;
 
-        try (S3Client s3Client = S3Client.create()) {
-            s3Client.deleteObject(DeleteObjectRequest.builder()
-                    .bucket(bucketName)
-                    .key(fileName)
-                    .build());
-        }
+        s3Client.deleteObject(DeleteObjectRequest.builder()
+                .bucket(bucketName)
+                .key(key)
+                .build());
     }
 
     // =========================
@@ -95,7 +90,6 @@ public class S3Service {
         if (lower.endsWith(".mp4")) return "video/mp4";
         if (lower.endsWith(".mov")) return "video/quicktime";
 
-        // ✅ 여기로 오면 허용 목록에서 걸러질 거라 사실상 예외 유도용
         return "application/octet-stream";
     }
 }
