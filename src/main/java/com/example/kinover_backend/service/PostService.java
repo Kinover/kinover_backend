@@ -158,21 +158,21 @@ public class PostService {
     public void deleteImage(UUID postId, String imageUrl) {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("게시글 없음"));
-
+    
+        // ✅ filename만 와도 CloudFront URL로 맞춰서 비교
+        String normalized = normalizeToCloudFrontUrl(imageUrl);
+    
         PostImage imageToDelete = post.getImages().stream()
-                .filter(img -> Objects.equals(img.getImageUrl(), imageUrl))
+                .filter(img -> Objects.equals(img.getImageUrl(), normalized))
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("이미지 없음"));
-
-        // ✅ CloudFront URL이면 S3 삭제
-        String s3Key = toS3KeyIfCloudFront(imageUrl);
-        if (!isBlank(s3Key)) {
-            s3Service.deleteImageFromS3(s3Key);
-        }
-
+    
+        String s3Key = toS3KeyIfCloudFront(imageToDelete.getImageUrl());
+        if (!isBlank(s3Key)) s3Service.deleteImageFromS3(s3Key);
+    
         postImageRepository.delete(imageToDelete);
         post.getImages().remove(imageToDelete);
-
+    
         if (post.getImages().isEmpty()) {
             commentRepository.deleteAllByPost(post);
             postRepository.delete(post);
@@ -180,7 +180,7 @@ public class PostService {
             postRepository.save(post);
         }
     }
-
+    
     @Transactional
     public void deletePost(UUID postId) {
         Post post = postRepository.findById(postId)
