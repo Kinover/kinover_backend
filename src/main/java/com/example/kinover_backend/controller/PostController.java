@@ -1,8 +1,10 @@
+// src/main/java/com/example/kinover_backend/controller/PostController.java
 package com.example.kinover_backend.controller;
 
-import com.example.kinover_backend.dto.PostDTO;
-import com.example.kinover_backend.service.PostService;
 import com.example.kinover_backend.JwtUtil;
+import com.example.kinover_backend.dto.PostDTO;
+import com.example.kinover_backend.dto.UpdatePostRequest;
+import com.example.kinover_backend.service.PostService;
 import com.example.kinover_backend.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -13,8 +15,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.UUID;
 import java.util.Map;
+import java.util.UUID;
 
 @Tag(name = "게시글 Controller", description = "게시글 조회, 삭제 API를 제공합니다.")
 @RestController
@@ -39,11 +41,6 @@ public class PostController {
         String token = authorizationHeader.replace("Bearer ", "");
         Long authenticatedUserId = jwtUtil.getUserIdFromToken(token);
 
-        System.out.println("=== Incoming createPost request ===");
-        System.out.println("Authenticated userId: " + authenticatedUserId);
-        System.out.println("PostDTO: " + postDTO);
-        System.out.println("===================================");
-
         if (!authenticatedUserId.equals(postDTO.getAuthorId())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
@@ -59,7 +56,8 @@ public class PostController {
     @DeleteMapping("/{postId}/image")
     public ResponseEntity<Void> deleteImageFromPost(
             @PathVariable UUID postId,
-            @RequestBody Map<String, String> request) {
+            @RequestBody Map<String, String> request
+    ) {
         String imageUrl = request.get("imageUrl");
         postService.deleteImage(postId, imageUrl);
         return ResponseEntity.ok().build();
@@ -104,4 +102,28 @@ public class PostController {
         else return ResponseEntity.badRequest().body("Invalid userId");
     }
 
+    @Operation(
+            summary = "게시글 수정",
+            description = "게시글 내용을 수정합니다. content/categoryId/imageUrls 중 필요한 것만 수정할 수 있습니다."
+    )
+    @ApiResponse(responseCode = "200", description = "게시글 수정 성공")
+    @PatchMapping("/{postId}")
+    public ResponseEntity<Void> updatePost(
+            @RequestHeader("Authorization") String authorizationHeader,
+            @PathVariable UUID postId,
+            @RequestBody UpdatePostRequest request
+    ) {
+        String token = authorizationHeader.replace("Bearer ", "");
+        Long authenticatedUserId = jwtUtil.getUserIdFromToken(token);
+
+        // ✅ 작성자 검증
+        if (request.getAuthorId() == null || !authenticatedUserId.equals(request.getAuthorId())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        // ✅ 서비스로 수정 요청 (Long userId 포함)
+        postService.updatePost(postId, authenticatedUserId, request);
+
+        return ResponseEntity.ok().build();
+    }
 }
