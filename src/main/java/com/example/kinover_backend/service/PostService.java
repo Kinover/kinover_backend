@@ -32,6 +32,50 @@ public class PostService {
     @Value("${cloudfront.domain}")
     private String cloudFrontDomain;
 
+    private boolean isBlank(String s) {
+        return s == null || s.trim().isEmpty();
+    }
+
+    private String normalizeToCloudFrontUrl(String raw) {
+        if (isBlank(raw)) return null;
+        String v = raw.trim();
+        if (v.startsWith("http")) return v;
+        // cloudFrontDomain 끝에 / 없으면 붙여주기(설정에 따라 안전)
+        if (!cloudFrontDomain.endsWith("/") && !v.startsWith("/")) {
+            return cloudFrontDomain + "/" + v;
+        }
+        return cloudFrontDomain + v;
+    }
+
+    private String toS3KeyIfCloudFront(String url) {
+        if (isBlank(url)) return null;
+        String u = url.trim();
+        if (!u.startsWith(cloudFrontDomain)) return null;
+        return u.substring(cloudFrontDomain.length());
+    }
+
+    private void validateMediaLists(List<String> urls, List<PostType> types) {
+        boolean hasUrls = urls != null;
+        boolean hasTypes = types != null;
+
+        if (hasUrls ^ hasTypes) {
+            throw new IllegalArgumentException("이미지 수정 시 imageUrls와 postTypes를 함께 보내야 합니다.");
+        }
+        if (!hasUrls) return;
+
+        if (urls.size() != types.size()) {
+            throw new IllegalArgumentException("imageUrls와 postTypes의 개수가 일치하지 않습니다.");
+        }
+        for (int i = 0; i < urls.size(); i++) {
+            if (isBlank(urls.get(i))) {
+                throw new IllegalArgumentException("imageUrls[" + i + "] is empty");
+            }
+            if (types.get(i) == null) {
+                throw new IllegalArgumentException("postTypes[" + i + "] is null");
+            }
+        }
+    }
+
     @Transactional
     public void createPost(PostDTO postDTO) {
         if (postDTO == null) throw new IllegalArgumentException("postDTO is null");
@@ -49,7 +93,7 @@ public class PostService {
         if (categoryId != null) {
             category = categoryRepository.findById(categoryId)
                     .orElseThrow(() -> new RuntimeException("존재하지 않는 카테고리: " + categoryId));
-        } else if (categoryTitle != null && !categoryTitle.isBlank()) {
+        } else if (!isBlank(categoryTitle)) {
             Category c = new Category();
             c.setTitle(categoryTitle);
             c.setFamily(family);
@@ -70,16 +114,13 @@ public class PostService {
         List<String> s3ObjectKeys = postDTO.getImageUrls();
         List<PostType> types = postDTO.getPostTypes();
 
-        if (s3ObjectKeys != null && types != null) {
-            if (s3ObjectKeys.size() != types.size()) {
-                throw new IllegalArgumentException("imageUrls와 postTypes의 개수가 일치하지 않습니다.");
-            }
+        // ✅ 생성도 검증 강화
+        validateMediaLists(s3ObjectKeys, types);
 
+        if (s3ObjectKeys != null) {
             for (int i = 0; i < s3ObjectKeys.size(); i++) {
-                String s3Key = s3ObjectKeys.get(i);
-                String cloudFrontUrl = (s3Key != null && s3Key.startsWith("http"))
-                        ? s3Key
-                        : cloudFrontDomain + s3Key;
+                String raw = s3ObjectKeys.get(i);
+                String cloudFrontUrl = normalizeToCloudFrontUrl(raw);
 
                 PostImage img = new PostImage();
                 img.setPost(post);
@@ -123,8 +164,9 @@ public class PostService {
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("이미지 없음"));
 
-        if (imageUrl != null && imageUrl.startsWith(cloudFrontDomain)) {
-            String s3Key = imageUrl.substring(cloudFrontDomain.length());
+        // ✅ CloudFront URL이면 S3 삭제
+        String s3Key = toS3KeyIfCloudFront(imageUrl);
+        if (!isBlank(s3Key)) {
             s3Service.deleteImageFromS3(s3Key);
         }
 
@@ -148,10 +190,7 @@ public class PostService {
 
         List<String> s3Keys = post.getImages().stream()
                 .map(PostImage::getImageUrl)
-                .filter(Objects::nonNull)
-                .map(imageUrl -> imageUrl.startsWith(cloudFrontDomain)
-                        ? imageUrl.substring(cloudFrontDomain.length())
-                        : null)
+                .map(this::toS3KeyIfCloudFront)
                 .filter(Objects::nonNull)
                 .toList();
 
@@ -211,19 +250,27 @@ public class PostService {
             post.setCategory(category);
         }
 
-        // 3) imageUrls/postTypes (선택) - 둘 중 하나라도 오면 "이미지 수정 요청"으로 간주
+        // 3) imageUrls/postTypes (선택)
         List<String> incomingUrls = request.getImageUrls();
         List<PostType> incomingTypes = request.getPostTypes();
 
         boolean wantsImageUpdate = (incomingUrls != null || incomingTypes != null);
 
         if (wantsImageUpdate) {
-            // ✅ 둘 다 있어야 서버가 정확히 처리 가능
-            if (incomingUrls == null || incomingTypes == null) {
-                throw new IllegalArgumentException("이미지 수정 시 imageUrls와 postTypes를 함께 보내야 합니다.");
+            // ✅ (핵심) null/길이/빈값/타입 검증
+            validateMediaLists(incomingUrls, incomingTypes);
+
+            // ✅ 서버 내에서 URL을 "CloudFront full url"로 통일
+            List<String> newUrlList = new ArrayList<>();
+            for (String raw : incomingUrls) {
+                String normalized = normalizeToCloudFrontUrl(raw);
+                if (normalized != null) newUrlList.add(normalized);
             }
-            if (incomingUrls.size() != incomingTypes.size()) {
-                throw new IllegalArgumentException("imageUrls와 postTypes의 개수가 일치하지 않습니다.");
+
+            // ✅ newUrlList 길이와 incomingTypes 길이가 달라지면 위험(빈값 제거로)
+            // -> 위 validate에서 빈값 막았으니 여기서는 동일 길이 보장됨.
+            if (newUrlList.size() != incomingTypes.size()) {
+                throw new IllegalArgumentException("정규화 후 imageUrls와 postTypes 길이가 달라졌습니다.");
             }
 
             // 기존 URL set
@@ -234,24 +281,21 @@ public class PostService {
                 }
             }
 
-            // 새 URL normalize(CloudFront full url로 통일)
-            List<String> newUrlList = new ArrayList<>();
-            for (String raw : incomingUrls) {
-                if (raw == null) continue;
-                String normalized = raw.startsWith("http") ? raw : cloudFrontDomain + raw;
-                newUrlList.add(normalized);
-            }
             Set<String> newUrlSet = new HashSet<>(newUrlList);
 
             // (A) 삭제된 이미지 S3 삭제
             for (String oldUrl : oldUrlSet) {
-                if (!newUrlSet.contains(oldUrl) && oldUrl.startsWith(cloudFrontDomain)) {
-                    String s3Key = oldUrl.substring(cloudFrontDomain.length());
-                    s3Service.deleteImageFromS3(s3Key);
+                if (!newUrlSet.contains(oldUrl)) {
+                    String s3Key = toS3KeyIfCloudFront(oldUrl);
+                    if (!isBlank(s3Key)) s3Service.deleteImageFromS3(s3Key);
                 }
             }
 
             // (B) DB replace
+            // ✅ 안전: 연관 데이터 제거는 먼저 clear -> delete (orphan/cascade 설정에 따라 충돌 방지)
+            if (post.getImages() != null) {
+                post.getImages().clear();
+            }
             postImageRepository.deleteAllByPost(post);
 
             List<PostImage> newImages = new ArrayList<>();
@@ -296,7 +340,7 @@ public class PostService {
             Category category = categoryRepository.findById(categoryId)
                     .orElseThrow(() -> new RuntimeException("존재하지 않는 카테고리: " + categoryId));
             post.setCategory(category);
-        } else if (categoryTitle != null && !categoryTitle.isBlank()) {
+        } else if (!isBlank(categoryTitle)) {
             Category c = new Category();
             c.setTitle(categoryTitle);
             c.setFamily(family);
@@ -307,12 +351,21 @@ public class PostService {
         List<String> incomingUrls = postDTO.getImageUrls();
         List<PostType> incomingTypes = postDTO.getPostTypes();
 
-        if (incomingUrls == null || incomingTypes == null) {
+        if (incomingUrls == null && incomingTypes == null) {
             postRepository.save(post);
             return;
         }
-        if (incomingUrls.size() != incomingTypes.size()) {
-            throw new IllegalArgumentException("imageUrls와 postTypes의 개수가 일치하지 않습니다.");
+
+        // ✅ 검증 강화(둘 중 하나만 오면 400 대상)
+        validateMediaLists(incomingUrls, incomingTypes);
+
+        List<String> newUrlList = new ArrayList<>();
+        for (String raw : incomingUrls) {
+            String normalized = normalizeToCloudFrontUrl(raw);
+            if (normalized != null) newUrlList.add(normalized);
+        }
+        if (newUrlList.size() != incomingTypes.size()) {
+            throw new IllegalArgumentException("정규화 후 imageUrls와 postTypes 길이가 달라졌습니다.");
         }
 
         Set<String> oldUrlSet = new HashSet<>();
@@ -322,22 +375,18 @@ public class PostService {
             }
         }
 
-        List<String> newUrlList = new ArrayList<>();
-        for (String raw : incomingUrls) {
-            if (raw == null) continue;
-            String normalized = raw.startsWith("http") ? raw : cloudFrontDomain + raw;
-            newUrlList.add(normalized);
-        }
-
         Set<String> newUrlSet = new HashSet<>(newUrlList);
 
         for (String oldUrl : oldUrlSet) {
-            if (!newUrlSet.contains(oldUrl) && oldUrl.startsWith(cloudFrontDomain)) {
-                String s3Key = oldUrl.substring(cloudFrontDomain.length());
-                s3Service.deleteImageFromS3(s3Key);
+            if (!newUrlSet.contains(oldUrl)) {
+                String s3Key = toS3KeyIfCloudFront(oldUrl);
+                if (!isBlank(s3Key)) s3Service.deleteImageFromS3(s3Key);
             }
         }
 
+        if (post.getImages() != null) {
+            post.getImages().clear();
+        }
         postImageRepository.deleteAllByPost(post);
 
         List<PostImage> newImages = new ArrayList<>();
