@@ -19,12 +19,13 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class S3Service {
 
+    // ✅ Presigned URL 생성에만 Presigner 빈 사용 (너 프로젝트에 이미 빈이 있는 상태라 OK)
     private final S3Presigner s3Presigner;
-    private final S3Client s3Client;
 
     @Value("${s3.bucket}")
     private String bucketName;
 
+    // ✅ 허용 타입(원하는 타입 있으면 여기 추가)
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
             "image/jpeg",
             "image/png",
@@ -39,8 +40,10 @@ public class S3Service {
             throw new IllegalArgumentException("fileName is blank");
         }
 
+        // ✅ contentType이 비어있으면 "파일 확장자"로 추론
         String ct = normalizeContentType(fileName, contentType);
 
+        // ✅ 보안상: 허용 타입만
         if (!ALLOWED_CONTENT_TYPES.contains(ct)) {
             throw new IllegalArgumentException("허용되지 않는 contentType: " + ct);
         }
@@ -64,10 +67,14 @@ public class S3Service {
     public void deleteImageFromS3(String key) {
         if (key == null || key.isBlank()) return;
 
-        s3Client.deleteObject(DeleteObjectRequest.builder()
-                .bucket(bucketName)
-                .key(key)
-                .build());
+        // ✅ S3Client를 스프링 빈으로 주입받지 않고, 필요할 때만 생성
+        // -> 서버 부팅 시 "S3Client 빈 없음"으로 터지는 문제 방지
+        try (S3Client s3Client = S3Client.create()) {
+            s3Client.deleteObject(DeleteObjectRequest.builder()
+                    .bucket(bucketName)
+                    .key(key)
+                    .build());
+        }
     }
 
     // =========================
@@ -90,6 +97,7 @@ public class S3Service {
         if (lower.endsWith(".mp4")) return "video/mp4";
         if (lower.endsWith(".mov")) return "video/quicktime";
 
+        // ✅ 여기로 오면 허용 목록에서 걸러질 거라 사실상 예외 유도용
         return "application/octet-stream";
     }
 }
