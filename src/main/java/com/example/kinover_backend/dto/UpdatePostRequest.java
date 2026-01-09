@@ -12,6 +12,7 @@ import java.util.UUID;
 @Setter
 public class UpdatePostRequest {
     private Long authorId;              // ✅ 프론트에서 보내고, 토큰 유저와 비교
+    private UUID familyId;          // ✅ 필요하면 추가
     private String content;             // (선택) 수정할 내용
     private UUID categoryId;            // (선택) 수정할 카테고리
 
