@@ -1,6 +1,8 @@
 // src/main/java/com/example/kinover_backend/service/MessageService.java
 package com.example.kinover_backend.service;
 
+import com.example.kinover_backend.dto.ChatRoomMediaResponseDTO;
+import com.example.kinover_backend.dto.MediaItemDTO;
 import com.example.kinover_backend.dto.MessageDTO;
 import com.example.kinover_backend.dto.UserDTO;
 import com.example.kinover_backend.entity.Message;
@@ -8,6 +10,7 @@ import com.example.kinover_backend.enums.MessageType;
 import com.example.kinover_backend.repository.ChatRoomRepository;
 import com.example.kinover_backend.repository.MessageRepository;
 import com.example.kinover_backend.repository.UserRepository;
+
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Value;
@@ -72,7 +75,7 @@ public class MessageService {
 
         Message saved = messageRepository.save(message);
 
-        // ✅ 저장된 값 기반 DTO (createdAt 포함) -> 이걸로 Redis + Push 통일
+        // ✅ 저장된 값 기반 DTO (createdAt 포함) -> Redis + Push 통일
         MessageDTO responseDto = getMessageDTO(saved);
 
         // ✅ Redis 발행
@@ -99,13 +102,11 @@ public class MessageService {
                 .filter(id -> !id.equals(messageDtoFromDb.getSenderId()))
                 .collect(Collectors.toSet());
 
-        // ✅ 수신자별 "이미 읽음이면 푸시 스킵" (카톡 느낌)
-        // - 사용자가 지금 방에 들어와서 읽음 처리(room:read)가 이미 올라갔으면 푸시 안 가는 게 자연스러움
+        // ✅ 수신자별 "이미 읽음이면 푸시 스킵"
         for (UserDTO u : users) {
             Long receiverId = u.getUserId();
             if (receiverId.equals(messageDtoFromDb.getSenderId())) continue;
 
-            // ✅ lastReadAt >= message.createdAt 이면 이미 읽은 상태로 간주 -> 푸시 생략
             LocalDateTime lastReadAt = chatRoomService.getLastReadAt(messageDtoFromDb.getChatRoomId(), receiverId);
             if (lastReadAt != null && messageDtoFromDb.getCreatedAt() != null
                     && !lastReadAt.isBefore(messageDtoFromDb.getCreatedAt())) {
@@ -148,7 +149,7 @@ public class MessageService {
             responseDto.setImageUrls(null);
         }
 
-        // ✅ 서버에서 멘션 리스트까지 내려주고 싶으면, 메시지 엔티티에 저장 구조를 추가해야 함
+        // ✅ 멘션은 엔티티 저장 구조가 있어야 내려줄 수 있음 (지금은 null)
         responseDto.setMentionUserIds(null);
 
         return responseDto;
@@ -168,5 +169,81 @@ public class MessageService {
         return messages.stream()
                 .map(MessageService::getMessageDTO)
                 .toList();
+    }
+
+    // =========================
+    // ✅ 채팅방 미디어 모아보기
+    // =========================
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public ChatRoomMediaResponseDTO fetchChatRoomMedia(UUID chatRoomId,
+                                                       String type, // ALL | IMAGE | VIDEO
+                                                       LocalDateTime before,
+                                                       int limit) {
+
+        int safeLimit = Math.min(Math.max(limit, 1), 50);
+        List<MessageType> types = resolveMediaTypes(type);
+
+        // ✅ Repository에서 sender/chatRoom까지 fetch join으로 가져옴 (N+1 방지)
+        List<Message> messages = messageRepository.findMediaMessagesBefore(
+                chatRoomId,
+                types,
+                before,
+                PageRequest.of(0, safeLimit)
+        );
+
+        List<MediaItemDTO> items = new ArrayList<>();
+
+        for (Message m : messages) {
+            List<String> urls = splitUrls(m.getContent());
+            if (urls.isEmpty()) continue;
+
+            for (int i = 0; i < urls.size(); i++) {
+                String url = urls.get(i);
+
+                items.add(MediaItemDTO.builder()
+                        .messageId(m.getMessageId())
+                        .chatRoomId(m.getChatRoom().getChatRoomId())
+                        .senderId(m.getSender().getUserId())
+                        .senderName(m.getSender().getName())
+                        .senderImage(m.getSender().getImage())
+                        .messageType(m.getMessageType())
+                        .url(url)
+                        .orderInMessage(i)
+                        .createdAt(m.getCreatedAt())
+                        .build());
+            }
+        }
+
+        // ✅ 다음 페이지 커서: 이번에 가져온 "마지막 메시지"의 createdAt
+        LocalDateTime nextBefore = null;
+        if (!messages.isEmpty()) {
+            nextBefore = messages.get(messages.size() - 1).getCreatedAt();
+        }
+
+        return ChatRoomMediaResponseDTO.builder()
+                .items(items)
+                .nextBefore(nextBefore)
+                .build();
+    }
+
+    private List<MessageType> resolveMediaTypes(String type) {
+        String t = (type == null) ? "ALL" : type.trim().toUpperCase();
+
+        if (t.equals("IMAGE")) return List.of(MessageType.image);
+        if (t.equals("VIDEO")) return List.of(MessageType.video);
+
+        return List.of(MessageType.image, MessageType.video);
+    }
+
+    private List<String> splitUrls(String content) {
+        if (content == null) return Collections.emptyList();
+
+        String trimmed = content.trim();
+        if (trimmed.isEmpty()) return Collections.emptyList();
+
+        return Arrays.stream(trimmed.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toList());
     }
 }

@@ -7,6 +7,7 @@ import com.example.kinover_backend.enums.ChatBotPersonality;
 import com.example.kinover_backend.enums.KinoType;
 import com.example.kinover_backend.enums.MessageType;
 import com.example.kinover_backend.repository.*;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -80,8 +81,6 @@ public class ChatRoomService {
 
     // =========================
     // ✅ 단건 조회 (푸시/딥링크 진입용)
-    // - 컨트롤러 GET /api/chatRoom/{chatRoomId}에서 호출
-    // - ChatRoomDTO에 최신메시지/시간, 멤버이미지, 알림ON, unreadCount까지 채워서 내려줌
     // =========================
     @Transactional(readOnly = true)
     public ChatRoomDTO getChatRoom(UUID chatRoomId, Long userId) {
@@ -98,8 +97,7 @@ public class ChatRoomService {
         ChatRoomDTO dto = chatRoomMapper.toDTO(chatRoom);
 
         // ✅ 최신 메시지
-        messageRepository
-                .findTopByChatRoom_ChatRoomIdOrderByCreatedAtDesc(chatRoomId)
+        messageRepository.findTopByChatRoom_ChatRoomIdOrderByCreatedAtDesc(chatRoomId)
                 .ifPresent(message -> {
                     if (message.getMessageType() == MessageType.text) {
                         dto.setLatestMessageContent(message.getContent());
@@ -116,7 +114,7 @@ public class ChatRoomService {
                     dto.setLatestMessageTime(message.getCreatedAt());
                 });
 
-        // ✅ 멤버 이미지
+        // ✅ 멤버 이미지 (LAZY 안전하게 Repository 통해 users 조회)
         List<String> images;
         if (isKinoRoom(chatRoomId)) {
             String suffix;
@@ -127,10 +125,7 @@ public class ChatRoomService {
 
             images = List.of(cloudFrontDomain + suffix);
         } else {
-            // 기존 코드 그대로(주의: chatRoom.getUserChatRooms()가 LAZY면 N+1/세션 문제 날 수 있음)
-            // 가능하면 userChatRoomRepository로 users를 가져오는 방식으로 바꾸는 걸 권장.
-            images = chatRoom.getUserChatRooms().stream()
-                    .map(UserChatRoom::getUser)
+            images = userChatRoomRepository.findUsersByChatRoomId(chatRoomId).stream()
                     .filter(u -> !u.getUserId().equals(userId))
                     .map(User::getImage)
                     .filter(Objects::nonNull)
@@ -269,18 +264,23 @@ public class ChatRoomService {
     }
 
     // =========================
-    // 특정 유저가 가진 채팅방 조회 (+ unreadCount)
+    // ✅ 특정 유저가 가진 채팅방 조회 (+ unreadCount)
+    // - 2-step으로 멤버 fetch join 해서 N+1 방지
     // =========================
     @Transactional(readOnly = true)
     public List<ChatRoomDTO> getAllChatRooms(Long userId, UUID familyId) {
-        List<ChatRoom> chatRooms = chatRoomRepository.findByUserIdAndFamilyId(userId, familyId);
+
+        Set<UUID> chatRoomIds = chatRoomRepository.findChatRoomIdsByUserAndFamily(userId, familyId);
+        if (chatRoomIds == null || chatRoomIds.isEmpty()) return List.of();
+
+        // ✅ 방 + 멤버 + 유저까지 한 번에 fetch
+        List<ChatRoom> chatRooms = chatRoomRepository.findByChatRoomIdInWithMembers(chatRoomIds);
 
         return chatRooms.stream().map(chatRoom -> {
             ChatRoomDTO dto = chatRoomMapper.toDTO(chatRoom);
 
             // ✅ 최신 메시지
-            messageRepository
-                    .findTopByChatRoom_ChatRoomIdOrderByCreatedAtDesc(chatRoom.getChatRoomId())
+            messageRepository.findTopByChatRoom_ChatRoomIdOrderByCreatedAtDesc(chatRoom.getChatRoomId())
                     .ifPresent(message -> {
                         if (message.getMessageType() == MessageType.text) {
                             dto.setLatestMessageContent(message.getContent());
@@ -306,6 +306,7 @@ public class ChatRoomService {
 
                 images = List.of(cloudFrontDomain + suffix);
             } else {
+                // ✅ 이제 chatRoom.userChatRooms + user가 fetch 되어 있어 LAZY 안정
                 images = chatRoom.getUserChatRooms().stream()
                         .map(UserChatRoom::getUser)
                         .filter(u -> !u.getUserId().equals(userId))
@@ -391,12 +392,11 @@ public class ChatRoomService {
         int remainingUsers = userChatRoomRepository.countByChatRoom(chatRoom);
 
         if (remainingUsers == 0) {
-            List<com.example.kinover_backend.entity.Message> messages = messageRepository
-                    .findAllByChatRoomId(chatRoomId);
+            List<Message> messages = messageRepository.findAllByChatRoomId(chatRoomId);
 
             List<String> s3KeysToDelete = new ArrayList<>();
 
-            for (com.example.kinover_backend.entity.Message message : messages) {
+            for (Message message : messages) {
                 MessageType type = message.getMessageType();
                 if (type == MessageType.image || type == MessageType.video) {
                     String content = message.getContent();

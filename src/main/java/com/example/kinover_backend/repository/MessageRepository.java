@@ -3,6 +3,8 @@ package com.example.kinover_backend.repository;
 
 import com.example.kinover_backend.entity.ChatRoom;
 import com.example.kinover_backend.entity.Message;
+import com.example.kinover_backend.enums.MessageType;
+
 import org.springframework.data.domain.*;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -35,6 +37,22 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
     int countByChatRoom_ChatRoomIdAndCreatedAtAfterAndSender_UserIdNot(
             UUID chatRoomId,
             LocalDateTime after,
-            Long senderUserId
-    );
+            Long senderUserId);
+
+    // ✅ 미디어 조회: sender/chatRoom까지 fetch join 해서 N+1 방지
+    @Query("""
+            select m
+            from Message m
+            join fetch m.sender s
+            join fetch m.chatRoom cr
+            where cr.chatRoomId = :chatRoomId
+              and m.messageType in :types
+              and (:before is null or m.createdAt < :before)
+            order by m.createdAt desc
+        """)
+    List<Message> findMediaMessagesBefore(
+            @Param("chatRoomId") UUID chatRoomId,
+            @Param("types") List<MessageType> types,
+            @Param("before") LocalDateTime before,
+            Pageable pageable);
 }
