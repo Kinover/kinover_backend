@@ -413,4 +413,28 @@ public class PostService {
 
         postRepository.save(post);
     }
+
+    @Transactional(readOnly = true)
+public PostDTO getPostById(Long userId, UUID postId) {
+    if (userId == null) throw new IllegalArgumentException("userId is null");
+    if (postId == null) throw new IllegalArgumentException("postId is null");
+
+    Post post = postRepository.findById(postId)
+            .orElseThrow(() -> new RuntimeException("게시글 없음"));
+
+    UUID familyId = (post.getFamily() != null) ? post.getFamily().getFamilyId() : null;
+    if (familyId == null) {
+        throw new RuntimeException("가족 정보 없음");
+    }
+
+    // ✅ 권한 검증: 해당 유저가 게시글의 가족에 속해있는지
+    boolean allowed = userFamilyRepository.existsByUser_UserIdAndFamily_FamilyId(userId, familyId);
+    if (!allowed) {
+        // 403 의미가 맞음
+        throw new RuntimeException("권한 없음");
+    }
+
+    return PostDTO.from(post);
+}
+
 }

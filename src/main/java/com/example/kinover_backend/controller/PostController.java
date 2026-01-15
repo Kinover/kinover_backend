@@ -50,6 +50,23 @@ public class PostController {
     }
 
     @Operation(
+            summary = "게시글 단건 조회",
+            description = "게시글 ID로 게시글 상세를 조회합니다. (가족 소속 권한 검증 포함)"
+    )
+    @ApiResponse(responseCode = "200", description = "게시글 단건 조회 성공")
+    @GetMapping("/{postId}")
+    public ResponseEntity<PostDTO> getPostById(
+            @RequestHeader("Authorization") String authorizationHeader,
+            @PathVariable UUID postId
+    ) {
+        String token = authorizationHeader.replace("Bearer ", "");
+        Long userId = jwtUtil.getUserIdFromToken(token);
+
+        PostDTO post = postService.getPostById(userId, postId);
+        return ResponseEntity.ok(post);
+    }
+
+    @Operation(
             summary = "게시글 이미지 삭제",
             description = "특정 게시글에서 하나의 이미지를 삭제합니다."
     )
@@ -121,9 +138,7 @@ public class PostController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        // ✅ 서비스로 수정 요청 (Long userId 포함)
         postService.updatePost(postId, authenticatedUserId, request);
-
         return ResponseEntity.ok().build();
     }
 }

@@ -10,7 +10,6 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -46,4 +45,6 @@ public interface UserFamilyRepository extends JpaRepository<UserFamily, UUID> {
 
     Optional<UserFamily> findByUser_UserIdAndFamily_FamilyId(Long userId, UUID familyId);
 
+    // ✅ 추가: 게시글/가족 권한 체크용 (가족 소속 여부)
+    boolean existsByUser_UserIdAndFamily_FamilyId(Long userId, UUID familyId);
 }
