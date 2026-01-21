@@ -9,6 +9,7 @@ import com.example.kinover_backend.dto.ReadPointersResponseDTO;
 import com.example.kinover_backend.dto.ReadRequestDTO;
 import com.example.kinover_backend.dto.UpdatePersonalityRequestDTO;
 import com.example.kinover_backend.dto.UserDTO;
+import com.example.kinover_backend.dto.RenameRoomForMeRequestDTO;
 import com.example.kinover_backend.service.ChatRoomService;
 import com.example.kinover_backend.service.MessageService;
 import com.example.kinover_backend.service.UserService;
@@ -62,6 +63,7 @@ public class ChatRoomController {
             throw new RuntimeException("해당 채팅방 멤버가 아닙니다.");
         }
 
+        // ✅ service에서 userId 기준 displayRoomName을 roomName으로 내려주게 만들 것
         ChatRoomDTO dto = chatRoomService.getChatRoom(chatRoomId, userId);
         return ResponseEntity.ok(dto);
     }
@@ -81,6 +83,7 @@ public class ChatRoomController {
                 .map(Long::parseLong)
                 .collect(Collectors.toList());
 
+        // ✅ service 내부에서 "유저별 displayRoomName" 자동 세팅
         ChatRoomDTO createdChatRoom = chatRoomService.createChatRoom(
                 familyId, authenticatedUserId, roomName, userIdList);
 
@@ -127,6 +130,7 @@ public class ChatRoomController {
             throw new RuntimeException("인증된 유저와 요청 유저가 일치하지 않습니다");
         }
 
+        // ✅ service에서 각 DTO.roomName을 "userId 기준 displayRoomName"으로 만들어서 내려주게 만들 것
         return chatRoomService.getAllChatRooms(userId, familyId);
     }
 
@@ -148,7 +152,7 @@ public class ChatRoomController {
         return messageService.fetchMessagesBefore(chatRoomId, before, limit);
     }
 
-    @Operation(summary = "채팅방 이름 수정", description = "chatRoomId에 해당하는 채팅방의 이름을 수정합니다.")
+    @Operation(summary = "채팅방 이름 수정(전역)", description = "chatRoomId에 해당하는 채팅방의 이름을 수정합니다. (전역 이름)")
     @PatchMapping("/{chatRoomId}/rename")
     public ResponseEntity<String> renameChatRoom(
             @Parameter(description = "채팅방 ID", required = true) @PathVariable UUID chatRoomId,
@@ -160,6 +164,30 @@ public class ChatRoomController {
 
         chatRoomService.renameChatRoom(chatRoomId, newRoomName, userId);
         return ResponseEntity.ok("채팅방 이름이 수정되었습니다.");
+    }
+
+    // ✅✅ 추가: 내 화면에서만 보이는 채팅방 이름 변경
+    @Operation(summary = "채팅방 이름 수정(나만)", description = "같은 채팅방이라도 내 화면에서만 보이는 이름을 수정합니다.")
+    @PatchMapping("/{chatRoomId}/rename/me")
+    public ResponseEntity<String> renameChatRoomForMe(
+            @PathVariable UUID chatRoomId,
+            @RequestBody RenameRoomForMeRequestDTO body,
+            @RequestHeader("Authorization") String authorizationHeader) {
+
+        String token = authorizationHeader.replace("Bearer ", "");
+        Long userId = jwtUtil.getUserIdFromToken(token);
+
+        if (!chatRoomService.isMember(chatRoomId, userId)) {
+            throw new RuntimeException("해당 채팅방 멤버가 아닙니다.");
+        }
+
+        String newName = (body != null) ? body.getRoomName() : null;
+        if (newName == null || newName.trim().isEmpty()) {
+            throw new IllegalArgumentException("roomName은 비어있을 수 없습니다.");
+        }
+
+        chatRoomService.renameChatRoomForUser(chatRoomId, userId, newName.trim());
+        return ResponseEntity.ok("내 채팅방 이름이 수정되었습니다.");
     }
 
     @Operation(summary = "채팅방 내 다른 유저 조회", description = "")

@@ -61,4 +61,27 @@ public interface UserChatRoomRepository extends JpaRepository<UserChatRoom, UUID
     """)
     void deleteCommonChatRoomWithBot(@Param("userId") Long userId, @Param("botId") Long botId);
 
+    @Query("""
+      select ucr
+      from UserChatRoom ucr
+      where ucr.chatRoom.chatRoomId = :chatRoomId
+        and ucr.user.userId = :userId
+  """)
+  Optional<UserChatRoom> findByChatRoomIdAndUserId(@Param("chatRoomId") UUID chatRoomId,
+                                                   @Param("userId") Long userId);
+
+  @Query("""
+      select ucr
+      from UserChatRoom ucr
+      join fetch ucr.user u
+      where ucr.chatRoom.chatRoomId = :chatRoomId
+  """)
+  List<UserChatRoom> findAllByChatRoomIdWithUser(@Param("chatRoomId") UUID chatRoomId);
+
+  @Query("""
+      select ucr
+      from UserChatRoom ucr
+      where ucr.chatRoom.chatRoomId = :chatRoomId
+  """)
+  List<UserChatRoom> findAllByChatRoomId(@Param("chatRoomId") UUID chatRoomId);
   }

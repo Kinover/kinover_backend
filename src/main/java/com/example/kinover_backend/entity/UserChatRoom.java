@@ -34,6 +34,14 @@ public class UserChatRoom {
     @Column(name = "last_read_at")
     private LocalDateTime lastReadAt;
 
+    // ✅ 추가: 유저별 채팅방 표시 이름
+    @Column(name = "display_room_name", columnDefinition = "VARCHAR(255)")
+    private String displayRoomName;
+
+    // ✅ 추가: 유저가 직접 채팅방 이름을 바꿨는지(자동 갱신 정책에 필요)
+    @Column(name = "is_custom_room_name", columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private boolean customRoomName;
+
     // ⚠️ DB에 추가해둔 last_read_message_id(BIGINT)는 UUID랑 타입이 안 맞아서
     // 지금은 사용하지 않는 걸 권장. (칼럼은 남아도 JPA는 무시함)
     // @Column(name = "last_read_message_id")
