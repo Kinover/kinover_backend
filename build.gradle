@@ -74,6 +74,9 @@ dependencies {
     // Redisson
     implementation 'org.redisson:redisson-spring-boot-starter:4.1.0'
 
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.25"
+    implementation "org.jetbrains.kotlin:kotlin-reflect:1.9.25"
+
     // Tests
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
