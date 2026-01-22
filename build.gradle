@@ -76,6 +76,12 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+ // ✅ Redisson (ChatMessageListener가 MessageListener 쓰고 있어서 필요)
+    implementation 'org.redisson:redisson-spring-boot-starter:3.27.2'
+
+    // ✅ (임시) org.webjars.NotFoundException 컴파일 에러 방지용
+    implementation 'org.webjars:webjars-locator-core:0.52'
 }
 
 tasks.named('test') {
