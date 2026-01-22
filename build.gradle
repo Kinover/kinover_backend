@@ -81,7 +81,7 @@ dependencies {
     // ❌ (제거) 임시 webjars-locator-core
     // springdoc 3.x로 올린 뒤에도 swagger-ui에서 org.webjars.NotFoundException가 재현되면
     // 그때 원인(컨텍스트패스/프록시/리소스 핸들러)을 보고 최소 의존성으로 다시 넣는 게 좋아.
-    implementation 'org.webjars:webjars-locator-core:0.52'
+    // implementation 'org.webjars:webjars-locator-core:0.52'
 }
 
 tasks.named('test') {
