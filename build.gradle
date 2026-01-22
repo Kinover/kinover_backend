@@ -17,6 +17,13 @@ configurations {
     compileOnly {
         extendsFrom annotationProcessor
     }
+    all {
+        resolutionStrategy.eachDependency { details ->
+            if (details.requested.group == 'org.springdoc') {
+                details.useVersion '2.8.0'
+            }
+        }
+    }
 }
 
 repositories {
@@ -35,8 +42,8 @@ dependencies {
     // DB driver
     runtimeOnly 'org.mariadb.jdbc:mariadb-java-client'
 
-    // ✅ Swagger (Boot 3.4.x + Spring 6.2.x 호환)
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.15'
+    // ✅ Swagger / OpenAPI (Spring Boot 3.4.x 라인)
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.0'
 
     // JWT (jjwt 0.11.5)
     implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
@@ -64,7 +71,7 @@ dependencies {
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
 
-    // ✅ Redisson
+    // Redisson
     implementation 'org.redisson:redisson-spring-boot-starter:4.1.0'
 
     // Tests
