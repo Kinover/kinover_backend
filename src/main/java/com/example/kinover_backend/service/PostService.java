@@ -13,7 +13,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -37,6 +36,7 @@ public class PostService {
         return s == null || s.trim().isEmpty();
     }
 
+    /** CloudFront 도메인을 끝 슬래시 없는 형태로 정규화 */
     private String cfBase() {
         if (isBlank(cloudFrontDomain)) return "";
         String v = cloudFrontDomain.trim();
@@ -44,21 +44,25 @@ public class PostService {
         return v;
     }
 
+    /** raw가 파일명/경로/full url 이든 최종적으로 CloudFront full url로 통일 */
     private String normalizeToCloudFrontUrl(String raw) {
         if (isBlank(raw)) return null;
 
         String v = raw.trim();
 
+        // 이미 URL이면 그대로
         if (v.startsWith("http://") || v.startsWith("https://")) return v;
 
+        // 앞 슬래시 제거
         while (v.startsWith("/")) v = v.substring(1);
 
         String base = cfBase();
-        if (isBlank(base)) return v;
+        if (isBlank(base)) return v; // 방어
 
         return base + "/" + v;
     }
 
+    /** CloudFront URL -> S3 key로 변환 (media_x.jpg 형태) */
     private String toS3KeyIfCloudFront(String url) {
         if (isBlank(url)) return null;
 
@@ -98,6 +102,9 @@ public class PostService {
         }
     }
 
+    // =========================
+    // CREATE
+    // =========================
     @Transactional
     public void createPost(PostDTO postDTO) {
         if (postDTO == null) throw new IllegalArgumentException("postDTO is null");
@@ -130,14 +137,14 @@ public class PostService {
         post.setContent(postDTO.getContent());
         post.setCommentCount(0);
 
-        List<String> s3ObjectKeys = postDTO.getImageUrls();
+        List<String> rawUrls = postDTO.getImageUrls();
         List<PostType> types = postDTO.getPostTypes();
 
-        validateMediaLists(s3ObjectKeys, types);
+        validateMediaLists(rawUrls, types);
 
-        if (s3ObjectKeys != null) {
-            for (int i = 0; i < s3ObjectKeys.size(); i++) {
-                String cloudFrontUrl = normalizeToCloudFrontUrl(s3ObjectKeys.get(i));
+        if (rawUrls != null) {
+            for (int i = 0; i < rawUrls.size(); i++) {
+                String cloudFrontUrl = normalizeToCloudFrontUrl(rawUrls.get(i));
 
                 PostImage img = new PostImage();
                 img.setImageUrl(cloudFrontUrl);
@@ -162,7 +169,6 @@ public class PostService {
         List<User> familyMembers = userFamilyRepository.findUsersByFamilyId(postDTO.getFamilyId());
         for (User member : familyMembers) {
             if (member == null) continue;
-
             if (!member.getUserId().equals(postDTO.getAuthorId())
                     && Boolean.TRUE.equals(member.getIsPostNotificationOn())) {
                 fcmNotificationService.sendPostNotification(member.getUserId(), postDTO);
@@ -170,6 +176,9 @@ public class PostService {
         }
     }
 
+    // =========================
+    // DELETE IMAGE (single)
+    // =========================
     @Transactional
     public void deleteImage(UUID postId, String imageUrl) {
         Post post = postRepository.findById(postId)
@@ -200,6 +209,9 @@ public class PostService {
         }
     }
 
+    // =========================
+    // DELETE POST
+    // =========================
     @Transactional
     public void deletePost(UUID postId) {
         Post post = postRepository.findById(postId)
@@ -225,13 +237,11 @@ public class PostService {
     }
 
     // =========================
-    // ✅ 여기! 500 방지 핵심 메서드
-    // - fetch join + order by를 "직접 같이" 안함
-    // - IDs 정렬을 기준으로 서비스에서 순서 복원
+    // LIST (500 방지 + 순서복원 + images 정렬)
     // =========================
     @Transactional(readOnly = true)
     public List<PostDTO> getPostsByFamilyAndCategory(Long userId, UUID familyId, UUID categoryId) {
-        // (선택) 권한 검증을 여기서도 하고 싶으면 추가 가능
+        // 필요하면 권한검증 추가
         // boolean allowed = userFamilyRepository.existsByUser_UserIdAndFamily_FamilyId(userId, familyId);
         // if (!allowed) throw new RuntimeException("권한 없음");
 
@@ -242,11 +252,12 @@ public class PostService {
             ids = postRepository.findPostIdsByFamilyAndCategoryOrderByCreatedAtDesc(familyId, categoryId);
         }
 
+        // ✅ 핵심: ids 비어있으면 IN 쿼리 안 침 (500 방지)
         if (ids == null || ids.isEmpty()) return List.of();
 
         List<Post> fetched = postRepository.findPostsWithImagesByIds(ids);
 
-        // ✅ 1) postId -> Post 맵
+        // ✅ postId -> Post 맵핑
         Map<UUID, Post> map = new HashMap<>();
         for (Post p : fetched) {
             if (p != null && p.getPostId() != null) {
@@ -254,14 +265,14 @@ public class PostService {
             }
         }
 
-        // ✅ 2) IDs 순서대로 정렬 복원
+        // ✅ ids 순서대로 복원
         List<Post> ordered = new ArrayList<>();
         for (UUID id : ids) {
             Post p = map.get(id);
             if (p != null) ordered.add(p);
         }
 
-        // ✅ 3) images 정렬까지 필요하면 여기서 한 번 더 (imageOrder 기준)
+        // ✅ images 정렬 (imageOrder 기준)
         for (Post p : ordered) {
             List<PostImage> imgs = p.getImages();
             if (imgs != null) {
@@ -272,6 +283,9 @@ public class PostService {
         return ordered.stream().map(PostDTO::from).toList();
     }
 
+    // =========================
+    // UPDATE (content/category/images)
+    // =========================
     @Transactional
     public void updatePost(UUID postId, Long authenticatedUserId, UpdatePostRequest request) {
         if (request == null) throw new IllegalArgumentException("request is null");
@@ -298,50 +312,58 @@ public class PostService {
         List<PostType> incomingTypes = request.getPostTypes();
 
         boolean wantsImageUpdate = (incomingUrls != null || incomingTypes != null);
+        if (!wantsImageUpdate) {
+            postRepository.save(post);
+            return;
+        }
 
-        if (wantsImageUpdate) {
-            validateMediaLists(incomingUrls, incomingTypes);
+        validateMediaLists(incomingUrls, incomingTypes);
 
-            List<String> newUrlList = new ArrayList<>();
-            for (String raw : incomingUrls) {
-                String normalized = normalizeToCloudFrontUrl(raw);
-                if (normalized != null) newUrlList.add(normalized);
+        // newUrlList 만들기(CloudFront 정규화)
+        List<String> newUrlList = new ArrayList<>();
+        for (String raw : incomingUrls) {
+            String normalized = normalizeToCloudFrontUrl(raw);
+            if (normalized != null) newUrlList.add(normalized);
+        }
+
+        if (newUrlList.size() != incomingTypes.size()) {
+            throw new IllegalArgumentException("정규화 후 imageUrls와 postTypes 길이가 달라졌습니다.");
+        }
+
+        // old/new 비교 -> 삭제된 것 S3 삭제
+        List<PostImage> oldImages = post.getImages() == null ? new ArrayList<>() : post.getImages();
+
+        Set<String> oldUrlSet = new HashSet<>();
+        for (PostImage pi : oldImages) {
+            if (pi != null && pi.getImageUrl() != null) oldUrlSet.add(pi.getImageUrl());
+        }
+
+        Set<String> newUrlSet = new HashSet<>(newUrlList);
+
+        for (String oldUrl : oldUrlSet) {
+            if (!newUrlSet.contains(oldUrl)) {
+                String s3Key = toS3KeyIfCloudFront(oldUrl);
+                if (!isBlank(s3Key)) s3Service.deleteImageFromS3(s3Key);
             }
+        }
 
-            if (newUrlList.size() != incomingTypes.size()) {
-                throw new IllegalArgumentException("정규화 후 imageUrls와 postTypes 길이가 달라졌습니다.");
-            }
+        // orphanRemoval 안전 업데이트: clear/add
+        post.clearImages();
 
-            List<PostImage> oldImages = post.getImages() == null ? new ArrayList<>() : post.getImages();
-
-            Set<String> oldUrlSet = new HashSet<>();
-            for (PostImage pi : oldImages) {
-                if (pi != null && pi.getImageUrl() != null) oldUrlSet.add(pi.getImageUrl());
-            }
-
-            Set<String> newUrlSet = new HashSet<>(newUrlList);
-
-            for (String oldUrl : oldUrlSet) {
-                if (!newUrlSet.contains(oldUrl)) {
-                    String s3Key = toS3KeyIfCloudFront(oldUrl);
-                    if (!isBlank(s3Key)) s3Service.deleteImageFromS3(s3Key);
-                }
-            }
-
-            post.clearImages();
-
-            for (int i = 0; i < newUrlList.size(); i++) {
-                PostImage img = new PostImage();
-                img.setImageUrl(newUrlList.get(i));
-                img.setPostType(incomingTypes.get(i));
-                img.setImageOrder(i);
-                post.addImage(img);
-            }
+        for (int i = 0; i < newUrlList.size(); i++) {
+            PostImage img = new PostImage();
+            img.setImageUrl(newUrlList.get(i));
+            img.setPostType(incomingTypes.get(i));
+            img.setImageOrder(i);
+            post.addImage(img);
         }
 
         postRepository.save(post);
     }
 
+    // =========================
+    // GET ONE (권한검증 포함)
+    // =========================
     @Transactional(readOnly = true)
     public PostDTO getPostById(Long userId, UUID postId) {
         if (userId == null) throw new IllegalArgumentException("userId is null");
@@ -351,16 +373,15 @@ public class PostService {
                 .orElseThrow(() -> new RuntimeException("게시글 없음"));
 
         UUID familyId = (post.getFamily() != null) ? post.getFamily().getFamilyId() : null;
-        if (familyId == null) {
-            throw new RuntimeException("가족 정보 없음");
-        }
+        if (familyId == null) throw new RuntimeException("가족 정보 없음");
 
         boolean allowed = userFamilyRepository.existsByUser_UserIdAndFamily_FamilyId(userId, familyId);
-        if (!allowed) {
-            throw new RuntimeException("권한 없음");
-        }
+        if (!allowed) throw new RuntimeException("권한 없음");
 
-        // 단건은 images가 필요하면 별도 fetch join 쿼리를 만들어도 됨
+        // 단건도 images 순서 필요하면 여기서 정렬
+        List<PostImage> imgs = post.getImages();
+        if (imgs != null) imgs.sort(Comparator.comparingInt(PostImage::getImageOrder));
+
         return PostDTO.from(post);
     }
 }
