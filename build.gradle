@@ -24,55 +24,53 @@ repositories {
 }
 
 dependencies {
-    // jwt
-    implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
+    // Spring starters (Boot BOM이 버전 관리)
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    implementation 'org.springframework.boot:spring-boot-starter-websocket'
+
+    // OAuth2 (쓰는 것만 유지해도 됨)
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-authorization-server'
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
-    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
-    implementation 'org.springframework.boot:spring-boot-starter-websocket'
+
+    // DB driver (MariaDB 쓰면 유지)
+    runtimeOnly 'org.mariadb.jdbc:mariadb-java-client'
+
+    // Swagger (Spring Boot 3.4.x 호환 위해 업그레이드)
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
+
+    // JWT: 일단 jjwt 0.11.5 세트만 유지 (0.12.0 제거)
+    implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
-    implementation 'com.auth0:java-jwt:3.18.2' // Java JWT 라이브러리
-    implementation 'com.auth0:java-jwt:3.18.2'
-    implementation 'io.jsonwebtoken:jjwt:0.12.0' // 최신 버전의 JJWT 사용
-    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
-    implementation 'org.redisson:redisson-spring-data-27:3.17.4'
+
+    // dotenv (둘 중 하나만)
     implementation 'io.github.cdimascio:java-dotenv:5.2.2'
 
-
-    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-    implementation 'org.springframework.boot:spring-boot-starter-security'
-
-    implementation 'org.springframework.boot:spring-boot-starter-web' // Spring Web 스타터 (서블릿 관련 기능 포함)
-
-    implementation 'com.fasterxml.jackson.core:jackson-databind'
-
-    compileOnly 'org.projectlombok:lombok'
-    runtimeOnly 'org.mariadb.jdbc:mariadb-java-client'
-    annotationProcessor 'org.projectlombok:lombok'
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    testImplementation 'org.springframework.security:spring-security-test'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.0.2'
+    // MapStruct
     implementation 'org.mapstruct:mapstruct:1.5.5.Final'
     annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
 
-    implementation 'jakarta.validation:jakarta.validation-api:3.0.2'
-    implementation 'org.hibernate.validator:hibernate-validator:8.0.1.Final'
-
-    //AWS S3
+    // AWS S3
     implementation platform("software.amazon.awssdk:bom:2.25.28")
     implementation 'software.amazon.awssdk:s3'
 
-    implementation 'io.github.cdimascio:dotenv-java:3.0.0'
+    // Firebase
     implementation 'com.google.firebase:firebase-admin:9.2.0'
-}
 
-bootRun {
-    environment "JWT_SECRET_KEY", System.getenv("JWT_SECRET_KEY")
-    environment "SPRING_DATASOURCE_PASSWORD", System.getenv("SPRING_DATASOURCE_PASSWORD")
-    environment "OPENAI_API_KEY", System.getenv("OPENAI_API_KEY")
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    // Tests
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 tasks.named('test') {
