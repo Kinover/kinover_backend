@@ -1,4 +1,3 @@
-// src/main/java/com/example/kinover_backend/controller/GlobalExceptionHandler.java
 package com.example.kinover_backend.controller;
 
 import com.example.kinover_backend.dto.ErrorResponseDTO;
@@ -16,7 +15,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponseDTO> unknown(Exception e) {
-        log.error("[INTERNAL_SERVER_ERROR]", e);
+        log.error("[INTERNAL_SERVER_ERROR]", e); // ✅ 여기서 스택트레이스 찍힘
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ErrorResponseDTO("INTERNAL_SERVER_ERROR", "서버 오류"));
     }
