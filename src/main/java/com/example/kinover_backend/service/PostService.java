@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -36,10 +37,6 @@ public class PostService {
         return s == null || s.trim().isEmpty();
     }
 
-    /**
-     * ✅ CloudFront 도메인을 항상 "끝 슬래시 없는 형태"로 정규화해서 사용
-     * 예) https://xxx.cloudfront.net/  -> https://xxx.cloudfront.net
-     */
     private String cfBase() {
         if (isBlank(cloudFrontDomain)) return "";
         String v = cloudFrontDomain.trim();
@@ -47,31 +44,21 @@ public class PostService {
         return v;
     }
 
-    /**
-     * ✅ raw가 파일명(media_x.jpg) 이든, /media_x.jpg 이든, full url 이든
-     * 최종적으로 "CloudFront full url"로 통일
-     */
     private String normalizeToCloudFrontUrl(String raw) {
         if (isBlank(raw)) return null;
 
         String v = raw.trim();
 
-        // 이미 URL이면 그대로
         if (v.startsWith("http://") || v.startsWith("https://")) return v;
 
-        // 파일명/경로 앞에 / 있으면 제거해서 중복 슬래시 방지
         while (v.startsWith("/")) v = v.substring(1);
 
         String base = cfBase();
-        if (isBlank(base)) return v; // 설정이 비어있으면 원본 반환(방어)
+        if (isBlank(base)) return v;
 
         return base + "/" + v;
     }
 
-    /**
-     * ✅ CloudFront URL -> S3 key로 변환
-     * - 선행 "/" 제거해서 "media_x.jpg" 형태로 반환
-     */
     private String toS3KeyIfCloudFront(String url) {
         if (isBlank(url)) return null;
 
@@ -84,7 +71,6 @@ public class PostService {
         if (!u.startsWith(prefix)) return null;
 
         String key = u.substring(prefix.length());
-
         while (key.startsWith("/")) key = key.substring(1);
 
         return isBlank(key) ? null : key;
@@ -158,7 +144,6 @@ public class PostService {
                 img.setPostType(types.get(i));
                 img.setImageOrder(i);
 
-                // ✅ addImage로 양방향 세팅 + 컬렉션 유지
                 post.addImage(img);
             }
         }
@@ -205,7 +190,6 @@ public class PostService {
         String s3Key = toS3KeyIfCloudFront(imageToDelete.getImageUrl());
         if (!isBlank(s3Key)) s3Service.deleteImageFromS3(s3Key);
 
-        // ✅ orphanRemoval이라 images.remove만 해도 삭제됨 (repo delete는 있어도 되지만 중복)
         images.remove(imageToDelete);
 
         if (images.isEmpty()) {
@@ -231,7 +215,6 @@ public class PostService {
                 .filter(Objects::nonNull)
                 .toList();
 
-        // ✅ orphanRemoval/cascade로도 되지만, 명시적으로 지우는 기존 흐름 유지
         postImageRepository.deleteAllByPost(post);
         commentRepository.deleteAllByPost(post);
         postRepository.delete(post);
@@ -241,25 +224,53 @@ public class PostService {
         }
     }
 
-
+    // =========================
+    // ✅ 여기! 500 방지 핵심 메서드
+    // - fetch join + order by를 "직접 같이" 안함
+    // - IDs 정렬을 기준으로 서비스에서 순서 복원
+    // =========================
     @Transactional(readOnly = true)
     public List<PostDTO> getPostsByFamilyAndCategory(Long userId, UUID familyId, UUID categoryId) {
-        List<Post> posts;
-    
+        // (선택) 권한 검증을 여기서도 하고 싶으면 추가 가능
+        // boolean allowed = userFamilyRepository.existsByUser_UserIdAndFamily_FamilyId(userId, familyId);
+        // if (!allowed) throw new RuntimeException("권한 없음");
+
+        List<UUID> ids;
         if (categoryId == null) {
-            posts = postRepository.findAllByFamily_FamilyIdOrderByCreatedAtDesc(familyId);
+            ids = postRepository.findPostIdsByFamilyOrderByCreatedAtDesc(familyId);
         } else {
-            posts = postRepository.findAllByFamily_FamilyIdAndCategory_CategoryIdOrderByCreatedAtDesc(
-                    familyId, categoryId);
+            ids = postRepository.findPostIdsByFamilyAndCategoryOrderByCreatedAtDesc(familyId, categoryId);
         }
-    
-        List<PostDTO> result = new ArrayList<>();
-        for (Post post : posts) {
-            result.add(PostDTO.from(post));
+
+        if (ids == null || ids.isEmpty()) return List.of();
+
+        List<Post> fetched = postRepository.findPostsWithImagesByIds(ids);
+
+        // ✅ 1) postId -> Post 맵
+        Map<UUID, Post> map = new HashMap<>();
+        for (Post p : fetched) {
+            if (p != null && p.getPostId() != null) {
+                map.put(p.getPostId(), p);
+            }
         }
-        return result;
+
+        // ✅ 2) IDs 순서대로 정렬 복원
+        List<Post> ordered = new ArrayList<>();
+        for (UUID id : ids) {
+            Post p = map.get(id);
+            if (p != null) ordered.add(p);
+        }
+
+        // ✅ 3) images 정렬까지 필요하면 여기서 한 번 더 (imageOrder 기준)
+        for (Post p : ordered) {
+            List<PostImage> imgs = p.getImages();
+            if (imgs != null) {
+                imgs.sort(Comparator.comparingInt(PostImage::getImageOrder));
+            }
+        }
+
+        return ordered.stream().map(PostDTO::from).toList();
     }
-    
 
     @Transactional
     public void updatePost(UUID postId, Long authenticatedUserId, UpdatePostRequest request) {
@@ -291,7 +302,6 @@ public class PostService {
         if (wantsImageUpdate) {
             validateMediaLists(incomingUrls, incomingTypes);
 
-            // ✅ CloudFront full url로 통일
             List<String> newUrlList = new ArrayList<>();
             for (String raw : incomingUrls) {
                 String normalized = normalizeToCloudFrontUrl(raw);
@@ -302,7 +312,6 @@ public class PostService {
                 throw new IllegalArgumentException("정규화 후 imageUrls와 postTypes 길이가 달라졌습니다.");
             }
 
-            // ✅ old/new 비교를 위해 기존 url set 만들기
             List<PostImage> oldImages = post.getImages() == null ? new ArrayList<>() : post.getImages();
 
             Set<String> oldUrlSet = new HashSet<>();
@@ -312,7 +321,6 @@ public class PostService {
 
             Set<String> newUrlSet = new HashSet<>(newUrlList);
 
-            // (A) 삭제된 이미지 S3 삭제
             for (String oldUrl : oldUrlSet) {
                 if (!newUrlSet.contains(oldUrl)) {
                     String s3Key = toS3KeyIfCloudFront(oldUrl);
@@ -320,8 +328,6 @@ public class PostService {
                 }
             }
 
-            // (B) ✅ JPA orphanRemoval 안전 업데이트
-            // - 컬렉션 "참조 유지" + clear/add만
             post.clearImages();
 
             for (int i = 0; i < newUrlList.size(); i++) {
@@ -329,7 +335,6 @@ public class PostService {
                 img.setImageUrl(newUrlList.get(i));
                 img.setPostType(incomingTypes.get(i));
                 img.setImageOrder(i);
-
                 post.addImage(img);
             }
         }
@@ -337,107 +342,25 @@ public class PostService {
         postRepository.save(post);
     }
 
-    @Transactional
-    public void updatePost(UUID postId, Long authenticatedUserId, PostDTO postDTO) {
-        if (postDTO == null) throw new IllegalArgumentException("postDTO is null");
+    @Transactional(readOnly = true)
+    public PostDTO getPostById(Long userId, UUID postId) {
+        if (userId == null) throw new IllegalArgumentException("userId is null");
+        if (postId == null) throw new IllegalArgumentException("postId is null");
 
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("게시글 없음"));
 
-        Long authorId = post.getAuthor() != null ? post.getAuthor().getUserId() : null;
-        if (authorId == null || !authorId.equals(authenticatedUserId)) {
-            throw new RuntimeException("작성자만 수정할 수 있습니다.");
+        UUID familyId = (post.getFamily() != null) ? post.getFamily().getFamilyId() : null;
+        if (familyId == null) {
+            throw new RuntimeException("가족 정보 없음");
         }
 
-        if (postDTO.getContent() != null) post.setContent(postDTO.getContent());
-
-        UUID categoryId = postDTO.getCategoryId();
-        String categoryTitle = postDTO.getCategoryTitle();
-
-        if (categoryId != null) {
-            Category category = categoryRepository.findById(categoryId)
-                    .orElseThrow(() -> new RuntimeException("존재하지 않는 카테고리: " + categoryId));
-            post.setCategory(category);
-        } else if (!isBlank(categoryTitle)) {
-            Category c = new Category();
-            c.setTitle(categoryTitle);
-            c.setFamily(post.getFamily());
-            Category saved = categoryRepository.save(c);
-            post.setCategory(saved);
+        boolean allowed = userFamilyRepository.existsByUser_UserIdAndFamily_FamilyId(userId, familyId);
+        if (!allowed) {
+            throw new RuntimeException("권한 없음");
         }
 
-        List<String> incomingUrls = postDTO.getImageUrls();
-        List<PostType> incomingTypes = postDTO.getPostTypes();
-
-        if (incomingUrls == null && incomingTypes == null) {
-            postRepository.save(post);
-            return;
-        }
-
-        validateMediaLists(incomingUrls, incomingTypes);
-
-        List<String> newUrlList = new ArrayList<>();
-        for (String raw : incomingUrls) {
-            String normalized = normalizeToCloudFrontUrl(raw);
-            if (normalized != null) newUrlList.add(normalized);
-        }
-
-        if (newUrlList.size() != incomingTypes.size()) {
-            throw new IllegalArgumentException("정규화 후 imageUrls와 postTypes 길이가 달라졌습니다.");
-        }
-
-        List<PostImage> oldImages = post.getImages() == null ? new ArrayList<>() : post.getImages();
-
-        Set<String> oldUrlSet = new HashSet<>();
-        for (PostImage pi : oldImages) {
-            if (pi != null && pi.getImageUrl() != null) oldUrlSet.add(pi.getImageUrl());
-        }
-
-        Set<String> newUrlSet = new HashSet<>(newUrlList);
-
-        for (String oldUrl : oldUrlSet) {
-            if (!newUrlSet.contains(oldUrl)) {
-                String s3Key = toS3KeyIfCloudFront(oldUrl);
-                if (!isBlank(s3Key)) s3Service.deleteImageFromS3(s3Key);
-            }
-        }
-
-        // ✅ orphanRemoval 안전 업데이트
-        post.clearImages();
-
-        for (int i = 0; i < newUrlList.size(); i++) {
-            PostImage img = new PostImage();
-            img.setImageUrl(newUrlList.get(i));
-            img.setPostType(incomingTypes.get(i));
-            img.setImageOrder(i);
-
-            post.addImage(img);
-        }
-
-        postRepository.save(post);
+        // 단건은 images가 필요하면 별도 fetch join 쿼리를 만들어도 됨
+        return PostDTO.from(post);
     }
-
-    @Transactional(readOnly = true)
-public PostDTO getPostById(Long userId, UUID postId) {
-    if (userId == null) throw new IllegalArgumentException("userId is null");
-    if (postId == null) throw new IllegalArgumentException("postId is null");
-
-    Post post = postRepository.findById(postId)
-            .orElseThrow(() -> new RuntimeException("게시글 없음"));
-
-    UUID familyId = (post.getFamily() != null) ? post.getFamily().getFamilyId() : null;
-    if (familyId == null) {
-        throw new RuntimeException("가족 정보 없음");
-    }
-
-    // ✅ 권한 검증: 해당 유저가 게시글의 가족에 속해있는지
-    boolean allowed = userFamilyRepository.existsByUser_UserIdAndFamily_FamilyId(userId, familyId);
-    if (!allowed) {
-        // 403 의미가 맞음
-        throw new RuntimeException("권한 없음");
-    }
-
-    return PostDTO.from(post);
-}
-
 }

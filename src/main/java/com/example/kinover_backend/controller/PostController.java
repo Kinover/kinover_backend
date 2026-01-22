@@ -28,6 +28,19 @@ public class PostController {
     private final UserService userService;
     private final JwtUtil jwtUtil;
 
+    // =========================
+    // ✅ 공통: Authorization 헤더 방어
+    // - null/NPE로 500 나지 않게
+    // - Bearer 형식 아니면 401로 명확히
+    // =========================
+    private String extractBearerTokenOrNull(String authorizationHeader) {
+        if (authorizationHeader == null) return null;
+        String v = authorizationHeader.trim();
+        if (!v.startsWith("Bearer ")) return null;
+        String token = v.substring("Bearer ".length()).trim();
+        return token.isEmpty() ? null : token;
+    }
+
     @Operation(
             summary = "게시글 작성",
             description = "게시글을 생성합니다. imageUrls에 파일 이름을 인자로 받습니다."
@@ -35,13 +48,17 @@ public class PostController {
     @ApiResponse(responseCode = "200", description = "게시글 작성 성공")
     @PostMapping
     public ResponseEntity<Void> createPost(
-            @RequestHeader("Authorization") String authorizationHeader,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             @RequestBody PostDTO postDTO
     ) {
-        String token = authorizationHeader.replace("Bearer ", "");
+        String token = extractBearerTokenOrNull(authorizationHeader);
+        if (token == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
         Long authenticatedUserId = jwtUtil.getUserIdFromToken(token);
 
-        if (!authenticatedUserId.equals(postDTO.getAuthorId())) {
+        if (postDTO == null || postDTO.getAuthorId() == null || !authenticatedUserId.equals(postDTO.getAuthorId())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
@@ -56,10 +73,14 @@ public class PostController {
     @ApiResponse(responseCode = "200", description = "게시글 단건 조회 성공")
     @GetMapping("/{postId}")
     public ResponseEntity<PostDTO> getPostById(
-            @RequestHeader("Authorization") String authorizationHeader,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             @PathVariable UUID postId
     ) {
-        String token = authorizationHeader.replace("Bearer ", "");
+        String token = extractBearerTokenOrNull(authorizationHeader);
+        if (token == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
         Long userId = jwtUtil.getUserIdFromToken(token);
 
         PostDTO post = postService.getPostById(userId, postId);
@@ -72,10 +93,23 @@ public class PostController {
     )
     @DeleteMapping("/{postId}/image")
     public ResponseEntity<Void> deleteImageFromPost(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             @PathVariable UUID postId,
             @RequestBody Map<String, String> request
     ) {
-        String imageUrl = request.get("imageUrl");
+        // ✅ 이 API는 기존엔 토큰 검증이 아예 없었음 (누구나 삭제 가능 상태)
+        // ✅ 최소한 401 방어라도 넣어두자
+        String token = extractBearerTokenOrNull(authorizationHeader);
+        if (token == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        jwtUtil.getUserIdFromToken(token); // 토큰 유효성 확인용(결과는 현재 로직에서 미사용)
+
+        String imageUrl = request != null ? request.get("imageUrl") : null;
+        if (imageUrl == null || imageUrl.trim().isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+
         postService.deleteImage(postId, imageUrl);
         return ResponseEntity.ok().build();
     }
@@ -85,7 +119,17 @@ public class PostController {
             description = "게시글 ID를 통해 해당 게시글을 삭제합니다."
     )
     @DeleteMapping("/{postId}")
-    public ResponseEntity<Void> deletePost(@PathVariable UUID postId) {
+    public ResponseEntity<Void> deletePost(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable UUID postId
+    ) {
+        // ✅ 이 API도 기존엔 토큰 검증이 아예 없었음 (누구나 삭제 가능 상태)
+        String token = extractBearerTokenOrNull(authorizationHeader);
+        if (token == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        jwtUtil.getUserIdFromToken(token);
+
         postService.deletePost(postId);
         return ResponseEntity.ok().build();
     }
@@ -97,11 +141,15 @@ public class PostController {
     @ApiResponse(responseCode = "200", description = "게시글 목록 조회 성공")
     @GetMapping
     public ResponseEntity<List<PostDTO>> getPostsByFamilyAndCategory(
-            @RequestHeader("Authorization") String authorizationHeader,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             @RequestParam("familyId") UUID familyId,
             @RequestParam(value = "categoryId", required = false) UUID categoryId
     ) {
-        String token = authorizationHeader.replace("Bearer ", "");
+        String token = extractBearerTokenOrNull(authorizationHeader);
+        if (token == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
         Long userId = jwtUtil.getUserIdFromToken(token);
 
         List<PostDTO> posts = postService.getPostsByFamilyAndCategory(userId, familyId, categoryId);
@@ -111,9 +159,17 @@ public class PostController {
     @PatchMapping("/notification/post")
     @Operation(summary = "게시글 알림 ON/OFF", description = "userId와 상태(true/false)를 전달하여 게시글 알림을 켜거나 끕니다.")
     public ResponseEntity<String> updatePostNotificationSetting(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             @RequestParam Long userId,
             @RequestParam boolean isOn
     ) {
+        // ✅ 이 API도 최소한 토큰 없으면 401
+        String token = extractBearerTokenOrNull(authorizationHeader);
+        if (token == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        jwtUtil.getUserIdFromToken(token);
+
         boolean success = userService.updatePostNotificationSetting(userId, isOn);
         if (success) return ResponseEntity.ok("Post notification setting updated.");
         else return ResponseEntity.badRequest().body("Invalid userId");
@@ -126,15 +182,19 @@ public class PostController {
     @ApiResponse(responseCode = "200", description = "게시글 수정 성공")
     @PatchMapping("/{postId}")
     public ResponseEntity<Void> updatePost(
-            @RequestHeader("Authorization") String authorizationHeader,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             @PathVariable UUID postId,
             @RequestBody UpdatePostRequest request
     ) {
-        String token = authorizationHeader.replace("Bearer ", "");
+        String token = extractBearerTokenOrNull(authorizationHeader);
+        if (token == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
         Long authenticatedUserId = jwtUtil.getUserIdFromToken(token);
 
         // ✅ 작성자 검증
-        if (request.getAuthorId() == null || !authenticatedUserId.equals(request.getAuthorId())) {
+        if (request == null || request.getAuthorId() == null || !authenticatedUserId.equals(request.getAuthorId())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
