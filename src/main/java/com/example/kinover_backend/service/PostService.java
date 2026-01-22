@@ -251,44 +251,26 @@ public class PostService {
     public List<PostDTO> getPostsByFamilyAndCategory(Long userId, UUID familyId, UUID categoryId) {
         if (userId == null) throw new IllegalArgumentException("userId is null");
         if (familyId == null) throw new IllegalArgumentException("familyId is null");
-
-        // ✅ 권한 검증(목록도 막아야 함)
+    
         boolean allowed = userFamilyRepository.existsByUser_UserIdAndFamily_FamilyId(userId, familyId);
-        if (!allowed) throw new RuntimeException("권한 없음");
-
-        List<UUID> ids = (categoryId == null)
-                ? postRepository.findPostIdsByFamilyOrderByCreatedAtDesc(familyId)
-                : postRepository.findPostIdsByFamilyAndCategoryOrderByCreatedAtDesc(familyId, categoryId);
-
-        if (ids == null || ids.isEmpty()) return List.of();
-
-        List<Post> fetched = postRepository.findPostsWithImagesByIds(ids);
-
-        Map<UUID, Post> map = new HashMap<>();
-        for (Post p : fetched) {
-            if (p != null && p.getPostId() != null) {
-                map.put(p.getPostId(), p);
-            }
-        }
-
-        List<Post> ordered = new ArrayList<>();
-        for (UUID id : ids) {
-            Post p = map.get(id);
-            if (p != null) ordered.add(p);
-        }
-
-        // ✅ 핵심 수정: primitive int 정렬은 comparingInt 사용 (null-safe 제거)
-        for (Post p : ordered) {
+        if (!allowed) throw new SecurityException("권한 없음");
+    
+        List<Post> posts = (categoryId == null)
+                ? postRepository.findByFamilyWithImagesOrderByCreatedAtDesc(familyId)
+                : postRepository.findByFamilyAndCategoryWithImagesOrderByCreatedAtDesc(familyId, categoryId);
+    
+        // images 정렬 (지금처럼 정렬 유지)
+        for (Post p : posts) {
             List<PostImage> imgs = p.getImages();
             if (imgs != null) {
                 imgs.removeIf(Objects::isNull);
                 imgs.sort(Comparator.comparingInt(PostImage::getImageOrder));
             }
         }
-
-        return ordered.stream().map(PostDTO::from).toList();
+    
+        return posts.stream().map(PostDTO::from).toList();
     }
-
+    
     // =========================
     // UPDATE (content/category/images)
     // =========================
