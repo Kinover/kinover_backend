@@ -35,8 +35,8 @@ dependencies {
     // DB driver
     runtimeOnly 'org.mariadb.jdbc:mariadb-java-client'
 
-    // ✅ Swagger (Boot 3.4.x 호환: springdoc 2.7~2.8 라인)
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.0'
+    // ✅ Swagger (Boot 3.4.x + Spring 6.2.x 호환)
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.15'
 
     // JWT (jjwt 0.11.5)
     implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
