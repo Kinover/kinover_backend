@@ -65,10 +65,6 @@ public class ChatRoomService {
             // ✅ 신규 생성/초대 정책: 초대 시점 이전 메시지는 읽음 처리
             ucr.setLastReadAt(LocalDateTime.now());
 
-            // ✅ 유저별 이름은 생성 후 한 번에 세팅 (아래 initDisplayRoomNamesAfterCreate에서)
-            // ucr.setDisplayRoomName(null);
-            // ucr.setCustomRoomName(false);
-
             userChatRoomRepository.save(ucr);
         }
 
@@ -127,7 +123,7 @@ public class ChatRoomService {
                     dto.setLatestMessageTime(message.getCreatedAt());
                 });
 
-        // ✅ 멤버 이미지 (LAZY 안전하게 Repository 통해 users 조회)
+        // ✅ 멤버 이미지
         List<String> images;
         if (isKinoRoom(chatRoomId)) {
             String suffix;
@@ -169,7 +165,7 @@ public class ChatRoomService {
         }
         dto.setUnreadCount(Math.max(unread, 0));
 
-        // ✅ 유저별 표시 이름 적용 (roomName을 displayRoomName으로 치환)
+        // ✅ 유저별 표시 이름 적용
         applyDisplayRoomName(dto, userId);
 
         return dto;
@@ -184,7 +180,7 @@ public class ChatRoomService {
     }
 
     // =========================
-    // ✅ 특정 유저의 lastReadAt 가져오기 (푸시 스킵 등에 사용)
+    // ✅ 특정 유저 lastReadAt
     // =========================
     @Transactional(readOnly = true)
     public LocalDateTime getLastReadAt(UUID chatRoomId, Long userId) {
@@ -213,7 +209,6 @@ public class ChatRoomService {
                     .orElseThrow(() -> new RuntimeException("읽음 처리 대상 row 없음"));
             return false;
         }
-
         return true;
     }
 
@@ -266,7 +261,7 @@ public class ChatRoomService {
             ucr.setUser(user);
             ucr.setChatRoom(chatRoom);
 
-            // ✅ 신규 초대 정책: 초대 시점 이전 메시지는 읽음 처리
+            // ✅ 신규 초대 정책
             ucr.setLastReadAt(LocalDateTime.now());
 
             userChatRoomRepository.save(ucr);
@@ -276,21 +271,17 @@ public class ChatRoomService {
         chatRoom.setFamilyType(memberCount > 2 ? "family" : "personal");
         chatRoomRepository.save(chatRoom);
 
-        // ✅ 멤버 변경 이후: "커스텀 이름이 아닌 사람들"의 기본 표시 이름을 최신 멤버 기준으로 갱신
-        // (커스텀으로 바꾼 사람은 그대로 유지)
+        // ✅ 멤버 변경 이후: 커스텀 이름 아닌 사람들만 기본 표시 이름 갱신
         refreshDisplayRoomNamesIfNotCustom(chatRoomId);
 
         ChatRoomDTO dto = chatRoomMapper.toDTO(chatRoom);
-
-        // ✅ 요청자 기준 displayName 적용해서 내려줌
         applyDisplayRoomName(dto, requesterId);
 
         return dto;
     }
 
     // =========================
-    // ✅ 특정 유저가 가진 채팅방 조회 (+ unreadCount)
-    // - 2-step으로 멤버 fetch join 해서 N+1 방지
+    // ✅ 특정 유저의 채팅방 목록 조회 (+ unreadCount)
     // =========================
     @Transactional(readOnly = true)
     public List<ChatRoomDTO> getAllChatRooms(Long userId, UUID familyId) {
@@ -298,7 +289,6 @@ public class ChatRoomService {
         Set<UUID> chatRoomIds = chatRoomRepository.findChatRoomIdsByUserAndFamily(userId, familyId);
         if (chatRoomIds == null || chatRoomIds.isEmpty()) return List.of();
 
-        // ✅ 방 + 멤버 + 유저까지 한 번에 fetch
         List<ChatRoom> chatRooms = chatRoomRepository.findByChatRoomIdInWithMembers(chatRoomIds);
 
         return chatRooms.stream().map(chatRoom -> {
@@ -331,7 +321,6 @@ public class ChatRoomService {
 
                 images = List.of(cloudFrontDomain + suffix);
             } else {
-                // ✅ 이제 chatRoom.userChatRooms + user가 fetch 되어 있어 LAZY 안정
                 images = chatRoom.getUserChatRooms().stream()
                         .map(UserChatRoom::getUser)
                         .filter(u -> !u.getUserId().equals(userId))
@@ -364,7 +353,7 @@ public class ChatRoomService {
             }
             dto.setUnreadCount(Math.max(unread, 0));
 
-            // ✅ 유저별 표시 이름 적용 (roomName을 displayRoomName으로 치환)
+            // ✅ 유저별 표시 이름 적용
             applyDisplayRoomName(dto, userId);
 
             return dto;
@@ -372,7 +361,7 @@ public class ChatRoomService {
     }
 
     // =========================
-    // 특정 채팅방의 유저 조회
+    // 특정 채팅방 유저 조회
     // =========================
     @Transactional(readOnly = true)
     public List<UserDTO> getUsersByChatRoom(UUID chatRoomId) {
@@ -405,11 +394,12 @@ public class ChatRoomService {
     }
 
     // =========================
-    // ✅ 채팅방 이름 변경 (나만)
+    // ✅ 채팅방 이름 변경 (나만)  ★ 여기 rename/me 500의 핵심
     // =========================
     @Transactional
     public void renameChatRoomForUser(UUID chatRoomId, Long userId, String newName) {
-        UserChatRoom ucr = userChatRoomRepository.findByChatRoomIdAndUserId(chatRoomId, userId)
+        UserChatRoom ucr = userChatRoomRepository
+                .findByUser_UserIdAndChatRoom_ChatRoomId(userId, chatRoomId)
                 .orElseThrow(() -> new RuntimeException("UserChatRoom not found"));
 
         ucr.setDisplayRoomName(newName);
@@ -459,7 +449,6 @@ public class ChatRoomService {
                 s3Service.deleteImageFromS3(s3Key);
             }
         } else {
-            // ✅ 남은 멤버가 있고, 커스텀 이름이 아닌 사람들은 기본 표시 이름을 재계산해서 최신화
             refreshDisplayRoomNamesIfNotCustom(chatRoomId);
         }
     }
@@ -525,7 +514,7 @@ public class ChatRoomService {
     }
 
     // =========================================================
-    // ✅ 유저별 채팅방 표시 이름 로직 (핵심)
+    // ✅ 유저별 채팅방 표시 이름 로직
     // =========================================================
 
     private String buildDefaultDisplayNameForUser(Long meUserId, List<UserDTO> members) {
@@ -534,7 +523,7 @@ public class ChatRoomService {
 
         String name = sorted.stream()
                 .filter(u -> u.getUserId() != null && !u.getUserId().equals(meUserId))
-                .map(UserDTO::getName) // 프로젝트 UserDTO에 getName() 존재 가정
+                .map(UserDTO::getName)
                 .filter(n -> n != null && !n.isBlank())
                 .collect(Collectors.joining(", "));
 
@@ -542,31 +531,26 @@ public class ChatRoomService {
         return name;
     }
 
-    /**
-     * ✅ 채팅방 생성 직후 1회 호출:
-     * - 각 유저의 displayRoomName = "나 제외 멤버 이름 나열"
-     */
+    // ✅ 생성 직후 1회
     private void initDisplayRoomNamesAfterCreate(UUID chatRoomId, List<UserDTO> members) {
         for (UserDTO me : members) {
             Long meId = me.getUserId();
             if (meId == null) continue;
 
-            userChatRoomRepository.findByChatRoomIdAndUserId(chatRoomId, meId).ifPresent(ucr -> {
-                // 생성 직후 커스텀은 보통 false지만, 혹시라도 true면 존중
-                if (ucr.isCustomRoomName()) return;
+            userChatRoomRepository
+                    .findByUser_UserIdAndChatRoom_ChatRoomId(meId, chatRoomId)
+                    .ifPresent(ucr -> {
+                        if (ucr.isCustomRoomName()) return;
 
-                String defaultName = buildDefaultDisplayNameForUser(meId, members);
-                ucr.setDisplayRoomName(defaultName);
-                ucr.setCustomRoomName(false);
-                userChatRoomRepository.save(ucr);
-            });
+                        String defaultName = buildDefaultDisplayNameForUser(meId, members);
+                        ucr.setDisplayRoomName(defaultName);
+                        ucr.setCustomRoomName(false);
+                        userChatRoomRepository.save(ucr);
+                    });
         }
     }
 
-    /**
-     * ✅ 멤버 변동(초대/나가기) 이후:
-     * - 커스텀 이름이 아닌 사람들만 기본 표시 이름을 최신 멤버 기준으로 갱신
-     */
+    // ✅ 멤버 변동 이후
     private void refreshDisplayRoomNamesIfNotCustom(UUID chatRoomId) {
         List<UserDTO> members = getUsersByChatRoom(chatRoomId);
 
@@ -574,25 +558,25 @@ public class ChatRoomService {
             Long meId = me.getUserId();
             if (meId == null) continue;
 
-            userChatRoomRepository.findByChatRoomIdAndUserId(chatRoomId, meId).ifPresent(ucr -> {
-                if (ucr.isCustomRoomName()) return; // 커스텀 이름은 유지
-                String defaultName = buildDefaultDisplayNameForUser(meId, members);
-                ucr.setDisplayRoomName(defaultName);
-                ucr.setCustomRoomName(false);
-                userChatRoomRepository.save(ucr);
-            });
+            userChatRoomRepository
+                    .findByUser_UserIdAndChatRoom_ChatRoomId(meId, chatRoomId)
+                    .ifPresent(ucr -> {
+                        if (ucr.isCustomRoomName()) return;
+
+                        String defaultName = buildDefaultDisplayNameForUser(meId, members);
+                        ucr.setDisplayRoomName(defaultName);
+                        ucr.setCustomRoomName(false);
+                        userChatRoomRepository.save(ucr);
+                    });
         }
     }
 
-    /**
-     * ✅ DTO 만들 때: 요청 userId 기준으로 displayRoomName을 dto.roomName에 넣음
-     * - displayRoomName이 null/blank면 즉석 계산값으로 fallback
-     */
+    // ✅ DTO 만들 때: 요청 userId 기준 displayRoomName을 dto.roomName에 넣음
     private void applyDisplayRoomName(ChatRoomDTO dto, Long requesterUserId) {
         if (dto == null || dto.getChatRoomId() == null || requesterUserId == null) return;
 
         String display = userChatRoomRepository
-                .findByChatRoomIdAndUserId(dto.getChatRoomId(), requesterUserId)
+                .findByUser_UserIdAndChatRoom_ChatRoomId(requesterUserId, dto.getChatRoomId())
                 .map(UserChatRoom::getDisplayRoomName)
                 .orElse(null);
 
