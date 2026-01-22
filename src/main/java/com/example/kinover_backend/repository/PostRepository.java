@@ -38,7 +38,7 @@ public interface PostRepository extends JpaRepository<Post, UUID> {
         select distinct p
         from Post p
         left join fetch p.images i
-        where p.postId in :ids
+        where p.postId in (:ids)
     """)
     List<Post> findPostsWithImagesByIds(@Param("ids") List<UUID> ids);
 }
