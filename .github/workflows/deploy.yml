@@ -21,11 +21,9 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
-      # ✅ 여기서부터가 핵심: 항상 깨끗하게, daemon 없이, bootJar로 고정
       - name: Build bootJar (clean)
         run: ./gradlew --no-daemon clean bootJar -x test
 
-      # ✅ 만들어진 jar 이름을 고정 파일명으로 복사(배포/실행 편하게)
       - name: Prepare artifact
         run: |
           ls -al build/libs
@@ -33,7 +31,6 @@ jobs:
           echo "Jar: $JAR"
           cp "build/libs/$JAR" build/libs/app.jar
 
-      # ✅ EC2로 jar 전송
       - name: Upload jar to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -43,8 +40,7 @@ jobs:
           source: "build/libs/app.jar"
           target: "/home/ubuntu/kinover_backend/deploy"
 
-      # ✅ EC2에서 실행만 담당
-      - name: Restart app on EC2
+      - name: Restart app on EC2 (systemd)
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -52,38 +48,40 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             set -e
+
             cd /home/ubuntu/kinover_backend
-
             mkdir -p deploy
-            ls -al deploy
 
-            echo "Creating .env file"
-            cat <<EOF > .env
-            SPRING_DATASOURCE_URL="${{ secrets.SPRING_DATASOURCE_URL }}"
-            SPRING_DATASOURCE_USERNAME=${{ secrets.SPRING_DATASOURCE_USERNAME }}
-            SPRING_DATASOURCE_PASSWORD=${{ secrets.SPRING_DATASOURCE_PASSWORD }}
-            JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
-            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
-            KAKAO_REST_API_KEY=${{ secrets.KAKAO_REST_API_KEY }}
-            REDIS_HOST=localhost
-            REDIS_PORT=6379
-            AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
-            AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
-            EOF
-
-            echo "Stop existing app on 9090"
-            if lsof -i:9090 -t >/dev/null; then
-              PID=$(lsof -i:9090 -t)
-              echo "Killing PID: $PID"
-              kill -9 $PID
+            echo "== Ensure jar path fixed =="
+            # scp-action이 경로를 보존할 수 있어서 실제 파일 위치를 찾아 고정 위치로 복사
+            if [ -f "/home/ubuntu/kinover_backend/deploy/build/libs/app.jar" ]; then
+              cp -f "/home/ubuntu/kinover_backend/deploy/build/libs/app.jar" "/home/ubuntu/kinover_backend/deploy/app.jar"
+            elif [ -f "/home/ubuntu/kinover_backend/deploy/app.jar" ]; then
+              echo "app.jar already at deploy/app.jar"
             else
-              echo "No process on 9090"
+              echo "ERROR: app.jar not found under deploy. Listing:"
+              find /home/ubuntu/kinover_backend/deploy -maxdepth 3 -type f -name "app.jar" -print
+              exit 1
             fi
 
-            echo "Start app"
-            nohup java -Duser.timezone=Asia/Seoul -jar /home/ubuntu/kinover_backend/deploy/build/libs/app.jar \
-              > /home/ubuntu/kinover_backend/app.log 2>&1 &
+            echo "== Create .env file =="
+            cat <<EOF > /home/ubuntu/kinover_backend/.env
+            SPRING_DATASOURCE_URL="${{ secrets.SPRING_DATASOURCE_URL }}"
+            SPRING_DATASOURCE_USERNAME="${{ secrets.SPRING_DATASOURCE_USERNAME }}"
+            SPRING_DATASOURCE_PASSWORD="${{ secrets.SPRING_DATASOURCE_PASSWORD }}"
+            JWT_SECRET_KEY="${{ secrets.JWT_SECRET_KEY }}"
+            OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}"
+            KAKAO_REST_API_KEY="${{ secrets.KAKAO_REST_API_KEY }}"
+            REDIS_HOST="localhost"
+            REDIS_PORT="6379"
+            AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}"
+            AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+            EOF
+            chmod 600 /home/ubuntu/kinover_backend/.env
 
-            sleep 1
-            echo "Health check: /v3/api-docs"
+            echo "== Restart service via systemd =="
+            sudo systemctl restart kinover
+            sudo systemctl status kinover --no-pager
+
+            echo "== Health check: /v3/api-docs =="
             curl -s -o /dev/null -w "%{http_code}\n" http://localhost:9090/v3/api-docs || true
