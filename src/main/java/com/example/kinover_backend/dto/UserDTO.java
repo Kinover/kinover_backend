@@ -6,7 +6,7 @@ import com.example.kinover_backend.enums.UserEmotion;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.webjars.NotFoundException;
+import com.example.kinover_backend.controller.NotFoundException;
 
 import java.time.LocalDateTime;
 import java.util.Date;
