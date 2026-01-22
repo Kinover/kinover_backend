@@ -1,13 +1,14 @@
+// src/main/java/com/example/kinover_backend/controller/GlobalExceptionHandler.java
 package com.example.kinover_backend.controller;
 
 import com.example.kinover_backend.dto.ErrorResponseDTO;
+import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import jakarta.servlet.http.HttpServletRequest;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -39,20 +40,20 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * ⚠️ 진짜 "예상 못한 서버 에러"만 처리
-     * Swagger / Spring 내부 흐름은 여기서 막지 않게 조건 추가
-          * @throws Exception 
-          */
-         @ExceptionHandler(Exception.class)
-         public ResponseEntity<ErrorResponseDTO> unknown(Exception e, HttpServletRequest request) throws Exception {
+     * ✅ 정말 예상 못한 서버 에러만 처리
+     * - Swagger / Spring 내부 문서화 흐름(/v3/api-docs, /swagger-ui)은 여기서 500으로 덮지 않게 예외를 그대로 던짐
+     */
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErrorResponseDTO> unknown(Exception e, HttpServletRequest request) throws Exception {
 
-        // ✅ Swagger / api-docs 요청은 그대로 예외 던짐
-        if (request.getRequestURI().startsWith("/v3/api-docs")
-                || request.getRequestURI().startsWith("/swagger-ui")) {
+        final String uri = (request != null) ? request.getRequestURI() : "";
+
+        // ✅ Swagger 관련 요청은 예외를 덮지 말고 그대로 위로 던져서, springdoc이 정상 처리/표시하게 둠
+        if (uri.startsWith("/v3/api-docs") || uri.startsWith("/swagger-ui")) {
             throw e;
         }
 
-        log.error("[INTERNAL_SERVER_ERROR]", e);
+        log.error("[INTERNAL_SERVER_ERROR] uri={}", uri, e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ErrorResponseDTO("INTERNAL_SERVER_ERROR", "서버 오류"));
     }
