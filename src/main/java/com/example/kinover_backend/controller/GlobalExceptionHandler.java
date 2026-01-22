@@ -1,4 +1,3 @@
-// src/main/java/com/example/kinover_backend/controller/GlobalExceptionHandler.java
 package com.example.kinover_backend.controller;
 
 import com.example.kinover_backend.dto.ErrorResponseDTO;
@@ -40,16 +39,14 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * ✅ 정말 예상 못한 서버 에러만 처리
-     * - Swagger / Spring 내부 문서화 흐름(/v3/api-docs, /swagger-ui)은 여기서 500으로 덮지 않게 예외를 그대로 던짐
+     * ✅ 진짜 예상 못한 서버 에러만 처리
+     * - Swagger /v3/api-docs, /swagger-ui 요청은 springdoc 내부에서 처리하도록 예외를 다시 던짐
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponseDTO> unknown(Exception e, HttpServletRequest request) throws Exception {
+        String uri = request.getRequestURI();
 
-        final String uri = (request != null) ? request.getRequestURI() : "";
-
-        // ✅ Swagger 관련 요청은 예외를 덮지 말고 그대로 위로 던져서, springdoc이 정상 처리/표시하게 둠
-        if (uri.startsWith("/v3/api-docs") || uri.startsWith("/swagger-ui")) {
+        if (uri != null && (uri.startsWith("/v3/api-docs") || uri.startsWith("/swagger-ui"))) {
             throw e;
         }
 

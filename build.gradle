@@ -23,21 +23,8 @@ repositories {
     mavenCentral()
 }
 
-/**
- * ✅ springdoc / spring framework 런타임 충돌 방지
- * - /v3/api-docs 500 (NoSuchMethodError) 원인: springdoc 버전 mismatch
- * - 실행 jar에 springdoc 2.6.0이 들어가므로 일단 2.6.0으로 명시 고정
- */
-configurations.all {
-    resolutionStrategy {
-        force "org.springdoc:springdoc-openapi-starter-common:2.6.0"
-        force "org.springdoc:springdoc-openapi-starter-webmvc-api:2.6.0"
-        force "org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0"
-    }
-}
-
 dependencies {
-    // Spring starters (Boot BOM 관리)
+    // Spring starters
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
@@ -48,10 +35,10 @@ dependencies {
     // DB driver
     runtimeOnly 'org.mariadb.jdbc:mariadb-java-client'
 
-    // ✅ Swagger (Boot 3.x용 springdoc 2.x 라인)
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
+    // ✅ Swagger (Boot 3.4.x 호환: springdoc 2.7~2.8 라인)
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.0'
 
-    // JWT (jjwt 0.11.5 세트 유지)
+    // JWT (jjwt 0.11.5)
     implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
@@ -63,7 +50,7 @@ dependencies {
     implementation 'org.mapstruct:mapstruct:1.5.5.Final'
     annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
 
-    // ✅ AWS S3 (BOM으로 통일)
+    // AWS S3
     implementation platform("software.amazon.awssdk:bom:2.41.1")
     implementation 'software.amazon.awssdk:s3'
 
@@ -71,21 +58,19 @@ dependencies {
     implementation('com.google.firebase:firebase-admin:9.2.0') {
         exclude group: 'com.google.guava', module: 'guava'
     }
-
-    // ✅ guava는 명시적으로 하나만 고정
     implementation 'com.google.guava:guava:32.1.3-jre'
 
     // Lombok
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
 
+    // ✅ Redisson
+    implementation 'org.redisson:redisson-spring-boot-starter:4.1.0'
+
     // Tests
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-
-    // ✅ Redisson
-    implementation 'org.redisson:redisson-spring-boot-starter:4.1.0'
 }
 
 tasks.named('test') {
