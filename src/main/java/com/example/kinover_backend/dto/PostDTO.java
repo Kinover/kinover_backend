@@ -37,25 +37,26 @@ public class PostDTO {
         var author = post.getAuthor();
         var family = post.getFamily();
 
-        List<PostImage> images = (post.getImages() == null) ? List.of() : post.getImages();
+        List<PostImage> images = post.getImages();
+        if (images == null) images = Collections.emptyList();
 
-        // ✅ imageOrder 기준 정렬 (null-safe)
+        // ✅ imageOrder 기준 정렬
+        // - DB 스키마상 image_order는 NOT NULL이므로 comparingInt가 가장 안전/명확함
+        // - 혹시라도 엔티티/데이터가 깨져 null이 끼어있으면 filter로 제거
         List<PostImage> sorted = images.stream()
                 .filter(Objects::nonNull)
-                .sorted(Comparator.comparing(
-                        PostImage::getImageOrder,
-                        Comparator.nullsLast(Integer::compareTo)
-                ))
-                .toList();
+                .sorted(Comparator.comparingInt(PostImage::getImageOrder))
+                .collect(Collectors.toList());
 
         List<String> urls = sorted.stream()
                 .map(PostImage::getImageUrl)
-                .filter(Objects::nonNull)
-                .toList();
+                .filter(s -> s != null && !s.trim().isEmpty())
+                .collect(Collectors.toList());
 
         List<PostType> types = sorted.stream()
                 .map(PostImage::getPostType)
-                .toList();
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
 
         return PostDTO.builder()
                 .postId(post.getPostId())

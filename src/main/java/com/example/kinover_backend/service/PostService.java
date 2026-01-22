@@ -62,7 +62,7 @@ public class PostService {
         return base + "/" + v;
     }
 
-    /** CloudFront URL -> S3 key로 변환 (media_x.jpg 형태) */
+    /** CloudFront URL -> S3 key로 변환 */
     private String toS3KeyIfCloudFront(String url) {
         if (isBlank(url)) return null;
 
@@ -141,7 +141,6 @@ public class PostService {
 
         List<String> rawUrls = postDTO.getImageUrls();
         List<PostType> types = postDTO.getPostTypes();
-
         validateMediaLists(rawUrls, types);
 
         if (rawUrls != null) {
@@ -253,11 +252,9 @@ public class PostService {
         if (userId == null) throw new IllegalArgumentException("userId is null");
         if (familyId == null) throw new IllegalArgumentException("familyId is null");
 
-        // ✅ 권한 검증(강추: 목록도 막아야 함)
+        // ✅ 권한 검증(목록도 막아야 함)
         boolean allowed = userFamilyRepository.existsByUser_UserIdAndFamily_FamilyId(userId, familyId);
-        if (!allowed) {
-            throw new RuntimeException("권한 없음");
-        }
+        if (!allowed) throw new RuntimeException("권한 없음");
 
         List<UUID> ids = (categoryId == null)
                 ? postRepository.findPostIdsByFamilyOrderByCreatedAtDesc(familyId)
@@ -280,15 +277,12 @@ public class PostService {
             if (p != null) ordered.add(p);
         }
 
-        // ✅ 핵심: imageOrder null-safe 정렬 (여기서 NPE로 500 나는 케이스 많음)
-        Comparator<PostImage> imageOrderComparator =
-                Comparator.comparing(PostImage::getImageOrder, Comparator.nullsLast(Integer::compareTo));
-
+        // ✅ 핵심 수정: primitive int 정렬은 comparingInt 사용 (null-safe 제거)
         for (Post p : ordered) {
             List<PostImage> imgs = p.getImages();
             if (imgs != null) {
                 imgs.removeIf(Objects::isNull);
-                imgs.sort(imageOrderComparator);
+                imgs.sort(Comparator.comparingInt(PostImage::getImageOrder));
             }
         }
 
@@ -392,7 +386,8 @@ public class PostService {
         List<PostImage> imgs = post.getImages();
         if (imgs != null) {
             imgs.removeIf(Objects::isNull);
-            imgs.sort(Comparator.comparing(PostImage::getImageOrder, Comparator.nullsLast(Integer::compareTo)));
+            // ✅ 핵심 수정: primitive int 정렬은 comparingInt 사용 (null-safe 제거)
+            imgs.sort(Comparator.comparingInt(PostImage::getImageOrder));
         }
 
         return PostDTO.from(post);
