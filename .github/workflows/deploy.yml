@@ -21,16 +21,20 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
+      # ✅ 항상 깨끗하게, daemon 없이, bootJar로 고정
       - name: Build bootJar (clean)
         run: ./gradlew --no-daemon clean bootJar -x test
 
-      - name: Prepare artifact
+      # ✅ 만들어진 jar 이름을 app.jar로 고정
+      - name: Prepare artifact (rename to app.jar)
         run: |
           ls -al build/libs
           JAR=$(ls build/libs | grep -v plain.jar | grep '.jar$' | head -n 1)
           echo "Jar: $JAR"
           cp "build/libs/$JAR" build/libs/app.jar
+          ls -al build/libs/app.jar
 
+      # ✅ EC2로 app.jar 전송
       - name: Upload jar to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -40,6 +44,7 @@ jobs:
           source: "build/libs/app.jar"
           target: "/home/ubuntu/kinover_backend/deploy"
 
+      # ✅ EC2에서: jar 위치 고정 → .env 갱신 → systemd restart → health check
       - name: Restart app on EC2 (systemd)
         uses: appleboy/ssh-action@v0.1.10
         with:
@@ -50,21 +55,19 @@ jobs:
             set -e
 
             cd /home/ubuntu/kinover_backend
-            mkdir -p deploy
+            mkdir -p /home/ubuntu/kinover_backend/deploy
 
-            echo "== Ensure jar path fixed =="
-            # scp-action이 경로를 보존할 수 있어서 실제 파일 위치를 찾아 고정 위치로 복사
-            if [ -f "/home/ubuntu/kinover_backend/deploy/build/libs/app.jar" ]; then
-              cp -f "/home/ubuntu/kinover_backend/deploy/build/libs/app.jar" "/home/ubuntu/kinover_backend/deploy/app.jar"
-            elif [ -f "/home/ubuntu/kinover_backend/deploy/app.jar" ]; then
-              echo "app.jar already at deploy/app.jar"
-            else
-              echo "ERROR: app.jar not found under deploy. Listing:"
-              find /home/ubuntu/kinover_backend/deploy -maxdepth 3 -type f -name "app.jar" -print
+            echo "== Fix jar path to /deploy/app.jar (avoid scp path quirks) =="
+            FOUND=$(find /home/ubuntu/kinover_backend/deploy -maxdepth 5 -type f -name "app.jar" | head -n 1)
+            if [ -z "$FOUND" ]; then
+              echo "ERROR: app.jar not found under deploy. Listing files:"
+              find /home/ubuntu/kinover_backend/deploy -maxdepth 5 -type f -print
               exit 1
             fi
+            cp -f "$FOUND" /home/ubuntu/kinover_backend/deploy/app.jar
+            ls -al /home/ubuntu/kinover_backend/deploy/app.jar
 
-            echo "== Create .env file =="
+            echo "== Create / update .env =="
             cat <<EOF > /home/ubuntu/kinover_backend/.env
             SPRING_DATASOURCE_URL="${{ secrets.SPRING_DATASOURCE_URL }}"
             SPRING_DATASOURCE_USERNAME="${{ secrets.SPRING_DATASOURCE_USERNAME }}"
@@ -81,7 +84,7 @@ jobs:
 
             echo "== Restart service via systemd =="
             sudo systemctl restart kinover
-            sudo systemctl status kinover --no-pager
+            sudo systemctl status kinover --no-pager -l
 
             echo "== Health check: /v3/api-docs =="
-            curl -s -o /dev/null -w "%{http_code}\n" http://localhost:9090/v3/api-docs || true
+            curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:9090/v3/api-docs || true
