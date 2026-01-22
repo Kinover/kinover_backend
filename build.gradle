@@ -23,6 +23,19 @@ repositories {
     mavenCentral()
 }
 
+/**
+ * ✅ springdoc / spring framework 런타임 충돌 방지
+ * - /v3/api-docs 500 (NoSuchMethodError) 원인: springdoc 버전 mismatch
+ * - 실행 jar에 springdoc 2.6.0이 들어가므로 일단 2.6.0으로 명시 고정
+ */
+configurations.all {
+    resolutionStrategy {
+        force "org.springdoc:springdoc-openapi-starter-common:2.6.0"
+        force "org.springdoc:springdoc-openapi-starter-webmvc-api:2.6.0"
+        force "org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0"
+    }
+}
+
 dependencies {
     // Spring starters (Boot BOM 관리)
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -32,16 +45,10 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
 
-    // OAuth2 (현재는 커스텀 카카오 + jjwt 사용 → 불필요한 자동설정 방지)
-    // implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
-    // implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
-
-    // DB driver (Boot BOM 버전 사용)
+    // DB driver
     runtimeOnly 'org.mariadb.jdbc:mariadb-java-client'
 
-    // ✅ Swagger: Boot 3.x에서 가장 검증된 라인(2.x)
-    // 네가 겪는 문제는 swagger-ui 리소스/의존성 쪽 꼬임이 섞여 있었고,
-    // 2.6.0이 실사용 안정성이 훨씬 높음.
+    // ✅ Swagger (Boot 3.x용 springdoc 2.x 라인)
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
 
     // JWT (jjwt 0.11.5 세트 유지)
@@ -56,7 +63,7 @@ dependencies {
     implementation 'org.mapstruct:mapstruct:1.5.5.Final'
     annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
 
-    // AWS S3 (BOM으로 통일)
+    // ✅ AWS S3 (BOM으로 통일)
     implementation platform("software.amazon.awssdk:bom:2.41.1")
     implementation 'software.amazon.awssdk:s3'
 
@@ -65,20 +72,20 @@ dependencies {
         exclude group: 'com.google.guava', module: 'guava'
     }
 
-    // guava 고정
+    // ✅ guava는 명시적으로 하나만 고정
     implementation 'com.google.guava:guava:32.1.3-jre'
 
     // Lombok
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
 
-    // ✅ Redisson: starter 3.x 라인이 호환성 측면에서 더 무난함
-    implementation 'org.redisson:redisson-spring-boot-starter:3.27.2'
-
     // Tests
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // ✅ Redisson
+    implementation 'org.redisson:redisson-spring-boot-starter:4.1.0'
 }
 
 tasks.named('test') {
