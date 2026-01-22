@@ -11,7 +11,7 @@ import java.util.UUID;
 
 public interface PostRepository extends JpaRepository<Post, UUID> {
 
-    // ✅ 1) family 기준 postId 목록 (createdAt desc)
+    // 1) family 기준 postId 목록 (createdAt desc)
     @Query("""
         select p.postId
         from Post p
@@ -20,7 +20,7 @@ public interface PostRepository extends JpaRepository<Post, UUID> {
     """)
     List<UUID> findPostIdsByFamilyOrderByCreatedAtDesc(@Param("familyId") UUID familyId);
 
-    // ✅ 2) family + category 기준 postId 목록 (createdAt desc)
+    // 2) family + category 기준 postId 목록 (createdAt desc)
     @Query("""
         select p.postId
         from Post p
@@ -33,7 +33,7 @@ public interface PostRepository extends JpaRepository<Post, UUID> {
             @Param("categoryId") UUID categoryId
     );
 
-    // ✅ 3) ids로 posts + images fetch join
+    // 3) ids로 posts + images fetch join (정렬은 서비스에서 복원)
     @Query("""
         select distinct p
         from Post p

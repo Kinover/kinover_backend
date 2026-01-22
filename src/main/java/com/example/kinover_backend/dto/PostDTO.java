@@ -1,3 +1,4 @@
+// src/main/java/com/example/kinover_backend/dto/PostDTO.java
 package com.example.kinover_backend.dto;
 
 import com.example.kinover_backend.entity.Post;
@@ -31,37 +32,47 @@ public class PostDTO {
     private String categoryTitle;
 
     public static PostDTO from(Post post) {
-        if (post == null)
-            return null;
+        if (post == null) return null;
 
         var author = post.getAuthor();
         var family = post.getFamily();
 
-        List<String> urls;
-        try {
-            urls = (post.getImages() == null)
-                    ? List.of()
-                    : post.getImages().stream()
-                            .filter(Objects::nonNull)
-                            .map(PostImage::getImageUrl)
-                            .filter(Objects::nonNull)
-                            .collect(Collectors.toList());
-        } catch (Exception e) {
-            // Lazy 로딩/프록시 문제로 터져도 목록 자체는 살려두기
-            urls = List.of();
-        }
+        List<PostImage> images = (post.getImages() == null) ? List.of() : post.getImages();
+
+        // ✅ imageOrder 기준 정렬 (null-safe)
+        List<PostImage> sorted = images.stream()
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparing(
+                        PostImage::getImageOrder,
+                        Comparator.nullsLast(Integer::compareTo)
+                ))
+                .toList();
+
+        List<String> urls = sorted.stream()
+                .map(PostImage::getImageUrl)
+                .filter(Objects::nonNull)
+                .toList();
+
+        List<PostType> types = sorted.stream()
+                .map(PostImage::getPostType)
+                .toList();
 
         return PostDTO.builder()
                 .postId(post.getPostId())
                 .content(post.getContent())
                 .createdAt(post.getCreatedAt())
                 .commentCount(post.getCommentCount())
+
                 .authorId(author != null ? author.getUserId() : null)
                 .authorName(author != null ? author.getName() : null)
                 .authorImage(author != null ? author.getImage() : null)
-                .categoryId(post.getCategory() != null ? post.getCategory().getCategoryId() : null)
+
                 .familyId(family != null ? family.getFamilyId() : null)
+                .categoryId(post.getCategory() != null ? post.getCategory().getCategoryId() : null)
+                .categoryTitle(post.getCategory() != null ? post.getCategory().getTitle() : null)
+
                 .imageUrls(urls)
+                .postTypes(types)
                 .build();
     }
 }

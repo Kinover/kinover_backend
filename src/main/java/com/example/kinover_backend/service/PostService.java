@@ -108,6 +108,8 @@ public class PostService {
     @Transactional
     public void createPost(PostDTO postDTO) {
         if (postDTO == null) throw new IllegalArgumentException("postDTO is null");
+        if (postDTO.getAuthorId() == null) throw new IllegalArgumentException("authorId is null");
+        if (postDTO.getFamilyId() == null) throw new IllegalArgumentException("familyId is null");
 
         User author = userRepository.findById(postDTO.getAuthorId())
                 .orElseThrow(() -> new RuntimeException("작성자 정보 없음"));
@@ -181,6 +183,9 @@ public class PostService {
     // =========================
     @Transactional
     public void deleteImage(UUID postId, String imageUrl) {
+        if (postId == null) throw new IllegalArgumentException("postId is null");
+        if (isBlank(imageUrl)) throw new IllegalArgumentException("imageUrl is blank");
+
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("게시글 없음"));
 
@@ -192,6 +197,7 @@ public class PostService {
         }
 
         PostImage imageToDelete = images.stream()
+                .filter(Objects::nonNull)
                 .filter(img -> Objects.equals(img.getImageUrl(), normalized))
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("이미지 없음"));
@@ -214,6 +220,8 @@ public class PostService {
     // =========================
     @Transactional
     public void deletePost(UUID postId) {
+        if (postId == null) throw new IllegalArgumentException("postId is null");
+
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("게시글 없음"));
 
@@ -222,6 +230,7 @@ public class PostService {
         List<PostImage> images = post.getImages() == null ? List.of() : post.getImages();
 
         List<String> s3Keys = images.stream()
+                .filter(Objects::nonNull)
                 .map(PostImage::getImageUrl)
                 .map(this::toS3KeyIfCloudFront)
                 .filter(Objects::nonNull)
@@ -241,23 +250,23 @@ public class PostService {
     // =========================
     @Transactional(readOnly = true)
     public List<PostDTO> getPostsByFamilyAndCategory(Long userId, UUID familyId, UUID categoryId) {
-        // 필요하면 권한검증 추가
-        // boolean allowed = userFamilyRepository.existsByUser_UserIdAndFamily_FamilyId(userId, familyId);
-        // if (!allowed) throw new RuntimeException("권한 없음");
+        if (userId == null) throw new IllegalArgumentException("userId is null");
+        if (familyId == null) throw new IllegalArgumentException("familyId is null");
 
-        List<UUID> ids;
-        if (categoryId == null) {
-            ids = postRepository.findPostIdsByFamilyOrderByCreatedAtDesc(familyId);
-        } else {
-            ids = postRepository.findPostIdsByFamilyAndCategoryOrderByCreatedAtDesc(familyId, categoryId);
+        // ✅ 권한 검증(강추: 목록도 막아야 함)
+        boolean allowed = userFamilyRepository.existsByUser_UserIdAndFamily_FamilyId(userId, familyId);
+        if (!allowed) {
+            throw new RuntimeException("권한 없음");
         }
 
-        // ✅ 핵심: ids 비어있으면 IN 쿼리 안 침 (500 방지)
+        List<UUID> ids = (categoryId == null)
+                ? postRepository.findPostIdsByFamilyOrderByCreatedAtDesc(familyId)
+                : postRepository.findPostIdsByFamilyAndCategoryOrderByCreatedAtDesc(familyId, categoryId);
+
         if (ids == null || ids.isEmpty()) return List.of();
 
         List<Post> fetched = postRepository.findPostsWithImagesByIds(ids);
 
-        // ✅ postId -> Post 맵핑
         Map<UUID, Post> map = new HashMap<>();
         for (Post p : fetched) {
             if (p != null && p.getPostId() != null) {
@@ -265,18 +274,21 @@ public class PostService {
             }
         }
 
-        // ✅ ids 순서대로 복원
         List<Post> ordered = new ArrayList<>();
         for (UUID id : ids) {
             Post p = map.get(id);
             if (p != null) ordered.add(p);
         }
 
-        // ✅ images 정렬 (imageOrder 기준)
+        // ✅ 핵심: imageOrder null-safe 정렬 (여기서 NPE로 500 나는 케이스 많음)
+        Comparator<PostImage> imageOrderComparator =
+                Comparator.comparing(PostImage::getImageOrder, Comparator.nullsLast(Integer::compareTo));
+
         for (Post p : ordered) {
             List<PostImage> imgs = p.getImages();
             if (imgs != null) {
-                imgs.sort(Comparator.comparingInt(PostImage::getImageOrder));
+                imgs.removeIf(Objects::isNull);
+                imgs.sort(imageOrderComparator);
             }
         }
 
@@ -288,6 +300,8 @@ public class PostService {
     // =========================
     @Transactional
     public void updatePost(UUID postId, Long authenticatedUserId, UpdatePostRequest request) {
+        if (postId == null) throw new IllegalArgumentException("postId is null");
+        if (authenticatedUserId == null) throw new IllegalArgumentException("authenticatedUserId is null");
         if (request == null) throw new IllegalArgumentException("request is null");
 
         Post post = postRepository.findById(postId)
@@ -319,7 +333,6 @@ public class PostService {
 
         validateMediaLists(incomingUrls, incomingTypes);
 
-        // newUrlList 만들기(CloudFront 정규화)
         List<String> newUrlList = new ArrayList<>();
         for (String raw : incomingUrls) {
             String normalized = normalizeToCloudFrontUrl(raw);
@@ -330,7 +343,6 @@ public class PostService {
             throw new IllegalArgumentException("정규화 후 imageUrls와 postTypes 길이가 달라졌습니다.");
         }
 
-        // old/new 비교 -> 삭제된 것 S3 삭제
         List<PostImage> oldImages = post.getImages() == null ? new ArrayList<>() : post.getImages();
 
         Set<String> oldUrlSet = new HashSet<>();
@@ -347,7 +359,6 @@ public class PostService {
             }
         }
 
-        // orphanRemoval 안전 업데이트: clear/add
         post.clearImages();
 
         for (int i = 0; i < newUrlList.size(); i++) {
@@ -378,9 +389,11 @@ public class PostService {
         boolean allowed = userFamilyRepository.existsByUser_UserIdAndFamily_FamilyId(userId, familyId);
         if (!allowed) throw new RuntimeException("권한 없음");
 
-        // 단건도 images 순서 필요하면 여기서 정렬
         List<PostImage> imgs = post.getImages();
-        if (imgs != null) imgs.sort(Comparator.comparingInt(PostImage::getImageOrder));
+        if (imgs != null) {
+            imgs.removeIf(Objects::isNull);
+            imgs.sort(Comparator.comparing(PostImage::getImageOrder, Comparator.nullsLast(Integer::compareTo)));
+        }
 
         return PostDTO.from(post);
     }
