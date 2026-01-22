@@ -7,9 +7,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.util.Date;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Getter
@@ -17,7 +15,6 @@ import java.util.stream.Collectors;
 @Builder
 public class PostDTO {
 
-    // 클라이언트 → 서버 요청 시 포함 (작성 시)
     private Long authorId;
     private UUID familyId;
     private UUID categoryId;
@@ -25,27 +22,46 @@ public class PostDTO {
     private List<PostType> postTypes;
     private String content;
 
-    // 서버 → 클라이언트 응답 시 채워짐
     private UUID postId;
     private String authorName;
     private String authorImage;
     private Date createdAt;
     private int commentCount;
 
-    private String categoryTitle; // 존재하지 않는 categoryId일 경우 사용할 title
+    private String categoryTitle;
 
     public static PostDTO from(Post post) {
+        if (post == null)
+            return null;
+
+        var author = post.getAuthor();
+        var family = post.getFamily();
+
+        List<String> urls;
+        try {
+            urls = (post.getImages() == null)
+                    ? List.of()
+                    : post.getImages().stream()
+                            .filter(Objects::nonNull)
+                            .map(PostImage::getImageUrl)
+                            .filter(Objects::nonNull)
+                            .collect(Collectors.toList());
+        } catch (Exception e) {
+            // Lazy 로딩/프록시 문제로 터져도 목록 자체는 살려두기
+            urls = List.of();
+        }
+
         return PostDTO.builder()
                 .postId(post.getPostId())
                 .content(post.getContent())
                 .createdAt(post.getCreatedAt())
                 .commentCount(post.getCommentCount())
-                .authorId(post.getAuthor().getUserId())
-                .authorName(post.getAuthor().getName())
-                .authorImage(post.getAuthor().getImage())
+                .authorId(author != null ? author.getUserId() : null)
+                .authorName(author != null ? author.getName() : null)
+                .authorImage(author != null ? author.getImage() : null)
                 .categoryId(post.getCategory() != null ? post.getCategory().getCategoryId() : null)
-                .familyId(post.getFamily().getFamilyId())
-                .imageUrls(post.getImages().stream().map(PostImage::getImageUrl).collect(Collectors.toList()))
+                .familyId(family != null ? family.getFamilyId() : null)
+                .imageUrls(urls)
                 .build();
     }
 }
