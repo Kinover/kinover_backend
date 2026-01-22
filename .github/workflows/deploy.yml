@@ -1,4 +1,4 @@
-name: Deploy Spring Boot App via SSH Build on EC2
+name: Deploy Spring Boot App (Build on GitHub Actions, Run on EC2)
 
 on:
   push:
@@ -9,42 +9,54 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Save PEM file
-        run: |
-          echo "${{ secrets.EC2_SSH_KEY }}" > kinover-key.pem
-          chmod 600 kinover-key.pem
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: SSH to EC2 and Build + Run App
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      # ✅ 여기서부터가 핵심: 항상 깨끗하게, daemon 없이, bootJar로 고정
+      - name: Build bootJar (clean)
+        run: ./gradlew --no-daemon clean bootJar -x test
+
+      # ✅ 만들어진 jar 이름을 고정 파일명으로 복사(배포/실행 편하게)
+      - name: Prepare artifact
+        run: |
+          ls -al build/libs
+          JAR=$(ls build/libs | grep -v plain.jar | grep '.jar$' | head -n 1)
+          echo "Jar: $JAR"
+          cp "build/libs/$JAR" build/libs/app.jar
+
+      # ✅ EC2로 jar 전송
+      - name: Upload jar to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "build/libs/app.jar"
+          target: "/home/ubuntu/kinover_backend/deploy"
+
+      # ✅ EC2에서 실행만 담당
+      - name: Restart app on EC2
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            echo "Changing to project directory"
+            set -e
             cd /home/ubuntu/kinover_backend
 
-            echo "Pulling latest changes"
-            git pull origin main
+            mkdir -p deploy
+            ls -al deploy
 
-            CHANGED_FILES=$(git diff --name-only HEAD@{1} HEAD)
-            if echo "$CHANGED_FILES" | grep -E 'build.gradle|application.properties'; then
-            echo "Detected critical file changes. Doing clean build."
-            GRADLE_CMD="./gradlew clean build -x test"
-            else
-            echo "No critical build file changes. Doing normal build."
-            GRADLE_CMD="./gradlew build -x test"
-            fi
-            
-            echo "Building project"
-            chmod +x ./gradlew
-            $GRADLE_CMD
-            
-            echo "Stopping Gradle Daemon"
-            ./gradlew --stop || echo "No active daemon to stop"
-            
-            cd build/libs
-            
             echo "Creating .env file"
             cat <<EOF > .env
             SPRING_DATASOURCE_URL="${{ secrets.SPRING_DATASOURCE_URL }}"
@@ -58,28 +70,20 @@ jobs:
             AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
             EOF
-            
-            echo "Exporting .env file"
-            set -a
-            source .env
-            set +a
-            
-            echo "Stopping existing application"
+
+            echo "Stop existing app on 9090"
             if lsof -i:9090 -t >/dev/null; then
               PID=$(lsof -i:9090 -t)
-              echo "Killing process on port 9090: $PID"
+              echo "Killing PID: $PID"
               kill -9 $PID
             else
-              echo "No process on port 9090"
+              echo "No process on 9090"
             fi
 
-            sleep 1
-
-            echo "Starting application"
-            JAR_NAME=$(ls | grep -v plain.jar | grep '.jar$' | head -n 1)
-            echo "Jar to execute: $JAR_NAME"
-
-            nohup java -Duser.timezone=Asia/Seoul -jar $JAR_NAME > nohup.out 2>&1 &
+            echo "Start app"
+            nohup java -Duser.timezone=Asia/Seoul -jar /home/ubuntu/kinover_backend/deploy/build/libs/app.jar \
+              > /home/ubuntu/kinover_backend/app.log 2>&1 &
 
             sleep 1
-            echo "Deployment complete"
+            echo "Health check: /v3/api-docs"
+            curl -s -o /dev/null -w "%{http_code}\n" http://localhost:9090/v3/api-docs || true
