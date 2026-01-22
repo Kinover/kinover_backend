@@ -17,10 +17,29 @@ configurations {
     compileOnly {
         extendsFrom annotationProcessor
     }
+    // ✅ 충돌 원인 추적/정렬 위해 runtimeClasspath도 통일될 수 있게
 }
 
 repositories {
     mavenCentral()
+}
+
+/**
+ * ✅ 핵심: Boot 3.4.2 기반에서 의존성 버전이 "섞여서" NoClassDefFoundError 나는 케이스 방어
+ * - org.springframework.boot:* 모듈이 다른 버전으로 끌려오면 런타임에 바로 터짐
+ * - 그래서 Boot 모듈은 전부 3.4.2로 강제 정렬
+ */
+configurations.all {
+    resolutionStrategy.eachDependency { details ->
+        if (details.requested.group == "org.springframework.boot") {
+            details.useVersion("3.4.2")
+        }
+        if (details.requested.group == "org.springframework" &&
+                details.requested.name?.startsWith("spring-")) {
+            // ✅ spring-framework 계열도 boot가 관리하는 라인으로 가도록 (충돌 방지 보조)
+            // (강제 버전 지정은 하지 않음: 필요시 여기서 더 조절)
+        }
+    }
 }
 
 dependencies {
@@ -36,7 +55,7 @@ dependencies {
     // implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
     // implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
 
-    // DB driver
+    // DB driver (Boot BOM 버전 사용)
     runtimeOnly 'org.mariadb.jdbc:mariadb-java-client'
 
     // ✅ Swagger (Boot 3.4.x 대응: springdoc 3.x 라인)
@@ -54,12 +73,13 @@ dependencies {
     implementation 'org.mapstruct:mapstruct:1.5.5.Final'
     annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
 
-    // ✅ AWS S3 (BOM으로 통일) - 최신으로 올리고 싶으면 여기만 바꾸면 됨
+    // ✅ AWS S3 (BOM으로 통일)
     implementation platform("software.amazon.awssdk:bom:2.41.1")
     implementation 'software.amazon.awssdk:s3'
 
     // Firebase
     implementation('com.google.firebase:firebase-admin:9.2.0') {
+        // ✅ firebase-admin이 guava 끌고 오면서 충돌나는 케이스 방어
         exclude group: 'com.google.guava', module: 'guava'
     }
 
@@ -75,12 +95,14 @@ dependencies {
     testImplementation 'org.springframework.security:spring-security-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
-    // ✅ Redisson (Boot 3.4.x + Spring Data Redis 쪽 매칭 안정화 기대)
+    /**
+     * ✅ Redisson
+     * - 여기서 Boot/Spring 버전이 섞여 들어오는 경우가 있어서
+     * - 위 resolutionStrategy로 org.springframework.boot:*는 3.4.2로 강제 정렬해둠
+     */
     implementation 'org.redisson:redisson-spring-boot-starter:4.1.0'
 
     // ❌ (제거) 임시 webjars-locator-core
-    // springdoc 3.x로 올린 뒤에도 swagger-ui에서 org.webjars.NotFoundException가 재현되면
-    // 그때 원인(컨텍스트패스/프록시/리소스 핸들러)을 보고 최소 의존성으로 다시 넣는 게 좋아.
     // implementation 'org.webjars:webjars-locator-core:0.52'
 }
 
