@@ -32,9 +32,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
 
-    // OAuth2
-    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
-    implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+    // OAuth2 (현재는 커스텀 카카오 + jjwt 사용 → 불필요한 자동설정 방지)
+    // implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+    // implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
 
     // DB driver
     runtimeOnly 'org.mariadb.jdbc:mariadb-java-client'
