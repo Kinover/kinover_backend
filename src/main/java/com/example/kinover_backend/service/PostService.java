@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 
@@ -241,22 +242,25 @@ public class PostService {
         }
     }
 
+
+    @Transactional(readOnly = true)
     public List<PostDTO> getPostsByFamilyAndCategory(Long userId, UUID familyId, UUID categoryId) {
         List<Post> posts;
-
+    
         if (categoryId == null) {
             posts = postRepository.findAllByFamily_FamilyIdOrderByCreatedAtDesc(familyId);
         } else {
             posts = postRepository.findAllByFamily_FamilyIdAndCategory_CategoryIdOrderByCreatedAtDesc(
                     familyId, categoryId);
         }
-
+    
         List<PostDTO> result = new ArrayList<>();
         for (Post post : posts) {
             result.add(PostDTO.from(post));
         }
         return result;
     }
+    
 
     @Transactional
     public void updatePost(UUID postId, Long authenticatedUserId, UpdatePostRequest request) {
