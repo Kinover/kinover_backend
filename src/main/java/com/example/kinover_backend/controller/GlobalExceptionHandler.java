@@ -46,8 +46,9 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponseDTO> unknown(Exception e, HttpServletRequest request) throws Exception {
         String uri = request.getRequestURI();
 
-        if (uri != null && (uri.startsWith("/v3/api-docs") || uri.startsWith("/swagger-ui"))) {
-            throw e;
+        if (request.getRequestURI().startsWith("/v3/api-docs")
+            || request.getRequestURI().startsWith("/swagger-ui")) {
+            throw e; // 절대 감싸지 말 것
         }
 
         log.error("[INTERNAL_SERVER_ERROR] uri={}", uri, e);

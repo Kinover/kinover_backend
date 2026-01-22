@@ -34,34 +34,31 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .authorizeHttpRequests(auth -> auth
-                // ✅ Preflight 무조건 통과
-                .requestMatchers(new AntPathRequestMatcher("/**", HttpMethod.OPTIONS.name())).permitAll()
-
-                // ✅ 인증 없이 허용
-                .requestMatchers(new AntPathRequestMatcher("/api/login/kakao")).permitAll()
-
-                // ✅ Swagger / OpenAPI
+                // Preflight
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+            
+                // Swagger / OpenAPI 완전 제외
                 .requestMatchers(
-                    new AntPathRequestMatcher("/swagger-ui/**"),
-                    new AntPathRequestMatcher("/v3/api-docs/**"),
-                    new AntPathRequestMatcher("/swagger-ui.html")
+                    "/v3/api-docs",
+                    "/v3/api-docs/**",
+                    "/swagger-ui.html",
+                    "/swagger-ui/**"
                 ).permitAll()
-
-                // ✅ WebSocket endpoint
-                .requestMatchers(
-                    new AntPathRequestMatcher("/chat/**"),
-                    new AntPathRequestMatcher("/status/**"),
-                    new AntPathRequestMatcher("/family-status/**")
-                ).permitAll()
-
-                // ✅ 기본 에러
-                .requestMatchers(new AntPathRequestMatcher("/error")).permitAll()
-
-                // ✅ API는 인증 필요
-                .requestMatchers(new AntPathRequestMatcher("/api/**")).authenticated()
-
+            
+                // 로그인
+                .requestMatchers("/api/login/kakao").permitAll()
+            
+                // WebSocket
+                .requestMatchers("/chat", "/status", "/family-status").permitAll()
+            
+                // error
+                .requestMatchers("/error").permitAll()
+            
+                // API
+                .requestMatchers("/api/**").authenticated()
                 .anyRequest().authenticated()
             )
+            
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .formLogin(formLogin -> formLogin.disable())
             .logout(logoutConfig -> logoutConfig.disable())
