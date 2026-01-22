@@ -17,29 +17,10 @@ configurations {
     compileOnly {
         extendsFrom annotationProcessor
     }
-    // ✅ 충돌 원인 추적/정렬 위해 runtimeClasspath도 통일될 수 있게
 }
 
 repositories {
     mavenCentral()
-}
-
-/**
- * ✅ 핵심: Boot 3.4.2 기반에서 의존성 버전이 "섞여서" NoClassDefFoundError 나는 케이스 방어
- * - org.springframework.boot:* 모듈이 다른 버전으로 끌려오면 런타임에 바로 터짐
- * - 그래서 Boot 모듈은 전부 3.4.2로 강제 정렬
- */
-configurations.all {
-    resolutionStrategy.eachDependency { details ->
-        if (details.requested.group == "org.springframework.boot") {
-            details.useVersion("3.4.2")
-        }
-        if (details.requested.group == "org.springframework" &&
-                details.requested.name?.startsWith("spring-")) {
-            // ✅ spring-framework 계열도 boot가 관리하는 라인으로 가도록 (충돌 방지 보조)
-            // (강제 버전 지정은 하지 않음: 필요시 여기서 더 조절)
-        }
-    }
 }
 
 dependencies {
@@ -58,8 +39,10 @@ dependencies {
     // DB driver (Boot BOM 버전 사용)
     runtimeOnly 'org.mariadb.jdbc:mariadb-java-client'
 
-    // ✅ Swagger (Boot 3.4.x 대응: springdoc 3.x 라인)
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.1'
+    // ✅ Swagger: Boot 3.x에서 가장 검증된 라인(2.x)
+    // 네가 겪는 문제는 swagger-ui 리소스/의존성 쪽 꼬임이 섞여 있었고,
+    // 2.6.0이 실사용 안정성이 훨씬 높음.
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
 
     // JWT (jjwt 0.11.5 세트 유지)
     implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
@@ -73,37 +56,29 @@ dependencies {
     implementation 'org.mapstruct:mapstruct:1.5.5.Final'
     annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
 
-    // ✅ AWS S3 (BOM으로 통일)
+    // AWS S3 (BOM으로 통일)
     implementation platform("software.amazon.awssdk:bom:2.41.1")
     implementation 'software.amazon.awssdk:s3'
 
     // Firebase
     implementation('com.google.firebase:firebase-admin:9.2.0') {
-        // ✅ firebase-admin이 guava 끌고 오면서 충돌나는 케이스 방어
         exclude group: 'com.google.guava', module: 'guava'
     }
 
-    // ✅ guava는 명시적으로 하나만 고정
+    // guava 고정
     implementation 'com.google.guava:guava:32.1.3-jre'
 
     // Lombok
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
 
+    // ✅ Redisson: starter 3.x 라인이 호환성 측면에서 더 무난함
+    implementation 'org.redisson:redisson-spring-boot-starter:3.27.2'
+
     // Tests
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-
-    /**
-     * ✅ Redisson
-     * - 여기서 Boot/Spring 버전이 섞여 들어오는 경우가 있어서
-     * - 위 resolutionStrategy로 org.springframework.boot:*는 3.4.2로 강제 정렬해둠
-     */
-    implementation 'org.redisson:redisson-spring-boot-starter:4.1.0'
-
-    // ❌ (제거) 임시 webjars-locator-core
-    // implementation 'org.webjars:webjars-locator-core:0.52'
 }
 
 tasks.named('test') {
