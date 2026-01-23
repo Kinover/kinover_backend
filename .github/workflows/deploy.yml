@@ -44,7 +44,7 @@ jobs:
           source: "build/libs/app.jar"
           target: "/home/ubuntu/kinover_backend/deploy"
 
-      # ✅ EC2에서: jar 위치 고정 → .env 갱신 → systemd restart → health check
+      # ✅ EC2에서: jar 위치 고정 → .env 갱신 → (검증) → systemd restart → health check
       - name: Restart app on EC2 (systemd)
         uses: appleboy/ssh-action@v0.1.10
         with:
@@ -68,23 +68,43 @@ jobs:
             ls -al /home/ubuntu/kinover_backend/deploy/app.jar
 
             echo "== Create / update .env =="
-            cat <<EOF > /home/ubuntu/kinover_backend/.env
-            SPRING_DATASOURCE_URL="${{ secrets.SPRING_DATASOURCE_URL }}"
-            SPRING_DATASOURCE_USERNAME="${{ secrets.SPRING_DATASOURCE_USERNAME }}"
-            SPRING_DATASOURCE_PASSWORD="${{ secrets.SPRING_DATASOURCE_PASSWORD }}"
-            JWT_SECRET_KEY="${{ secrets.JWT_SECRET_KEY }}"
-            OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}"
-            KAKAO_REST_API_KEY="${{ secrets.KAKAO_REST_API_KEY }}"
-            REDIS_HOST="localhost"
-            REDIS_PORT="6379"
-            AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}"
-            AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+            # ✅ 따옴표 제거: .env는 KEY=VALUE 형식이 가장 안전
+            cat > /home/ubuntu/kinover_backend/.env <<EOF
+            SPRING_DATASOURCE_URL=${{ secrets.SPRING_DATASOURCE_URL }}
+            SPRING_DATASOURCE_USERNAME=${{ secrets.SPRING_DATASOURCE_USERNAME }}
+            SPRING_DATASOURCE_PASSWORD=${{ secrets.SPRING_DATASOURCE_PASSWORD }}
+            JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
+            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+            KAKAO_REST_API_KEY=${{ secrets.KAKAO_REST_API_KEY }}
+            REDIS_HOST=localhost
+            REDIS_PORT=6379
+            AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
+            AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
             EOF
             chmod 600 /home/ubuntu/kinover_backend/.env
 
+            echo "== Validate .env (datasource url must start with jdbc) =="
+            grep -n "^SPRING_DATASOURCE_URL=" /home/ubuntu/kinover_backend/.env || (echo "Missing SPRING_DATASOURCE_URL" && exit 1)
+            if ! grep -q "^SPRING_DATASOURCE_URL=jdbc" /home/ubuntu/kinover_backend/.env; then
+              echo "ERROR: SPRING_DATASOURCE_URL must start with jdbc"
+              grep -n "^SPRING_DATASOURCE_URL=" /home/ubuntu/kinover_backend/.env
+              exit 1
+            fi
+
+            echo "== Ensure systemd reads EnvironmentFile (.env) =="
+            # ⚠️ 서비스 파일에서 EnvironmentFile이 주석 처리면 .env를 절대 못 읽음
+            #    아래 출력에서 EnvironmentFile 라인이 실제로 살아있는지 꼭 확인해.
+            sudo systemctl cat kinover || true
+
             echo "== Restart service via systemd =="
+            sudo systemctl daemon-reload
             sudo systemctl restart kinover
             sudo systemctl status kinover --no-pager -l
+
+            echo "== Confirm env injected into process =="
+            PID=$(systemctl show -p MainPID --value kinover)
+            echo "MainPID=$PID"
+            sudo tr '\0' '\n' < /proc/$PID/environ | egrep "SPRING_DATASOURCE_URL|SPRING_DATASOURCE_USERNAME" || true
 
             echo "== Health check: /v3/api-docs =="
             curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:9090/v3/api-docs || true
