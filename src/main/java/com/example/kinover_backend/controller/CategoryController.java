@@ -28,40 +28,49 @@ public class CategoryController {
         return token.isEmpty() ? null : token;
     }
 
-    private Long extractUserIdOrUnauthorized(String authorizationHeader) {
+    private Long extractUserIdOrNull(String authorizationHeader) {
         String token = extractBearerTokenOrNull(authorizationHeader);
         if (token == null) return null;
-        return jwtUtil.getUserIdFromToken(token);
+
+        try {
+            return jwtUtil.getUserIdFromToken(token);
+        } catch (Exception e) {
+            // 토큰 만료/서명오류/형식오류 등 -> 401로 처리
+            return null;
+        }
     }
 
-    /**
-     * ✅ A안: 서버가 토큰으로 familyId 결정
-     * POST /api/categories
-     * body: { title }
-     */
     @PostMapping
     public ResponseEntity<CategoryDTO> createCategory(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             @RequestBody CategoryDTO dto
     ) {
-        Long userId = extractUserIdOrUnauthorized(authorizationHeader);
+        Long userId = extractUserIdOrNull(authorizationHeader);
         if (userId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
 
-        CategoryDTO created = categoryService.createCategoryA(userId, dto);
-        return ResponseEntity.ok(created);
+        try {
+            CategoryDTO created = categoryService.createCategoryA(userId, dto);
+            return ResponseEntity.status(HttpStatus.CREATED).body(created);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        } catch (RuntimeException e) {
+            // "가족 없음", "가족 소속 없음" 같은 케이스를 404/400 중 하나로 정해야 함
+            // 여기서는 404로 처리(가족 리소스를 못 찾음)
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
     }
 
-    /**
-     * ✅ A안: 서버가 토큰으로 familyId 결정
-     * GET /api/categories
-     */
     @GetMapping
     public ResponseEntity<List<CategoryDTO>> getCategories(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader
     ) {
-        Long userId = extractUserIdOrUnauthorized(authorizationHeader);
+        Long userId = extractUserIdOrNull(authorizationHeader);
         if (userId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
 
-        return ResponseEntity.ok(categoryService.getCategoriesA(userId));
+        try {
+            return ResponseEntity.ok(categoryService.getCategoriesA(userId));
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
     }
 }

@@ -41,7 +41,12 @@ public class PostController {
         return jwtUtil.getUserIdFromToken(token);
     }
 
-    @Operation(summary = "게시글 작성", description = "게시글을 생성합니다. imageUrls에 파일 이름을 인자로 받습니다.")
+    // =========================
+    // ✅ CREATE (A안: familyId를 body에서 안 받음)
+    // POST /api/posts
+    // body: authorId, content, categoryId(or categoryTitle), imageUrls, postTypes
+    // =========================
+    @Operation(summary = "게시글 작성", description = "게시글을 생성합니다. (A안: 토큰 기반 familyId 결정)")
     @ApiResponse(responseCode = "200", description = "게시글 작성 성공")
     @PostMapping
     public ResponseEntity<Void> createPost(
@@ -51,14 +56,19 @@ public class PostController {
         Long authenticatedUserId = extractUserIdOrUnauthorized(authorizationHeader);
         if (authenticatedUserId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
 
+        // ✅ authorId는 반드시 토큰 유저와 일치
         if (postDTO == null || postDTO.getAuthorId() == null || !authenticatedUserId.equals(postDTO.getAuthorId())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        postService.createPost(postDTO);
+        // ✅ A안: 서버가 familyId를 결정
+        postService.createPostA(authenticatedUserId, postDTO);
         return ResponseEntity.ok().build();
     }
 
+    // =========================
+    // GET ONE (권한검증 포함)
+    // =========================
     @Operation(summary = "게시글 단건 조회", description = "게시글 ID로 게시글 상세를 조회합니다. (가족 소속 권한 검증 포함)")
     @ApiResponse(responseCode = "200", description = "게시글 단건 조회 성공")
     @GetMapping("/{postId}")
@@ -74,7 +84,7 @@ public class PostController {
     }
 
     // =========================
-    // ✅ LIST (A안: familyId를 요청으로 받지 않음)
+    // ✅ LIST (A안)
     // GET /api/posts?categoryId=...
     // =========================
     @Operation(summary = "게시글 목록 조회", description = "유저 토큰 기준으로 본인 가족의 게시글 목록 조회 (categoryId optional)")
@@ -91,7 +101,10 @@ public class PostController {
         return ResponseEntity.ok(posts);
     }
 
-    @Operation(summary = "게시글 이미지 삭제", description = "특정 게시글에서 하나의 이미지를 삭제합니다.")
+    // =========================
+    // ✅ DELETE IMAGE (작성자만)
+    // =========================
+    @Operation(summary = "게시글 이미지 삭제", description = "특정 게시글에서 하나의 이미지를 삭제합니다. (작성자만 가능)")
     @DeleteMapping("/{postId}/image")
     public ResponseEntity<Void> deleteImageFromPost(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
@@ -106,11 +119,14 @@ public class PostController {
             return ResponseEntity.badRequest().build();
         }
 
-        postService.deleteImage(postId, imageUrl);
+        postService.deleteImage(postId, userId, imageUrl);
         return ResponseEntity.ok().build();
     }
 
-    @Operation(summary = "게시글 삭제", description = "게시글 ID로 삭제합니다.")
+    // =========================
+    // ✅ DELETE POST (작성자만)
+    // =========================
+    @Operation(summary = "게시글 삭제", description = "게시글 ID로 삭제합니다. (작성자만 가능)")
     @DeleteMapping("/{postId}")
     public ResponseEntity<Void> deletePost(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
@@ -119,25 +135,30 @@ public class PostController {
         Long userId = extractUserIdOrUnauthorized(authorizationHeader);
         if (userId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
 
-        postService.deletePost(postId);
+        postService.deletePost(postId, userId);
         return ResponseEntity.ok().build();
     }
 
+    // =========================
+    // ✅ POST 알림 ON/OFF (본인만 변경)
+    // PATCH /api/posts/notification/post?isOn=true/false
+    // =========================
     @PatchMapping("/notification/post")
-    @Operation(summary = "게시글 알림 ON/OFF", description = "userId와 상태(true/false)를 전달하여 게시글 알림을 켜거나 끕니다.")
     public ResponseEntity<String> updatePostNotificationSetting(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
-            @RequestParam Long userId,
             @RequestParam boolean isOn
     ) {
         Long authenticatedUserId = extractUserIdOrUnauthorized(authorizationHeader);
         if (authenticatedUserId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
 
-        boolean success = userService.updatePostNotificationSetting(userId, isOn);
+        boolean success = userService.updatePostNotificationSetting(authenticatedUserId, isOn);
         if (success) return ResponseEntity.ok("Post notification setting updated.");
         return ResponseEntity.badRequest().body("Invalid userId");
     }
 
+    // =========================
+    // UPDATE (작성자만)
+    // =========================
     @Operation(summary = "게시글 수정", description = "게시글 내용을 수정합니다. content/categoryId/imageUrls 중 필요한 것만 수정")
     @ApiResponse(responseCode = "200", description = "게시글 수정 성공")
     @PatchMapping("/{postId}")

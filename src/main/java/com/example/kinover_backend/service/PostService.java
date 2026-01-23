@@ -101,20 +101,54 @@ public class PostService {
         }
     }
 
+    /**
+     * ✅ A안 핵심: userId -> familyId 1개 결정 (유저 1가족 전제)
+     */
+    private UUID resolveSingleFamilyIdOrThrow(Long userId) {
+        if (userId == null) throw new IllegalArgumentException("userId is null");
+
+        List<UUID> familyIds = userFamilyRepository.findFamilyIdsByUserId(userId);
+        if (familyIds == null || familyIds.isEmpty()) {
+            throw new RuntimeException("가족 소속이 없습니다.");
+        }
+        return familyIds.get(0);
+    }
+
+    private void assertAuthorOrThrow(Post post, Long userId) {
+        if (post == null) throw new IllegalArgumentException("post is null");
+        if (userId == null) throw new IllegalArgumentException("userId is null");
+
+        Long authorId = post.getAuthor() != null ? post.getAuthor().getUserId() : null;
+        if (authorId == null || !authorId.equals(userId)) {
+            throw new RuntimeException("작성자만 수행할 수 있습니다.");
+        }
+    }
+
     // =========================
-    // CREATE
+    // ✅ CREATE (A안)
+    // - familyId는 서버가 userId로 결정
     // =========================
     @Transactional
-    public void createPost(PostDTO postDTO) {
+    public void createPostA(Long authenticatedUserId, PostDTO postDTO) {
+        if (authenticatedUserId == null) throw new IllegalArgumentException("authenticatedUserId is null");
         if (postDTO == null) throw new IllegalArgumentException("postDTO is null");
         if (postDTO.getAuthorId() == null) throw new IllegalArgumentException("authorId is null");
-        if (postDTO.getFamilyId() == null) throw new IllegalArgumentException("familyId is null");
 
-        User author = userRepository.findById(postDTO.getAuthorId())
+        // 컨트롤러에서도 했지만, 서비스에서도 한 번 더 방어
+        if (!authenticatedUserId.equals(postDTO.getAuthorId())) {
+            throw new RuntimeException("토큰 유저와 authorId가 일치하지 않습니다.");
+        }
+
+        User author = userRepository.findById(authenticatedUserId)
                 .orElseThrow(() -> new RuntimeException("작성자 정보 없음"));
 
-        Family family = familyRepository.findFamilyById(postDTO.getFamilyId())
+        UUID familyId = resolveSingleFamilyIdOrThrow(authenticatedUserId);
+
+        Family family = familyRepository.findFamilyById(familyId)
                 .orElseThrow(() -> new RuntimeException("가족 정보 없음"));
+
+        // ✅ DTO에도 familyId를 세팅해두면, 아래 FCM 발송 등에서 안전
+        postDTO.setFamilyId(familyId);
 
         Category category = null;
         UUID categoryId = postDTO.getCategoryId();
@@ -123,6 +157,10 @@ public class PostService {
         if (categoryId != null) {
             category = categoryRepository.findById(categoryId)
                     .orElseThrow(() -> new RuntimeException("존재하지 않는 카테고리: " + categoryId));
+
+            // (선택) 카테고리가 같은 가족 소속인지 검증하고 싶으면 여기서 체크
+            // UUID catFamilyId = category.getFamily() != null ? category.getFamily().getFamilyId() : null;
+            // if (catFamilyId == null || !catFamilyId.equals(familyId)) throw new RuntimeException("다른 가족의 카테고리입니다.");
         } else if (!isBlank(categoryTitle)) {
             Category c = new Category();
             c.setTitle(categoryTitle);
@@ -166,10 +204,11 @@ public class PostService {
                 .build();
         notificationRepository.save(notification);
 
-        List<User> familyMembers = userFamilyRepository.findUsersByFamilyId(postDTO.getFamilyId());
+        // ✅ 가족 구성원에게 FCM (본인 제외 + 알림 ON인 사람만)
+        List<User> familyMembers = userFamilyRepository.findUsersByFamilyId(familyId);
         for (User member : familyMembers) {
             if (member == null) continue;
-            if (!member.getUserId().equals(postDTO.getAuthorId())
+            if (!member.getUserId().equals(authenticatedUserId)
                     && Boolean.TRUE.equals(member.getIsPostNotificationOn())) {
                 fcmNotificationService.sendPostNotification(member.getUserId(), postDTO);
             }
@@ -177,15 +216,49 @@ public class PostService {
     }
 
     // =========================
-    // DELETE IMAGE (single)
+    // ✅ LIST (A안)
+    // =========================
+    @Transactional(readOnly = true)
+    public List<PostDTO> getMyFamilyPosts(Long userId, UUID categoryId) {
+        if (userId == null) throw new IllegalArgumentException("userId is null");
+
+        List<UUID> familyIds = userFamilyRepository.findFamilyIdsByUserId(userId);
+        if (familyIds == null || familyIds.isEmpty()) {
+            return List.of();
+        }
+
+        UUID familyId = familyIds.get(0);
+
+        List<Post> posts = (categoryId == null)
+                ? postRepository.findByFamilyWithImagesOrderByCreatedAtDesc(familyId)
+                : postRepository.findByFamilyAndCategoryWithImagesOrderByCreatedAtDesc(familyId, categoryId);
+
+        // images 정렬(※ PostDTO.from에서도 정렬한다면 여기 제거 가능)
+        for (Post p : posts) {
+            List<PostImage> imgs = p.getImages();
+            if (imgs != null) {
+                imgs.removeIf(Objects::isNull);
+                imgs.sort(Comparator.comparingInt(PostImage::getImageOrder));
+            }
+        }
+
+        return posts.stream().map(PostDTO::from).toList();
+    }
+
+    // =========================
+    // ✅ DELETE IMAGE (single) - 작성자만
     // =========================
     @Transactional
-    public void deleteImage(UUID postId, String imageUrl) {
+    public void deleteImage(UUID postId, Long userId, String imageUrl) {
         if (postId == null) throw new IllegalArgumentException("postId is null");
+        if (userId == null) throw new IllegalArgumentException("userId is null");
         if (isBlank(imageUrl)) throw new IllegalArgumentException("imageUrl is blank");
 
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("게시글 없음"));
+
+        // ✅ 작성자만 삭제 가능
+        assertAuthorOrThrow(post, userId);
 
         String normalized = normalizeToCloudFrontUrl(imageUrl);
 
@@ -200,12 +273,21 @@ public class PostService {
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("이미지 없음"));
 
+        // S3 삭제
         String s3Key = toS3KeyIfCloudFront(imageToDelete.getImageUrl());
         if (!isBlank(s3Key)) s3Service.deleteImageFromS3(s3Key);
 
         images.remove(imageToDelete);
 
+        // ✅ imageOrder 재정렬 (0..n-1)
+        for (int i = 0; i < images.size(); i++) {
+            PostImage pi = images.get(i);
+            if (pi != null) pi.setImageOrder(i);
+        }
+
         if (images.isEmpty()) {
+            // ✅ 이미지 0개면 글 자체 삭제 (연관 데이터 정리)
+            notificationRepository.deleteByPostId(postId);
             commentRepository.deleteAllByPost(post);
             postRepository.delete(post);
         } else {
@@ -214,14 +296,18 @@ public class PostService {
     }
 
     // =========================
-    // DELETE POST
+    // ✅ DELETE POST - 작성자만
     // =========================
     @Transactional
-    public void deletePost(UUID postId) {
+    public void deletePost(UUID postId, Long userId) {
         if (postId == null) throw new IllegalArgumentException("postId is null");
+        if (userId == null) throw new IllegalArgumentException("userId is null");
 
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("게시글 없음"));
+
+        // ✅ 작성자만 삭제 가능
+        assertAuthorOrThrow(post, userId);
 
         notificationRepository.deleteByPostId(postId);
 
@@ -244,42 +330,7 @@ public class PostService {
     }
 
     // =========================
-    // ✅ LIST (A안: familyId를 서버가 userId로 결정)
-    // - 기존 getPostsByFamilyAndCategory(userId, familyId, categoryId) 대체
-    // =========================
-    @Transactional(readOnly = true)
-    public List<PostDTO> getMyFamilyPosts(Long userId, UUID categoryId) {
-        if (userId == null) throw new IllegalArgumentException("userId is null");
-
-        // 1) userId로 familyId 찾기
-        List<UUID> familyIds = userFamilyRepository.findFamilyIdsByUserId(userId);
-        if (familyIds == null || familyIds.isEmpty()) {
-            // 유저가 아직 가족에 속해있지 않은 경우: 빈 목록
-            return List.of();
-        }
-
-        // ✅ A안: 유저 1가족 전제
-        UUID familyId = familyIds.get(0);
-
-        // 2) posts 조회
-        List<Post> posts = (categoryId == null)
-                ? postRepository.findByFamilyWithImagesOrderByCreatedAtDesc(familyId)
-                : postRepository.findByFamilyAndCategoryWithImagesOrderByCreatedAtDesc(familyId, categoryId);
-
-        // 3) images 정렬
-        for (Post p : posts) {
-            List<PostImage> imgs = p.getImages();
-            if (imgs != null) {
-                imgs.removeIf(Objects::isNull);
-                imgs.sort(Comparator.comparingInt(PostImage::getImageOrder));
-            }
-        }
-
-        return posts.stream().map(PostDTO::from).toList();
-    }
-
-    // =========================
-    // UPDATE (content/category/images)
+    // UPDATE (content/category/images) - 작성자만
     // =========================
     @Transactional
     public void updatePost(UUID postId, Long authenticatedUserId, UpdatePostRequest request) {
@@ -335,6 +386,7 @@ public class PostService {
 
         Set<String> newUrlSet = new HashSet<>(newUrlList);
 
+        // ✅ 삭제된 URL에 대해서만 S3 삭제
         for (String oldUrl : oldUrlSet) {
             if (!newUrlSet.contains(oldUrl)) {
                 String s3Key = toS3KeyIfCloudFront(oldUrl);

@@ -6,7 +6,6 @@ import com.example.kinover_backend.entity.Family;
 import com.example.kinover_backend.repository.CategoryRepository;
 import com.example.kinover_backend.repository.FamilyRepository;
 import com.example.kinover_backend.repository.UserFamilyRepository;
-
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -29,6 +28,7 @@ public class CategoryService {
 
     /**
      * ✅ A안 핵심: userId -> familyId 1개 결정 (유저 1가족 전제)
+     * - 만약 여러 가족이 나오면 지금은 에러로 막는 편이 안전함
      */
     private UUID resolveSingleFamilyIdOrThrow(Long userId) {
         if (userId == null) throw new IllegalArgumentException("userId is null");
@@ -37,6 +37,12 @@ public class CategoryService {
         if (familyIds == null || familyIds.isEmpty()) {
             throw new RuntimeException("가족 소속이 없습니다.");
         }
+
+        // ✅ 다가족 데이터가 생겼을 때 “조용히 첫번째로 처리”하면 사고 나기 쉬움
+        if (familyIds.size() > 1) {
+            throw new RuntimeException("여러 가족에 소속되어 있습니다. active family 설정이 필요합니다.");
+        }
+
         return familyIds.get(0);
     }
 
@@ -69,10 +75,8 @@ public class CategoryService {
     public List<CategoryDTO> getCategories(UUID familyId) {
         if (familyId == null) throw new IllegalArgumentException("familyId is null");
 
-        Family family = familyRepository.findById(familyId)
-                .orElseThrow(() -> new RuntimeException("가족 없음"));
-
-        return categoryRepository.findByFamily(family)
+        // ✅ Family 엔티티 조회 없이 바로 familyId로 찾도록 레포지토리 변경하면 더 깔끔함
+        return categoryRepository.findByFamily_FamilyId(familyId)
                 .stream()
                 .map(category -> new CategoryDTO(
                         category.getCategoryId(),
