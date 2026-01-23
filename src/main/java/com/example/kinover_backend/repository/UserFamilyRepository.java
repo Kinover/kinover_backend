@@ -1,8 +1,8 @@
 package com.example.kinover_backend.repository;
 
+import com.example.kinover_backend.entity.Family;
 import com.example.kinover_backend.entity.User;
 import com.example.kinover_backend.entity.UserFamily;
-import com.example.kinover_backend.entity.Family;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -45,6 +45,14 @@ public interface UserFamilyRepository extends JpaRepository<UserFamily, UUID> {
 
     Optional<UserFamily> findByUser_UserIdAndFamily_FamilyId(Long userId, UUID familyId);
 
-    // ✅ 추가: 게시글/가족 권한 체크용 (가족 소속 여부)
+    // ✅ 게시글/가족 권한 체크용 (가족 소속 여부)
     boolean existsByUser_UserIdAndFamily_FamilyId(Long userId, UUID familyId);
+
+    // ✅ A안 핵심: "유저가 속한 가족 ID 조회" (유저 1가족 전제)
+    @Query("""
+        select uf.family.familyId
+        from UserFamily uf
+        where uf.user.userId = :userId
+    """)
+    List<UUID> findFamilyIdsByUserId(@Param("userId") Long userId);
 }

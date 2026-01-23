@@ -1,4 +1,3 @@
-// src/main/java/com/example/kinover_backend/service/PostService.java
 package com.example.kinover_backend.service;
 
 import com.example.kinover_backend.dto.PostDTO;
@@ -245,21 +244,29 @@ public class PostService {
     }
 
     // =========================
-    // LIST (500 방지 + 순서복원 + images 정렬)
+    // ✅ LIST (A안: familyId를 서버가 userId로 결정)
+    // - 기존 getPostsByFamilyAndCategory(userId, familyId, categoryId) 대체
     // =========================
     @Transactional(readOnly = true)
-    public List<PostDTO> getPostsByFamilyAndCategory(Long userId, UUID familyId, UUID categoryId) {
+    public List<PostDTO> getMyFamilyPosts(Long userId, UUID categoryId) {
         if (userId == null) throw new IllegalArgumentException("userId is null");
-        if (familyId == null) throw new IllegalArgumentException("familyId is null");
-    
-        boolean allowed = userFamilyRepository.existsByUser_UserIdAndFamily_FamilyId(userId, familyId);
-        if (!allowed) throw new SecurityException("권한 없음");
-    
+
+        // 1) userId로 familyId 찾기
+        List<UUID> familyIds = userFamilyRepository.findFamilyIdsByUserId(userId);
+        if (familyIds == null || familyIds.isEmpty()) {
+            // 유저가 아직 가족에 속해있지 않은 경우: 빈 목록
+            return List.of();
+        }
+
+        // ✅ A안: 유저 1가족 전제
+        UUID familyId = familyIds.get(0);
+
+        // 2) posts 조회
         List<Post> posts = (categoryId == null)
                 ? postRepository.findByFamilyWithImagesOrderByCreatedAtDesc(familyId)
                 : postRepository.findByFamilyAndCategoryWithImagesOrderByCreatedAtDesc(familyId, categoryId);
-    
-        // images 정렬 (지금처럼 정렬 유지)
+
+        // 3) images 정렬
         for (Post p : posts) {
             List<PostImage> imgs = p.getImages();
             if (imgs != null) {
@@ -267,10 +274,10 @@ public class PostService {
                 imgs.sort(Comparator.comparingInt(PostImage::getImageOrder));
             }
         }
-    
+
         return posts.stream().map(PostDTO::from).toList();
     }
-    
+
     // =========================
     // UPDATE (content/category/images)
     // =========================
@@ -368,7 +375,6 @@ public class PostService {
         List<PostImage> imgs = post.getImages();
         if (imgs != null) {
             imgs.removeIf(Objects::isNull);
-            // ✅ 핵심 수정: primitive int 정렬은 comparingInt 사용 (null-safe 제거)
             imgs.sort(Comparator.comparingInt(PostImage::getImageOrder));
         }
 

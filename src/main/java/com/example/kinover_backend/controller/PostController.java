@@ -1,4 +1,3 @@
-// src/main/java/com/example/kinover_backend/controller/PostController.java
 package com.example.kinover_backend.controller;
 
 import com.example.kinover_backend.JwtUtil;
@@ -74,18 +73,21 @@ public class PostController {
         return ResponseEntity.ok(post);
     }
 
-    @Operation(summary = "게시글 목록 조회", description = "가족 ID로 게시글 목록 조회 (categoryId optional)")
+    // =========================
+    // ✅ LIST (A안: familyId를 요청으로 받지 않음)
+    // GET /api/posts?categoryId=...
+    // =========================
+    @Operation(summary = "게시글 목록 조회", description = "유저 토큰 기준으로 본인 가족의 게시글 목록 조회 (categoryId optional)")
     @ApiResponse(responseCode = "200", description = "게시글 목록 조회 성공")
     @GetMapping
-    public ResponseEntity<List<PostDTO>> getPostsByFamilyAndCategory(
+    public ResponseEntity<List<PostDTO>> getMyFamilyPosts(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
-            @RequestParam("familyId") UUID familyId,
             @RequestParam(value = "categoryId", required = false) UUID categoryId
     ) {
         Long userId = extractUserIdOrUnauthorized(authorizationHeader);
         if (userId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
 
-        List<PostDTO> posts = postService.getPostsByFamilyAndCategory(userId, familyId, categoryId);
+        List<PostDTO> posts = postService.getMyFamilyPosts(userId, categoryId);
         return ResponseEntity.ok(posts);
     }
 
@@ -130,9 +132,6 @@ public class PostController {
     ) {
         Long authenticatedUserId = extractUserIdOrUnauthorized(authorizationHeader);
         if (authenticatedUserId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-
-        // (선택) 본인 것만 바꾸게 하려면:
-        // if (!authenticatedUserId.equals(userId)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
 
         boolean success = userService.updatePostNotificationSetting(userId, isOn);
         if (success) return ResponseEntity.ok("Post notification setting updated.");
