@@ -19,6 +19,9 @@ public class User {
     @Id
     private Long userId;
 
+    @Column(name = "kakao_id", unique = true)
+    private Long kakaoId;
+
     @Version  // 낙관적 락 적용, 초기값은 DB에서 DEFAULT 0으로 설정
     private Integer version;
 

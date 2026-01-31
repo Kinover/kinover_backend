@@ -28,6 +28,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 @RequiredArgsConstructor
@@ -71,13 +72,21 @@ public class UserService {
 
     public User createNewUserFromKakao(KakaoUserDto kakaoUserDto) {
         try {
-            User user = entityManager.find(User.class, kakaoUserDto.getKakaoId(), LockModeType.PESSIMISTIC_WRITE);
+            Long kakaoId = kakaoUserDto.getKakaoId();
+
+            // 1. 기존에는 PK로 바로 찾았지만, 이제는 kakaoId 컬럼으로 찾습니다.
+            // (LockModeType은 필요하다면 repository 레벨에서 @Lock으로 처리하거나, 여기서는 일단 제외하고 조회)
+            User user = userRepository.findByKakaoId(kakaoId).orElse(null);
 
             if (user == null) {
+                // 2. 신규 가입: 랜덤 PK 생성 로직 수행
                 user = new User();
-                user.setUserId(kakaoUserDto.getKakaoId());
+                user.setUserId(generateRandomUserId()); // 하단에 메서드 구현
+                user.setKakaoId(kakaoId); // 카카오 ID 저장
+                logger.info("신규 유저 생성: userId={}, kakaoId={}", user.getUserId(), kakaoId);
             }
 
+            // 3. 정보 업데이트 (기존과 동일)
             user.setEmail(kakaoUserDto.getEmail());
             user.setName(kakaoUserDto.getNickname());
             user.setPhoneNumber(kakaoUserDto.getPhoneNumber());
@@ -98,9 +107,6 @@ public class UserService {
                 }
             }
 
-            logger.info("Creating/updating user: id={}, name={}, email={}, phone={}, birth={}",
-                    user.getUserId(), user.getName(), user.getEmail(), user.getPhoneNumber(), user.getBirth());
-
             return userRepository.saveAndFlush(user);
 
         } catch (DataIntegrityViolationException e) {
@@ -110,6 +116,18 @@ public class UserService {
             logger.error("유저 생성 중 예외 발생", e);
             throw new RuntimeException("유저 생성 중 오류가 발생했습니다.");
         }
+    }
+
+    private Long generateRandomUserId() {
+        Long randomId;
+        // 중복되지 않는 ID가 나올 때까지 반복
+        do {
+            // 10억 ~ 90억 사이의 랜덤 숫자 (범위는 자유롭게 설정 가능)
+            // Long.MAX_VALUE까지 쓰면 너무 기니까 적당한 길이로 설정
+            randomId = ThreadLocalRandom.current().nextLong(1000000000L, 9999999999L);
+        } while (userRepository.existsByUserId(randomId));
+        
+        return randomId;
     }
 
     public User updateUserFromKakao(User user, KakaoUserDto kakaoUserDto) {
@@ -150,6 +168,8 @@ public class UserService {
         user.setPwd(null);
         user.setPhoneNumber(null);
         user.setTrait(null);
+        user.setEmail(null); 
+        user.setKakaoId(null);
 
         List<UserFamily> toRemove = userFamilyRepository.findAllByUser_UserId(userId);
         userFamilyRepository.deleteAll(toRemove);

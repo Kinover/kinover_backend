@@ -23,6 +23,12 @@ public interface UserRepository extends JpaRepository<User,Long> {
     @Query("SELECT u FROM User u WHERE u.userId IN :userIds")
     List<User> findUsersByIds(@Param("userIds") List<Long> userIds);
 
+    // 카카오 ID로 유저 찾기
+    Optional<User> findByKakaoId(Long kakaoId);
+
+    // 랜덤 생성한 ID 중복 체크용
+    boolean existsByUserId(Long userId);
+
 
 //    Optional<User> findByUserId(Long kakaoId);
 
