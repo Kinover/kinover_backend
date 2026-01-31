@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Date;
 
+
 @Component
 public class JwtUtil {
 
@@ -18,18 +19,21 @@ public class JwtUtil {
     @Value("${jwt.expiration}")
     private long expirationTime; // application.properties의 3600000 사용
 
-    // 토큰 생성
-    public String generateToken(Long kakaoId) {
-        if (secretKey == null || secretKey.length() < 16) { // 16바이트 이상 허용
+    // ✅ 토큰 생성 
+    public String generateToken(Long userId) {
+        if (secretKey == null || secretKey.length() < 16) { 
             throw new IllegalArgumentException("JWT secret key must be at least 16 characters long");
         }
 
         Instant now = Instant.now();
         return Jwts.builder()
-                .setSubject(kakaoId.toString()) // 유저의 고유 ID (sub) -> Long을 String으로 변환
-                .setIssuedAt(Date.from(now)) // 발급 시간
-                .setExpiration(Date.from(now.plusSeconds(expirationTime))) // 3600000ms (1시간)
-                .signWith(Keys.hmacShaKeyFor(secretKey.getBytes(StandardCharsets.UTF_8)), SignatureAlgorithm.HS256) // HS256 명시
+                .setSubject(String.valueOf(userId)) 
+                .setIssuedAt(Date.from(now)) 
+                // 주의: expirationTime이 '초(Second)' 단위인지 '밀리초' 단위인지 확인하세요.
+                // plusSeconds()를 쓰시려면 expirationTime이 3600(1시간)이어야 하고, 
+                // 3600000이라면 plusMillis()를 써야 합니다.
+                .setExpiration(Date.from(now.plusSeconds(expirationTime))) 
+                .signWith(Keys.hmacShaKeyFor(secretKey.getBytes(StandardCharsets.UTF_8)), SignatureAlgorithm.HS256) 
                 .compact();
     }
 

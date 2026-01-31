@@ -38,21 +38,26 @@ public class    KakaoUserService {
 
     private static final Logger logger = LoggerFactory.getLogger(KakaoUserService.class);
 
+    
+
     @Transactional
     public LoginResponseDto processKakaoLogin(String accessToken) {
-        try {
-            KakaoUserDto kakaoUserDto = getKakaoUserInfo(accessToken);
-            logger.info("Kakao User Info Retrieved: Kakao ID = {}", kakaoUserDto.getKakaoId());
-            User user = findOrCreateUser(kakaoUserDto);
-            boolean hasFamily = userFamilyRepository.existsByUser_UserId(user.getUserId());
-            return new LoginResponseDto(jwtUtil.generateToken(user.getUserId()), hasFamily);
-        } catch (ObjectOptimisticLockingFailureException ex) {
-            logger.error("데이터 충돌 발생: {}", ex.getMessage());
-            throw new RuntimeException("데이터 충돌이 발생했습니다. 다시 시도해주세요.", ex);
-        } catch (Exception ex) {
-            logger.error("알 수 없는 오류 발생: {}", ex.getMessage());
-            throw new RuntimeException("카카오 로그인 처리 중 오류가 발생했습니다.", ex);
-        }
+        // 1. 액세스 토큰으로 카카오 서버에 사용자 정보 요청
+        // (기존에 구현되어 있던 getUserInfo 메서드 활용)
+        KakaoUserDto kakaoUserInfo = getKakaoUserInfo(accessToken); 
+
+        // 2. [핵심 변경] 가져온 정보를 UserService로 넘김
+        // UserService 내부에서 'kakaoId'로 조회하고, 없으면 '랜덤 userId'로 가입시킴
+        User user = userService.createNewUserFromKakao(kakaoUserInfo);
+
+        // 3. [중요] 토큰 발급 시, 카카오 ID가 아니라 'DB의 랜덤 userId'를 넣어야 함
+        // user.getUserId()는 이제 5827104921 같은 랜덤 숫자임
+        String token = jwtUtil.generateToken(user.getUserId());
+
+        // 4. 가족 여부 확인 (기존 로직)
+        boolean hasFamily = !user.getUserFamilyList().isEmpty();
+
+        return new LoginResponseDto(token, hasFamily);
     }
 
     private KakaoUserDto getKakaoUserInfo(String accessToken) {
