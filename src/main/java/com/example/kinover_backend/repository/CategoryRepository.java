@@ -8,4 +8,6 @@ import java.util.UUID;
 
 public interface CategoryRepository extends JpaRepository<Category, UUID> {
     List<Category> findByFamily_FamilyId(UUID familyId);
+    // 뒤에 OrderByCreatedAtDesc 를 붙입니다.
+    List<Category> findByFamily_FamilyIdOrderByCreatedAtDesc(UUID familyId);
 }

@@ -33,4 +33,7 @@ public interface PostRepository extends JpaRepository<Post, UUID> {
             @Param("familyId") UUID familyId,
             @Param("categoryId") UUID categoryId
     );
+
+    // ✅ 추가: 특정 카테고리에 속한 게시글 개수 세기
+    long countByCategory_CategoryId(UUID categoryId);
 }

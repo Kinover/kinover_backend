@@ -70,7 +70,8 @@ public class ChatRoomService {
 
         // ✅ 생성 직후: 유저별 기본 표시 이름 세팅 (나 제외한 멤버 이름 나열)
         List<UserDTO> members = getUsersByChatRoom(chatRoom.getChatRoomId());
-        initDisplayRoomNamesAfterCreate(chatRoom.getChatRoomId(), members);
+        // [수정됨] 입력받은 roomName을 인자로 함께 전달
+        initDisplayRoomNamesAfterCreate(chatRoom.getChatRoomId(), members, roomName);
 
         ChatRoomDTO dto = chatRoomMapper.toDTO(chatRoom);
 
@@ -531,8 +532,11 @@ public class ChatRoomService {
         return name;
     }
 
-    // ✅ 생성 직후 1회
-    private void initDisplayRoomNamesAfterCreate(UUID chatRoomId, List<UserDTO> members) {
+    // ✅ 생성 직후 1회 - [수정됨] globalRoomName 파라미터 추가
+    private void initDisplayRoomNamesAfterCreate(UUID chatRoomId, List<UserDTO> members, String globalRoomName) {
+        // 입력된 방 이름이 유효한지 체크
+        boolean hasCustomName = globalRoomName != null && !globalRoomName.trim().isEmpty();
+
         for (UserDTO me : members) {
             Long meId = me.getUserId();
             if (meId == null) continue;
@@ -542,9 +546,22 @@ public class ChatRoomService {
                     .ifPresent(ucr -> {
                         if (ucr.isCustomRoomName()) return;
 
-                        String defaultName = buildDefaultDisplayNameForUser(meId, members);
-                        ucr.setDisplayRoomName(defaultName);
-                        ucr.setCustomRoomName(false);
+                        String displayName;
+                        boolean isCustom;
+
+                        if (hasCustomName) {
+                            // [추가된 로직] 입력받은 방 이름이 있으면 그걸로 설정
+                            displayName = globalRoomName;
+                            // true로 설정해야 나중에 멤버가 변경되어도 이름이 "User1, User2"로 바뀌지 않고 고정됨
+                            isCustom = true; 
+                        } else {
+                            // [기존 로직] 없으면 멤버 이름 조합
+                            displayName = buildDefaultDisplayNameForUser(meId, members);
+                            isCustom = false;
+                        }
+
+                        ucr.setDisplayRoomName(displayName);
+                        ucr.setCustomRoomName(isCustom);
                         userChatRoomRepository.save(ucr);
                     });
         }

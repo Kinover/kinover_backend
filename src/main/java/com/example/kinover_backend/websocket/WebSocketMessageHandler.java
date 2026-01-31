@@ -10,6 +10,9 @@ import com.example.kinover_backend.service.MessageService;
 import com.example.kinover_backend.service.OpenAiService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.*;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
@@ -31,6 +34,8 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
     private final ObjectMapper objectMapper;
     private final OpenAiService openAiService;
     private final ChatRoomService chatRoomService;
+    private final StringRedisTemplate redisTemplate; // RedisTemplate 주입 필요
+    private final ChannelTopic channelTopic;         // ChannelTopic 주입 필요
 
     private final Map<Long, Set<WebSocketSession>> sessions = new ConcurrentHashMap<>();
 
@@ -107,15 +112,9 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
                 return;
             }
 
-            boolean updated = chatRoomService.markRead(dto.getChatRoomId(), userId, dto.getLastReadAt());
+            String jsonPayload = makeReadBroadcastPayload(dto.getChatRoomId(), userId, dto.getLastReadAt());
+            redisTemplate.convertAndSend(channelTopic.getTopic(), jsonPayload);
 
-            // ✅ 실제로 forward 업데이트 된 경우에만 브로드캐스트
-            if (updated) {
-                broadcastToRoomMembers(
-                        dto.getChatRoomId(),
-                        makeReadBroadcastPayload(dto.getChatRoomId(), userId, dto.getLastReadAt())
-                );
-            }
             return;
         }
 

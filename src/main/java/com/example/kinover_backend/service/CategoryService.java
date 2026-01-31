@@ -75,8 +75,8 @@ public class CategoryService {
     public List<CategoryDTO> getCategories(UUID familyId) {
         if (familyId == null) throw new IllegalArgumentException("familyId is null");
 
-        // ✅ Family 엔티티 조회 없이 바로 familyId로 찾도록 레포지토리 변경하면 더 깔끔함
-        return categoryRepository.findByFamily_FamilyId(familyId)
+        // ✅ 변경된 Repository 메소드 호출 (OrderByCreatedAtDesc)
+        return categoryRepository.findByFamily_FamilyIdOrderByCreatedAtDesc(familyId)
                 .stream()
                 .map(category -> new CategoryDTO(
                         category.getCategoryId(),

@@ -31,6 +31,20 @@ public class PostService {
     @Value("${cloudfront.domain}")
     private String cloudFrontDomain;
 
+    // =========================================================
+    // ✅ 헬퍼 메소드 추가 (PostService 내부에서만 사용)
+    // =========================================================
+    private void deleteCategoryIfEmpty(UUID categoryId) {
+        if (categoryId == null) return;
+
+        // 방금 게시글을 지웠으므로, 남은 개수가 0개인지 확인
+        long remainingPosts = postRepository.countByCategory_CategoryId(categoryId);
+        
+        if (remainingPosts == 0) {
+            categoryRepository.deleteById(categoryId);
+        }
+    }
+
     private boolean isBlank(String s) {
         return s == null || s.trim().isEmpty();
     }
@@ -112,16 +126,6 @@ public class PostService {
             throw new RuntimeException("가족 소속이 없습니다.");
         }
         return familyIds.get(0);
-    }
-
-    private void assertAuthorOrThrow(Post post, Long userId) {
-        if (post == null) throw new IllegalArgumentException("post is null");
-        if (userId == null) throw new IllegalArgumentException("userId is null");
-
-        Long authorId = post.getAuthor() != null ? post.getAuthor().getUserId() : null;
-        if (authorId == null || !authorId.equals(userId)) {
-            throw new RuntimeException("작성자만 수행할 수 있습니다.");
-        }
     }
 
     // =========================
@@ -257,8 +261,8 @@ public class PostService {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("게시글 없음"));
 
-        // ✅ 작성자만 삭제 가능
-        assertAuthorOrThrow(post, userId);
+        // ✅ 카테고리 ID 미리 저장 (게시글 삭제 시 필요)
+        UUID categoryId = (post.getCategory() != null) ? post.getCategory().getCategoryId() : null;
 
         String normalized = normalizeToCloudFrontUrl(imageUrl);
 
@@ -290,6 +294,8 @@ public class PostService {
             notificationRepository.deleteByPostId(postId);
             commentRepository.deleteAllByPost(post);
             postRepository.delete(post);
+            // 4. ✅ [추가] 카테고리 비었으면 삭제
+            deleteCategoryIfEmpty(categoryId);
         } else {
             postRepository.save(post);
         }
@@ -306,8 +312,8 @@ public class PostService {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("게시글 없음"));
 
-        // ✅ 작성자만 삭제 가능
-        assertAuthorOrThrow(post, userId);
+        // ✅ 카테고리 ID 미리 저장
+        UUID categoryId = (post.getCategory() != null) ? post.getCategory().getCategoryId() : null;
 
         notificationRepository.deleteByPostId(postId);
 
@@ -323,6 +329,10 @@ public class PostService {
         postImageRepository.deleteAllByPost(post);
         commentRepository.deleteAllByPost(post);
         postRepository.delete(post);
+
+        // 3. ✅ [추가] 게시글 삭제 후 카테고리가 비었으면 삭제
+        // (반드시 postRepository.delete(post) 호출 후에 실행해야 count가 0이 됩니다)
+        deleteCategoryIfEmpty(categoryId);
 
         for (String s3Key : s3Keys) {
             s3Service.deleteImageFromS3(s3Key);
