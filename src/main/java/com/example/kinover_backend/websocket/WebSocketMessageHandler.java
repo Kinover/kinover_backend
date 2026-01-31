@@ -9,8 +9,8 @@ import com.example.kinover_backend.service.ChatRoomService;
 import com.example.kinover_backend.service.MessageService;
 import com.example.kinover_backend.service.OpenAiService;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
-
+// import lombok.RequiredArgsConstructor; // 제거
+import org.springframework.context.annotation.Lazy; // 추가
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.stereotype.Component;
@@ -26,7 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 
 @Component
-@RequiredArgsConstructor
+// @RequiredArgsConstructor // 제거: 직접 생성자를 만들어 @Lazy를 적용하기 위함
 public class WebSocketMessageHandler extends TextWebSocketHandler {
 
     private final JwtUtil jwtUtil;
@@ -34,10 +34,29 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
     private final ObjectMapper objectMapper;
     private final OpenAiService openAiService;
     private final ChatRoomService chatRoomService;
-    private final StringRedisTemplate redisTemplate; // RedisTemplate 주입 필요
-    private final ChannelTopic channelTopic;         // ChannelTopic 주입 필요
+    private final StringRedisTemplate redisTemplate;
+    private final ChannelTopic channelTopic;
 
     private final Map<Long, Set<WebSocketSession>> sessions = new ConcurrentHashMap<>();
+
+    // ✅ 생성자 직접 주입 (Redis 관련 빈에 @Lazy 적용)
+    public WebSocketMessageHandler(
+            JwtUtil jwtUtil,
+            MessageService messageService,
+            ObjectMapper objectMapper,
+            OpenAiService openAiService,
+            ChatRoomService chatRoomService,
+            @Lazy StringRedisTemplate redisTemplate, // 순환 참조 끊기
+            @Lazy ChannelTopic channelTopic          // 순환 참조 끊기
+    ) {
+        this.jwtUtil = jwtUtil;
+        this.messageService = messageService;
+        this.objectMapper = objectMapper;
+        this.openAiService = openAiService;
+        this.chatRoomService = chatRoomService;
+        this.redisTemplate = redisTemplate;
+        this.channelTopic = channelTopic;
+    }
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
@@ -97,7 +116,7 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
         String type = map.get("type") != null ? String.valueOf(map.get("type")) : "message:new";
 
         // =========================
-        // A) 읽음 이벤트 (클라이언트가 "방을 실제로 봤다"는 신호)
+        // A) 읽음 이벤트
         // =========================
         if ("room:read".equals(type)) {
             ReadWsRequestDTO dto = objectMapper.readValue(rawPayload, ReadWsRequestDTO.class);
@@ -113,6 +132,7 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
             }
 
             String jsonPayload = makeReadBroadcastPayload(dto.getChatRoomId(), userId, dto.getLastReadAt());
+            // @Lazy로 주입된 redisTemplate 사용 시점에 실제 빈이 로드됨
             redisTemplate.convertAndSend(channelTopic.getTopic(), jsonPayload);
 
             return;
@@ -139,18 +159,10 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
             return;
         }
 
-        // 서버에서 messageId는 새로 생성되도록 강제
         dto.setMessageId(null);
 
-        // 1) 메시지 저장
         messageService.addMessage(dto);
 
-        // 2) ✅ "보낸 사람(sender)"은 본인이 보낸 메시지를 '읽음'으로 간주해도 되므로
-        //    서버에서 자동 read 처리 (프론트에서 -1 같은 트릭을 할 필요가 없어짐)
-        //
-        //    - 가장 좋은 건 "저장된 메시지 createdAt"으로 markRead 하는 것인데,
-        //      현재 addMessage(dto)가 반환값이 없어 여기서는 LocalDateTime.now()로 처리.
-        //    - Kino 자동응답은 아직 user가 안 읽었을 수 있으니, user 메시지 직후까지만 read를 올림.
         LocalDateTime lastReadAt = LocalDateTime.now();
         boolean updated = chatRoomService.markRead(dto.getChatRoomId(), userId, lastReadAt);
 
@@ -161,7 +173,6 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
             );
         }
 
-        // 3) 키노룸이면 키노 답장 저장 (여기서는 read 올리지 않음)
         if (chatRoomService.isKinoRoom(dto.getChatRoomId())) {
             String reply = openAiService.getKinoResponse(dto.getChatRoomId(), userId);
 
