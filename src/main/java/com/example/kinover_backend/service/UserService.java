@@ -70,6 +70,7 @@ public class UserService {
         return dto;
     }
 
+    @Transactional
     public User createNewUserFromKakao(KakaoUserDto kakaoUserDto) {
         try {
             Long kakaoId = kakaoUserDto.getKakaoId();
