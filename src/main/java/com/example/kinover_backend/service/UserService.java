@@ -70,7 +70,6 @@ public class UserService {
         return dto;
     }
 
-    @Transactional
     public User createNewUserFromKakao(KakaoUserDto kakaoUserDto) {
         // [DEBUG-01] 메서드 진입 확인
         logger.info("=== [DEBUG-01] createNewUserFromKakao 메서드 시작 ===");
