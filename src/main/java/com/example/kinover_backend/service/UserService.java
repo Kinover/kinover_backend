@@ -110,12 +110,14 @@ public class UserService {
 
             return userRepository.saveAndFlush(user);
 
-        } catch (DataIntegrityViolationException e) {
-            logger.error("데이터베이스 제약조건 위반", e);
-            throw new RuntimeException("유저를 저장하는 데 오류가 발생했습니다.");
+        } // 변경 (어떤 필드 때문에 에러가 났는지 확인하기 위함)
+        catch (DataIntegrityViolationException e) {
+            logger.error("!!! DB 제약조건 위반 !!! : {}", e.getMessage());
+            // 보통 e.getRootCause()를 찍어보면 "Column 'email' cannot be null" 처럼 정확한 이유가 나옵니다.
+            throw new RuntimeException("DB 저장 실패: " + e.getRootCause().getMessage());
         } catch (Exception e) {
-            logger.error("유저 생성 중 예외 발생", e);
-            throw new RuntimeException("유저 생성 중 오류가 발생했습니다.");
+            logger.error("!!! 알 수 없는 에러 !!!", e);
+            throw new RuntimeException("시스템 오류: " + e.getMessage());
         }
     }
 
