@@ -70,10 +70,10 @@ public class User {
     private List<Message> messages = new ArrayList<>();
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
-    private List<UserFamily> userFamilyList;
+    private List<UserFamily> userFamilyList = new ArrayList<>();
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
-    private List<UserChatRoom> userChatRooms;
+    private List<UserChatRoom> userChatRooms = new ArrayList<>();
 
     /**
      * ✅ 참여 중인 일정 목록

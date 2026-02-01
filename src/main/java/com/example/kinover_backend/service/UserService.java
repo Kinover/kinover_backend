@@ -71,24 +71,19 @@ public class UserService {
     }
 
     public User createNewUserFromKakao(KakaoUserDto kakaoUserDto) {
-        // [DEBUG-01] 메서드 진입 확인
-        logger.info("=== [DEBUG-01] createNewUserFromKakao 메서드 시작 ===");
         
         try {
             Long kakaoId = kakaoUserDto.getKakaoId();
-            logger.info("=== [DEBUG-02] 카카오 ID 추출 완료: {}", kakaoId);
 
             User user = userRepository.findByKakaoId(kakaoId).orElse(null);
 
             if (user == null) {
-                // [DEBUG-03] 신규 유저 로직 진입
-                logger.info("=== [DEBUG-03] 신규 가입 유저임. 객체 생성 시작");
                 user = new User();
                 user.setUserId(generateRandomUserId());
                 user.setKakaoId(kakaoId);
-                logger.info("=== [DEBUG-04] 신규 유저 기본 세팅 완료 (ID: {}, KakaoID: {})", user.getUserId(), kakaoId);
-            } else {
-                logger.info("=== [DEBUG-03] 기존 유저 발견 (ID: {})", user.getUserId());
+                Date now = new Date();
+                user.setCreatedAt(now);
+                user.setUpdatedAt(now);
             }
 
             // 정보 업데이트
@@ -102,56 +97,24 @@ public class UserService {
             }
             user.setImage(profileImageUrl);
             
-            // [DEBUG-05] 날짜 변환 전 확인
-            logger.info("=== [DEBUG-05] 기본 정보 세팅 완료. 생년월일 처리 시작. (Year: {}, Day: {})", kakaoUserDto.getBirthyear(), kakaoUserDto.getBirthday());
-
             if (kakaoUserDto.getBirthyear() != null && kakaoUserDto.getBirthday() != null) {
                 try {
                     String yyyyMMdd = kakaoUserDto.getBirthyear() + kakaoUserDto.getBirthday();
                     LocalDate birthDate = LocalDate.parse(yyyyMMdd, DateTimeFormatter.ofPattern("yyyyMMdd"));
                     user.setBirth(Date.from(birthDate.atStartOfDay(ZoneId.systemDefault()).toInstant()));
-                    logger.info("=== [DEBUG-06] 생일 변환 성공: {}", user.getBirth());
                 } catch (DateTimeParseException ex) {
                     // WARN 대신 INFO로 변경하여 무조건 출력
                     logger.info("!!! [DEBUG-WARN] 생일 정보 파싱 실패 (로직은 계속 진행됨): {}", ex.getMessage());
                 }
             }
-
-            // [DEBUG-07] DB 저장 직전 데이터 확인 (여기서 데이터가 이상하면 DB가 거부함)
-            logger.info("=== [DEBUG-07] DB 저장(saveAndFlush) 직전 상태 ===");
-            logger.info("-> ID: {}", user.getUserId());
-            logger.info("-> Email: {}", user.getEmail());
-            logger.info("-> Name: {}", user.getName());
-            logger.info("-> KakaoId: {}", user.getKakaoId());
-
             // 실제 저장 시도
             User savedUser = userRepository.saveAndFlush(user);
-
-            // [DEBUG-08] 저장 성공 확인
-            logger.info("=== [DEBUG-08] saveAndFlush 성공! 리턴된 객체 ID: {}", savedUser.getUserId());
-
             return savedUser;
 
         } catch (DataIntegrityViolationException e) {
-            // [DEBUG-ERROR] 제약조건 위반 (INFO로 출력)
-            logger.info("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-            logger.info("!!! [DEBUG-ERROR] DB 제약조건 위반 발생 (DataIntegrityViolationException) !!!");
-            logger.info("!!! 에러 메시지: {}", e.getMessage());
-            if(e.getRootCause() != null) {
-                logger.info("!!! 진짜 원인(RootCause): {}", e.getRootCause().getMessage());
-            }
-            logger.info("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
             throw new RuntimeException("DB 저장 실패: " + (e.getRootCause() != null ? e.getRootCause().getMessage() : e.getMessage()));
 
         } catch (Exception e) {
-            // [DEBUG-ERROR] 그 외 모든 에러 (INFO로 출력)
-            logger.info("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-            logger.info("!!! [DEBUG-ERROR] 알 수 없는 예외 발생 (Exception) !!!");
-            logger.info("!!! 예외 클래스: {}", e.getClass().getName());
-            logger.info("!!! 에러 메시지: {}", e.getMessage());
-            // 스택 트레이스를 로그로 찍기 위해 e.printStackTrace() 대신 로그에 e를 넘김
-            logger.info("!!! 스택 트레이스 정보:", e); 
-            logger.info("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
             throw new RuntimeException("시스템 오류: " + e.getMessage());
         }
     }
