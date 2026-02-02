@@ -41,19 +41,56 @@ public class FamilyController {
         this.userFamilyService = userFamilyService;
     }
 
+    private Long getAuthUserId(String authorizationHeader) {
+        String token = authorizationHeader.replace("Bearer ", "");
+        return jwtUtil.getUserIdFromToken(token);
+    }
+
     @Operation(summary = "가족 아이디로 가족 조회", description = "특정 가족의 정보를 조회합니다.")
     @PostMapping("/{familyId}")
     public FamilyDTO getFamily(
             @Parameter(description = "가족 아이디", required = true) @PathVariable UUID familyId,
             @RequestHeader("Authorization") String authorizationHeader) {
+
+        // (선택) 여기서 authorizationHeader로 권한 체크를 할 수도 있음
         return familyService.getFamilyById(familyId);
     }
 
     @Operation(summary = "가족 추가", description = "입력값 없이 호출하면 새로운 가족 그룹을 생성하고 ID를 반환합니다.")
     @PostMapping("/add")
     public FamilyDTO addFamily(@RequestHeader("Authorization") String authorizationHeader) {
-        // Body를 받지 않고 서비스 호출
         return familyService.createFamily();
+    }
+
+    // ✅ ✅ 핵심 1) 내 토큰 유저를 특정 가족에 참여시키기 (userId 파라미터 제거)
+    @Operation(summary = "가족 참여(본인)", description = "토큰의 유저를 해당 가족에 추가합니다.")
+    @PostMapping("/join/{familyId}")
+    public ResponseEntity<String> joinFamily(
+            @Parameter(description = "가족 아이디", required = true) @PathVariable UUID familyId,
+            @RequestHeader("Authorization") String authorizationHeader) {
+
+        Long authenticatedUserId = getAuthUserId(authorizationHeader);
+
+        userFamilyService.addUserByFamilyIdAndUserId(familyId, authenticatedUserId);
+        return ResponseEntity.status(HttpStatus.CREATED).body("가족 구성원이 성공적으로 추가되었습니다");
+    }
+
+    // ✅ ✅ 핵심 2) 가족 생성 + 내가 그 가족에 참여까지 한 번에
+    @Operation(summary = "가족 생성 후 바로 참여(본인)", description = "새 가족 생성 후 토큰 유저를 자동으로 추가합니다.")
+    @PostMapping("/create-and-join")
+    public ResponseEntity<FamilyDTO> createAndJoin(
+            @RequestHeader("Authorization") String authorizationHeader) {
+
+        Long authenticatedUserId = getAuthUserId(authorizationHeader);
+
+        // 1) 가족 생성
+        FamilyDTO created = familyService.createFamily();
+
+        // 2) 생성된 가족에 나 추가
+        // created.getFamilyId() 타입이 UUID라고 가정
+        userFamilyService.addUserByFamilyIdAndUserId(created.getFamilyId(), authenticatedUserId);
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
     @Operation(summary = "가족 삭제", description = "특정 가족을 삭제합니다.")
@@ -72,19 +109,19 @@ public class FamilyController {
         return familyService.modifyFamily(family);
     }
 
-    @Operation(summary = "가족 구성원 추가", description = "가족 구성원을 추가합니다.")
+    // (레거시 유지가 필요하면 남겨두고, 프론트는 joinFamily만 쓰도록 옮기면 됨)
+    @Operation(summary = "가족 구성원 추가(레거시)", description = "레거시: familyId/userId로 추가합니다.")
     @PostMapping("/add/{familyId}/{userId}")
-    public ResponseEntity<String> addFamilyUser(
-            @Parameter(description = "가족 아이디", required = true) @PathVariable UUID familyId,
-            @Parameter(description = "추가할 유저 아이디", required = true) @PathVariable Long userId,
+    public ResponseEntity<String> addFamilyUserLegacy(
+            @PathVariable UUID familyId,
+            @PathVariable Long userId,
             @RequestHeader("Authorization") String authorizationHeader) {
-         String token = authorizationHeader.replace("Bearer ", "");
-         Long authenticatedUserId = jwtUtil.getUserIdFromToken(token);
 
-         // 요청자가 인증된 유저인지 확인 (선택적, 필요 시 제거 가능)
-         if (!authenticatedUserId.equals(userId)) {
-             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("자신만 가족에 추가할 수 있습니다");
-         }
+        Long authenticatedUserId = getAuthUserId(authorizationHeader);
+
+        if (!authenticatedUserId.equals(userId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("자신만 가족에 추가할 수 있습니다");
+        }
 
         userFamilyService.addUserByFamilyIdAndUserId(familyId, userId);
         return ResponseEntity.status(HttpStatus.CREATED).body("가족 구성원이 성공적으로 추가되었습니다");
@@ -93,8 +130,8 @@ public class FamilyController {
     @Operation(summary = "가족 구성원 탈퇴", description = "가족에서 탈퇴합니다.")
     @PostMapping("/delete-user/{familyId}/{userId}")
     public void deleteFamilyUser(
-            @Parameter(description = "가족 아이디", required = true) @PathVariable UUID familyId,
-            @Parameter(description = "탈퇴할 유저 아이디", required = true) @PathVariable Long userId) {
+            @PathVariable UUID familyId,
+            @PathVariable Long userId) {
         userFamilyService.deleteUserByFamilyIdAndUserId(familyId, userId);
     }
 
@@ -109,16 +146,12 @@ public class FamilyController {
     }
 
     @Operation(summary = "가족 공지사항 조회")
-    @ApiResponse(responseCode = "200", description = "공지사항 반환",
-            content = @Content(schema = @Schema(implementation = String.class)))
     @GetMapping("/notice/{familyId}")
     public ResponseEntity<String> getFamilyNotice(@PathVariable UUID familyId) {
         return ResponseEntity.ok(familyService.getNotice(familyId));
     }
 
     @Operation(summary = "가족 공지사항 수정")
-    @ApiResponse(responseCode = "200", description = "공지사항 수정 완료",
-            content = @Content(schema = @Schema(implementation = String.class)))
     @PutMapping("/notice/{familyId}")
     public ResponseEntity<Void> updateFamilyNotice(
             @PathVariable UUID familyId,
@@ -126,6 +159,4 @@ public class FamilyController {
         familyService.updateNotice(familyId, content);
         return ResponseEntity.ok().build();
     }
-
-
 }
