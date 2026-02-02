@@ -84,4 +84,6 @@ public interface UserChatRoomRepository extends JpaRepository<UserChatRoom, UUID
       where ucr.chatRoom.chatRoomId = :chatRoomId
   """)
   List<UserChatRoom> findAllByChatRoomId(@Param("chatRoomId") UUID chatRoomId);
-  }
+
+
+}

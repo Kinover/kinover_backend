@@ -47,4 +47,7 @@ public interface ChatRoomRepository extends JpaRepository<ChatRoom, UUID> {
         where cr.chatRoomId in :chatRoomIds
     """)
     List<ChatRoom> findByChatRoomIdInWithMembers(@Param("chatRoomIds") Set<UUID> chatRoomIds);
+   
+    Optional<ChatRoom> findFirstByFamily_FamilyIdAndKinoTrueAndFamilyType(UUID familyId, String familyType);
+
 }

@@ -1,4 +1,3 @@
-// src/main/java/com/example/kinover_backend/config/JwtAuthenticationFilter.java
 package com.example.kinover_backend.config;
 
 import com.example.kinover_backend.JwtUtil;
@@ -29,9 +28,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(
-        HttpServletRequest request,
-        HttpServletResponse response,
-        FilterChain filterChain
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain
     ) throws ServletException, IOException {
 
         final String uri = request.getRequestURI();
@@ -50,8 +49,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String token = extractToken(request);
 
-        // 토큰이 없는 경우: 여기서는 그냥 통과
-        // (최종적으로 /api/** 는 SecurityConfig에서 authenticated로 막힘)
+        // 토큰이 없는 경우: 그냥 통과 (SecurityConfig에서 막을 건 막음)
         if (token == null) {
             filterChain.doFilter(request, response);
             return;
@@ -72,19 +70,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         // ✅ 유효한 토큰이면 인증 세팅
-        Long userId = jwtUtil.getUserIdFromToken(token);
+        try {
+            Long userId = jwtUtil.getUserIdFromToken(token);
 
-        // ✅ 권한은 최소 1개 넣어두는 게 안전 (403 방지에 도움)
-        var authorities = List.of(new SimpleGrantedAuthority("ROLE_USER"));
+            var authorities = List.of(new SimpleGrantedAuthority("ROLE_USER"));
+            UsernamePasswordAuthenticationToken authentication =
+                    new UsernamePasswordAuthenticationToken(userId, null, authorities);
 
-        UsernamePasswordAuthenticationToken authentication =
-            new UsernamePasswordAuthenticationToken(userId, null, authorities);
+            authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+            SecurityContextHolder.getContext().setAuthentication(authentication);
 
-        authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-        SecurityContextHolder.getContext().setAuthentication(authentication);
-
-        // ✅ 디버그 로그(필요 시)
-        // System.out.println(">>> AUTH SET: " + authentication);
+        } catch (Exception e) {
+            // ✅ 파싱 중 예외면 401로 끊기(500 방지)
+            sendUnauthorized(response, "INVALID_TOKEN");
+            return;
+        }
 
         filterChain.doFilter(request, response);
     }
@@ -93,6 +93,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String authorizationHeader = request.getHeader("Authorization");
         if (authorizationHeader == null) return null;
 
+        // ✅ "Bearer <token>"만 인정
         if (authorizationHeader.startsWith("Bearer ")) {
             return authorizationHeader.substring(7);
         }
