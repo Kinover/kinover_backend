@@ -10,16 +10,20 @@ import java.util.List;
 import java.util.UUID;
 
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.annotations.UuidGenerator;
+import org.hibernate.type.SqlTypes;
 
 @Getter
 @Setter
 @Entity
 public class Family {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID) // DB(JPA)가 UUID 자동 생성
-    @Column(columnDefinition = "BINARY(16)") // UUID 저장을 위한 최적화 (선택사항, 생략 가능)
+  @Id
+    @UuidGenerator
+    @Column(name = "family_id", columnDefinition = "BINARY(16)", nullable = false)
+    @JdbcTypeCode(SqlTypes.BINARY) // ✅ UUID를 BINARY로 저장하도록 고정
     private UUID familyId;
 
     @Column(columnDefinition = "VARCHAR(30)")
