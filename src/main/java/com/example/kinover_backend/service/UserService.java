@@ -7,7 +7,6 @@ import com.example.kinover_backend.repository.*;
 import com.example.kinover_backend.websocket.WebSocketStatusHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.LockModeType;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,6 +14,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,8 +27,8 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.*;
-import java.util.stream.Collectors;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -55,6 +55,24 @@ public class UserService {
     @Value("${cloudfront.domain}")
     private String cloudFrontDomain;
 
+    /**
+     * ✅ 최신 familyId 1개 조회 헬퍼 (중복 제거)
+     * - 없으면 null
+     * - 실패해도 null로 방어해서 userinfo가 죽지 않게
+     */
+    private UUID resolveLatestFamilyId(Long userId) {
+        try {
+            List<UUID> ids = userFamilyRepository.findLatestFamilyIdByUserId(
+                    userId,
+                    PageRequest.of(0, 1)
+            );
+            return (ids != null && !ids.isEmpty()) ? ids.get(0) : null;
+        } catch (Exception e) {
+            logger.warn("[resolveLatestFamilyId] fail userId={}, err={}", userId, e.toString());
+            return null;
+        }
+    }
+
     @Transactional
     public UserDTO getUserById(Long userId) {
         User user = userRepository.findByUserId(userId)
@@ -62,16 +80,13 @@ public class UserService {
 
         UserDTO dto = new UserDTO(user);
 
-        List<UserFamily> list = userFamilyRepository.findAllByUser_UserId(user.getUserId());
-        if (!list.isEmpty()) {
-            dto.setFamilyId(list.get(0).getFamily().getFamilyId());
-        }
+        // ✅✅✅ 핵심: 가족 여러 개면 "가장 최근 생성된 가족" 기준으로 familyId 내려줌
+        dto.setFamilyId(resolveLatestFamilyId(user.getUserId()));
 
         return dto;
     }
 
     public User createNewUserFromKakao(KakaoUserDto kakaoUserDto) {
-        
         try {
             Long kakaoId = kakaoUserDto.getKakaoId();
 
@@ -96,24 +111,22 @@ public class UserService {
                 profileImageUrl = "https://" + profileImageUrl.substring(7);
             }
             user.setImage(profileImageUrl);
-            
+
             if (kakaoUserDto.getBirthyear() != null && kakaoUserDto.getBirthday() != null) {
                 try {
                     String yyyyMMdd = kakaoUserDto.getBirthyear() + kakaoUserDto.getBirthday();
                     LocalDate birthDate = LocalDate.parse(yyyyMMdd, DateTimeFormatter.ofPattern("yyyyMMdd"));
                     user.setBirth(Date.from(birthDate.atStartOfDay(ZoneId.systemDefault()).toInstant()));
                 } catch (DateTimeParseException ex) {
-                    // WARN 대신 INFO로 변경하여 무조건 출력
                     logger.info("!!! [DEBUG-WARN] 생일 정보 파싱 실패 (로직은 계속 진행됨): {}", ex.getMessage());
                 }
             }
+
             // 실제 저장 시도
-            User savedUser = userRepository.saveAndFlush(user);
-            return savedUser;
+            return userRepository.saveAndFlush(user);
 
         } catch (DataIntegrityViolationException e) {
             throw new RuntimeException("DB 저장 실패: " + (e.getRootCause() != null ? e.getRootCause().getMessage() : e.getMessage()));
-
         } catch (Exception e) {
             throw new RuntimeException("시스템 오류: " + e.getMessage());
         }
@@ -121,13 +134,9 @@ public class UserService {
 
     private Long generateRandomUserId() {
         Long randomId;
-        // 중복되지 않는 ID가 나올 때까지 반복
         do {
-            // 10억 ~ 90억 사이의 랜덤 숫자 (범위는 자유롭게 설정 가능)
-            // Long.MAX_VALUE까지 쓰면 너무 기니까 적당한 길이로 설정
             randomId = ThreadLocalRandom.current().nextLong(1000000000L, 9999999999L);
         } while (userRepository.existsByUserId(randomId));
-        
         return randomId;
     }
 
@@ -169,7 +178,7 @@ public class UserService {
         user.setPwd(null);
         user.setPhoneNumber(null);
         user.setTrait(null);
-        user.setEmail(null); 
+        user.setEmail(null);
         user.setKakaoId(null);
 
         List<UserFamily> toRemove = userFamilyRepository.findAllByUser_UserId(userId);
@@ -210,10 +219,8 @@ public class UserService {
 
         UserDTO dto = new UserDTO(saved);
 
-        List<UserFamily> list = userFamilyRepository.findAllByUser_UserId(user.getUserId());
-        if (!list.isEmpty()) {
-            dto.setFamilyId(list.get(0).getFamily().getFamilyId());
-        }
+        // ✅✅✅ 핵심: 최신 familyId로 통일
+        dto.setFamilyId(resolveLatestFamilyId(saved.getUserId()));
 
         return dto;
     }
@@ -260,17 +267,12 @@ public class UserService {
     /*
      * =========================================================
      * ✅ 알림 조회 (수정본)
-     * - 조회에서 절대 터지지 않게(orElseThrow 금지)
-     * - 참조(작성자/게시물/댓글) 깨져도 DTO는 만들고, 비워서 내려주기
-     * - N+1 방지 벌크 조회(Map)
      * =========================================================
      */
     @Transactional(readOnly = true)
     public NotificationResponseDTO getUserNotifications(Long userId) {
         User user = userRepository.findById(userId).orElse(null);
         if (user == null) {
-            // 여기서 throw하면 프론트가 “주원/은재만” 같은 케이스에서 또 죽을 수 있음
-            // (토큰은 맞는데 DB에서 유저 조회가 꼬이는 상황도 방어)
             return NotificationResponseDTO.builder()
                     .lastCheckedAt(null)
                     .notifications(Collections.emptyList())
@@ -298,7 +300,6 @@ public class UserService {
                     .build();
         }
 
-        // ✅ 내 알림 제외(서버에서 DTO 생성 전에 필터)
         List<Notification> filtered = notifications.stream()
                 .filter(n -> !Objects.equals(n.getAuthorId(), userId))
                 .collect(Collectors.toList());
@@ -310,44 +311,38 @@ public class UserService {
                     .build();
         }
 
-        // ✅ 벌크 조회 준비
         Set<Long> authorIds = new HashSet<>();
         Set<UUID> postIds = new HashSet<>();
         Set<UUID> commentIds = new HashSet<>();
 
         for (Notification n : filtered) {
-            if (n.getAuthorId() != null)
-                authorIds.add(n.getAuthorId());
-            if (n.getPostId() != null)
-                postIds.add(n.getPostId());
-            if (n.getCommentId() != null)
-                commentIds.add(n.getCommentId());
+            if (n.getAuthorId() != null) authorIds.add(n.getAuthorId());
+            if (n.getPostId() != null) postIds.add(n.getPostId());
+            if (n.getCommentId() != null) commentIds.add(n.getCommentId());
         }
 
         Map<Long, User> authorMap = authorIds.isEmpty()
                 ? Collections.emptyMap()
                 : userRepository.findAllById(authorIds).stream()
-                        .collect(Collectors.toMap(User::getUserId, u -> u, (a, b) -> a));
+                .collect(Collectors.toMap(User::getUserId, u -> u, (a, b) -> a));
 
         Map<UUID, Post> postMap = postIds.isEmpty()
                 ? Collections.emptyMap()
                 : postRepository.findAllById(postIds).stream()
-                        .collect(Collectors.toMap(Post::getPostId, p -> p, (a, b) -> a));
+                .collect(Collectors.toMap(Post::getPostId, p -> p, (a, b) -> a));
 
         Map<UUID, Comment> commentMap = commentIds.isEmpty()
                 ? Collections.emptyMap()
                 : commentRepository.findAllById(commentIds).stream()
-                        .collect(Collectors.toMap(Comment::getCommentId, c -> c, (a, b) -> a));
+                .collect(Collectors.toMap(Comment::getCommentId, c -> c, (a, b) -> a));
 
         List<NotificationDTO> dtoList = new ArrayList<>();
 
         for (Notification n : filtered) {
             try {
                 NotificationDTO dto = buildNotificationDTO(n, authorMap, postMap, commentMap);
-                if (dto != null)
-                    dtoList.add(dto);
+                if (dto != null) dtoList.add(dto);
             } catch (Exception e) {
-                // ✅ 한 건 터져도 전체 응답은 살림
                 logger.warn("[NOTI_SKIP] userId={}, notificationId={}, type={}, err={}",
                         userId, n.getNotificationId(), n.getNotificationType(), e.toString());
             }
@@ -364,6 +359,7 @@ public class UserService {
             Map<Long, User> authorMap,
             Map<UUID, Post> postMap,
             Map<UUID, Comment> commentMap) {
+
         NotificationType type = n.getNotificationType();
 
         User author = (n.getAuthorId() == null) ? null : authorMap.get(n.getAuthorId());
@@ -380,7 +376,6 @@ public class UserService {
         Post post = (postId == null) ? null : postMap.get(postId);
         Comment comment = (commentId == null) ? null : commentMap.get(commentId);
 
-        // ✅ 타입별로 필요한 정보 채우기 (없으면 그냥 빈 값)
         if (type == NotificationType.POST) {
             if (post != null) {
                 categoryTitle = safe(getCategoryTitleSafe(post), "");
@@ -389,18 +384,13 @@ public class UserService {
             }
         } else if (type == NotificationType.COMMENT) {
             if (comment != null) {
-                // comment -> post 로 타고 들어가는데, 이게 LAZY/삭제로 터질 수 있어서 보호
                 Post p = null;
-                try {
-                    p = comment.getPost();
-                } catch (Exception ignore) {
-                }
+                try { p = comment.getPost(); } catch (Exception ignore) {}
 
                 if (p != null) {
                     categoryTitle = safe(getCategoryTitleSafe(p), "");
                     firstImageUrl = getFirstImageUrlSafe(p);
                 } else if (post != null) {
-                    // 혹시 notification.postId도 같이 저장되어 있다면 이걸로라도 복구
                     categoryTitle = safe(getCategoryTitleSafe(post), "");
                     firstImageUrl = getFirstImageUrlSafe(post);
                 }
@@ -424,11 +414,9 @@ public class UserService {
 
     private String getCategoryTitleSafe(Post post) {
         try {
-            if (post == null)
-                return "";
+            if (post == null) return "";
             Category c = post.getCategory();
-            if (c == null)
-                return "";
+            if (c == null) return "";
             return safe(c.getTitle(), "");
         } catch (Exception e) {
             return "";
@@ -437,10 +425,8 @@ public class UserService {
 
     private String getFirstImageUrlSafe(Post post) {
         try {
-            if (post == null)
-                return null;
-            if (post.getImages() == null || post.getImages().isEmpty())
-                return null;
+            if (post == null) return null;
+            if (post.getImages() == null || post.getImages().isEmpty()) return null;
             return post.getImages().get(0).getImageUrl();
         } catch (Exception e) {
             return null;
@@ -448,8 +434,7 @@ public class UserService {
     }
 
     private String trimContentSafe(String content) {
-        if (content == null)
-            return "";
+        if (content == null) return "";
         return content.length() > 30 ? content.substring(0, 30) + "..." : content;
     }
 
@@ -457,9 +442,6 @@ public class UserService {
         return (s == null) ? fallback : s;
     }
 
-    /**
-     * ✅ 변경 핵심 2) hasUnread도 "내가 만든 알림은 제외"해야 함.
-     */
     @Transactional(readOnly = true)
     public boolean hasUnreadNotifications(Long userId) {
         User user = userRepository.findById(userId)
@@ -471,8 +453,7 @@ public class UserService {
                 .map(Family::getFamilyId)
                 .collect(Collectors.toList());
 
-        if (familyIds.isEmpty())
-            return false;
+        if (familyIds.isEmpty()) return false;
 
         LocalDateTime 기준 = (lastCheckedAt != null) ? lastCheckedAt : LocalDateTime.MIN;
 
@@ -491,8 +472,7 @@ public class UserService {
                 .map(Family::getFamilyId)
                 .collect(Collectors.toList());
 
-        if (familyIds.isEmpty())
-            return 0L;
+        if (familyIds.isEmpty()) return 0L;
 
         LocalDateTime 기준 = (lastCheckedAt != null) ? lastCheckedAt : LocalDateTime.MIN;
 
@@ -500,12 +480,10 @@ public class UserService {
                 familyIds, 기준, userId);
     }
 
-    // ✅ 채팅 unread 합계 (종과 분리)
     @Transactional(readOnly = true)
     public long getChatUnreadCount(Long userId) {
         List<UserChatRoom> links = userChatRoomRepository.findByUserId(userId);
-        if (links == null || links.isEmpty())
-            return 0L;
+        if (links == null || links.isEmpty()) return 0L;
 
         long total = 0L;
 
@@ -527,7 +505,6 @@ public class UserService {
         return total;
     }
 
-    // ✅ 앱 배지 합계 = 종 unread + 채팅 unread
     @Transactional(readOnly = true)
     public long getBadgeCount(Long userId) {
         long bell = getUnreadNotificationCount(userId);
@@ -535,9 +512,6 @@ public class UserService {
         return Math.max(0L, bell + chat);
     }
 
-    /**
-     * ✅ 읽음 확정은 여기서만 한다.
-     */
     @Transactional
     public LocalDateTime markNotificationsRead(Long userId) {
         User user = userRepository.findById(userId)
@@ -553,8 +527,7 @@ public class UserService {
     @Transactional
     public boolean updatePostNotificationSetting(Long userId, boolean isOn) {
         Optional<User> optionalUser = userRepository.findById(userId);
-        if (optionalUser.isEmpty())
-            return false;
+        if (optionalUser.isEmpty()) return false;
 
         User user = optionalUser.get();
         user.setIsPostNotificationOn(isOn);
@@ -565,8 +538,7 @@ public class UserService {
     @Transactional
     public boolean updateCommentNotificationSetting(Long userId, boolean isOn) {
         Optional<User> optionalUser = userRepository.findById(userId);
-        if (optionalUser.isEmpty())
-            return false;
+        if (optionalUser.isEmpty()) return false;
 
         User user = optionalUser.get();
         user.setIsCommentNotificationOn(isOn);
@@ -577,8 +549,7 @@ public class UserService {
     @Transactional
     public boolean updateChatNotificationSetting(Long userId, boolean isOn) {
         Optional<User> userOpt = userRepository.findById(userId);
-        if (userOpt.isEmpty())
-            return false;
+        if (userOpt.isEmpty()) return false;
 
         User user = userOpt.get();
         user.setIsChatNotificationOn(isOn);
@@ -595,8 +566,7 @@ public class UserService {
     }
 
     private Date parseDateTime(String birth) {
-        if (birth == null || birth.isEmpty())
-            return null;
+        if (birth == null || birth.isEmpty()) return null;
 
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
@@ -633,6 +603,10 @@ public class UserService {
             user.setMarketingAgreedAt(parseDateTime(req.getMarketingAgreedAt()));
 
         userRepository.save(user);
-        return new UserDTO(user);
+
+        UserDTO dto = new UserDTO(user);
+        // ✅ 프로필 업데이트 이후에도 최신 familyId 내려주면 프론트 상태 꼬임이 덜함
+        dto.setFamilyId(resolveLatestFamilyId(userId));
+        return dto;
     }
 }
