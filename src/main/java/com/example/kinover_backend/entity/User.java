@@ -22,7 +22,7 @@ public class User {
     @Column(name = "kakao_id", unique = true)
     private Long kakaoId;
 
-    @Version  // 낙관적 락 적용, 초기값은 DB에서 DEFAULT 0으로 설정
+    @Version // 낙관적 락 적용, 초기값은 DB에서 DEFAULT 0으로 설정
     private Integer version;
 
     @Column(columnDefinition = "VARCHAR(100)")
@@ -40,13 +40,13 @@ public class User {
     // 기존 String emotion 제거하고 아래로 교체
     @Enumerated(EnumType.STRING)
     @Column(length = 50)
-    private UserEmotion emotion;  // 오늘의 감정 상태
+    private UserEmotion emotion; // 오늘의 감정 상태
 
     @Column(nullable = false)
-    private Boolean isOnline = false;  // 현재 접속 상태 (true/false)
+    private Boolean isOnline = false; // 현재 접속 상태 (true/false)
 
     @Column(columnDefinition = "TIMESTAMP")
-    private LocalDateTime lastActiveAt;  // 마지막 활동 시간
+    private LocalDateTime lastActiveAt; // 마지막 활동 시간
 
     @Column(columnDefinition = "TIMESTAMP")
     private LocalDateTime lastNotificationCheckedAt;
@@ -93,7 +93,7 @@ public class User {
     private Boolean isChatNotificationOn = true;
 
     @Column(columnDefinition = "TIMESTAMP")
-    private LocalDateTime emotionUpdatedAt;  // 감정을 마지막으로 수정한 시간
+    private LocalDateTime emotionUpdatedAt; // 감정을 마지막으로 수정한 시간
 
     @Column(name = "terms_agreed")
     private Boolean termsAgreed;
@@ -115,4 +115,7 @@ public class User {
 
     @Column(name = "marketing_agreed_at")
     private Date marketingAgreedAt;
+
+    @Column(name = "apple_id", unique = true, length = 64)
+    private String appleId;
 }

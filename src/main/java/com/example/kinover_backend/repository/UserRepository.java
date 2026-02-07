@@ -29,7 +29,7 @@ public interface UserRepository extends JpaRepository<User,Long> {
     // 랜덤 생성한 ID 중복 체크용
     boolean existsByUserId(Long userId);
 
+    Optional<User> findByAppleId(String appleId);
 
-//    Optional<User> findByUserId(Long kakaoId);
 
 }

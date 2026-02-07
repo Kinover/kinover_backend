@@ -5,7 +5,6 @@ import com.example.kinover_backend.dto.KakaoUserDto;
 import com.example.kinover_backend.dto.LoginResponseDto;
 import com.example.kinover_backend.entity.User;
 import com.example.kinover_backend.repository.UserRepository;
-import com.example.kinover_backend.repository.UserFamilyRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -22,7 +21,6 @@ import org.springframework.web.client.RestTemplate;
 public class KakaoUserService {
 
     private final UserRepository userRepository;
-    private final UserFamilyRepository userFamilyRepository; // (현재 메서드에서 미사용이면 나중에 정리 가능)
     private final JwtUtil jwtUtil;
     private final RestTemplate restTemplate;
     private final UserService userService;
