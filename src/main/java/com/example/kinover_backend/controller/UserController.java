@@ -42,8 +42,7 @@ public class UserController {
     }
 
     @Operation(summary = "토큰으로 유저 조회", description = "JWT 토큰을 이용해 유저 정보를 조회합니다.")
-    @ApiResponse(responseCode = "200", description = "유저 정보 조회 성공",
-            content = @Content(schema = @Schema(implementation = UserDTO.class)))
+    @ApiResponse(responseCode = "200", description = "유저 정보 조회 성공", content = @Content(schema = @Schema(implementation = UserDTO.class)))
     @GetMapping("/userinfo")
     public UserDTO getUserInfo() {
         Long userId = getAuthUserId();
@@ -59,15 +58,13 @@ public class UserController {
     }
 
     @Operation(summary = "유저 정보 수정", description = "userId를 포함한 DTO를 기반으로 유저 정보를 수정합니다.")
-    @ApiResponse(responseCode = "200", description = "수정된 유저 정보 반환",
-            content = @Content(schema = @Schema(implementation = UserDTO.class)))
+    @ApiResponse(responseCode = "200", description = "수정된 유저 정보 반환", content = @Content(schema = @Schema(implementation = UserDTO.class)))
     @PostMapping("/modify")
     public UserDTO modifyUser(@RequestBody UserDTO userDTO) {
         return userService.modifyUser(userDTO);
     }
 
-    @Operation(summary = "사용자 알림 조회",
-            description = "알림 목록 조회만 합니다. 읽음 처리는 /notifications/mark-read로만 합니다.")
+    @Operation(summary = "사용자 알림 조회", description = "알림 목록 조회만 합니다. 읽음 처리는 /notifications/mark-read로만 합니다.")
     @GetMapping("/notifications")
     public NotificationResponseDTO getUserNotifications() {
         Long userId = getAuthUserId();
@@ -122,11 +119,10 @@ public class UserController {
 
     @Operation(summary = "전체 프로필 업데이트", description = "JWT 기반으로 사용자 프로필을 업데이트합니다.")
     @PatchMapping("/profile")
-    public ResponseEntity<?> updateUserProfile(
-            @RequestBody UpdateProfileRequest request
-    ) {
+    public UserDTO updateUserProfile(
+            @RequestBody UpdateProfileRequest request) {
         Long userId = getAuthUserId();
-        userService.updateUserProfile(userId, request);
-        return ResponseEntity.ok().body("프로필 업데이트가 완료되었습니다.");
+        return userService.updateUserProfile(userId, request);
+        // return ResponseEntity.ok().body("프로필 업데이트가 완료되었습니다.");
     }
 }
