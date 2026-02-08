@@ -43,6 +43,7 @@ public class UserService {
     private final StringRedisTemplate redisTemplate;
     private final ObjectProvider<WebSocketStatusHandler> statusHandlerProvider;
     private final UserChatRoomRepository userChatRoomRepository;
+    private static final String DELETED_USER_IMAGE = "user.png";
 
     // ✅ 채팅 unread 계산용
     private final MessageRepository messageRepository;
@@ -64,8 +65,7 @@ public class UserService {
         try {
             List<UUID> ids = userFamilyRepository.findLatestFamilyIdByUserId(
                     userId,
-                    PageRequest.of(0, 1)
-            );
+                    PageRequest.of(0, 1));
             return (ids != null && !ids.isEmpty()) ? ids.get(0) : null;
         } catch (Exception e) {
             logger.warn("[resolveLatestFamilyId] fail userId={}, err={}", userId, e.toString());
@@ -126,7 +126,8 @@ public class UserService {
             return userRepository.saveAndFlush(user);
 
         } catch (DataIntegrityViolationException e) {
-            throw new RuntimeException("DB 저장 실패: " + (e.getRootCause() != null ? e.getRootCause().getMessage() : e.getMessage()));
+            throw new RuntimeException(
+                    "DB 저장 실패: " + (e.getRootCause() != null ? e.getRootCause().getMessage() : e.getMessage()));
         } catch (Exception e) {
             throw new RuntimeException("시스템 오류: " + e.getMessage());
         }
@@ -172,7 +173,7 @@ public class UserService {
         userChatRoomRepository.deleteCommonChatRoomWithBot(userId, chatbotId);
 
         user.setName("탈퇴했음");
-        user.setImage(cloudFrontDomain + "kinover_deleted_user.png");
+        user.setImage(cloudFrontDomain + DELETED_USER_IMAGE);
         user.setBirth(null);
         user.setEmail(null);
         user.setPwd(null);
@@ -316,32 +317,36 @@ public class UserService {
         Set<UUID> commentIds = new HashSet<>();
 
         for (Notification n : filtered) {
-            if (n.getAuthorId() != null) authorIds.add(n.getAuthorId());
-            if (n.getPostId() != null) postIds.add(n.getPostId());
-            if (n.getCommentId() != null) commentIds.add(n.getCommentId());
+            if (n.getAuthorId() != null)
+                authorIds.add(n.getAuthorId());
+            if (n.getPostId() != null)
+                postIds.add(n.getPostId());
+            if (n.getCommentId() != null)
+                commentIds.add(n.getCommentId());
         }
 
         Map<Long, User> authorMap = authorIds.isEmpty()
                 ? Collections.emptyMap()
                 : userRepository.findAllById(authorIds).stream()
-                .collect(Collectors.toMap(User::getUserId, u -> u, (a, b) -> a));
+                        .collect(Collectors.toMap(User::getUserId, u -> u, (a, b) -> a));
 
         Map<UUID, Post> postMap = postIds.isEmpty()
                 ? Collections.emptyMap()
                 : postRepository.findAllById(postIds).stream()
-                .collect(Collectors.toMap(Post::getPostId, p -> p, (a, b) -> a));
+                        .collect(Collectors.toMap(Post::getPostId, p -> p, (a, b) -> a));
 
         Map<UUID, Comment> commentMap = commentIds.isEmpty()
                 ? Collections.emptyMap()
                 : commentRepository.findAllById(commentIds).stream()
-                .collect(Collectors.toMap(Comment::getCommentId, c -> c, (a, b) -> a));
+                        .collect(Collectors.toMap(Comment::getCommentId, c -> c, (a, b) -> a));
 
         List<NotificationDTO> dtoList = new ArrayList<>();
 
         for (Notification n : filtered) {
             try {
                 NotificationDTO dto = buildNotificationDTO(n, authorMap, postMap, commentMap);
-                if (dto != null) dtoList.add(dto);
+                if (dto != null)
+                    dtoList.add(dto);
             } catch (Exception e) {
                 logger.warn("[NOTI_SKIP] userId={}, notificationId={}, type={}, err={}",
                         userId, n.getNotificationId(), n.getNotificationType(), e.toString());
@@ -385,7 +390,10 @@ public class UserService {
         } else if (type == NotificationType.COMMENT) {
             if (comment != null) {
                 Post p = null;
-                try { p = comment.getPost(); } catch (Exception ignore) {}
+                try {
+                    p = comment.getPost();
+                } catch (Exception ignore) {
+                }
 
                 if (p != null) {
                     categoryTitle = safe(getCategoryTitleSafe(p), "");
@@ -414,9 +422,11 @@ public class UserService {
 
     private String getCategoryTitleSafe(Post post) {
         try {
-            if (post == null) return "";
+            if (post == null)
+                return "";
             Category c = post.getCategory();
-            if (c == null) return "";
+            if (c == null)
+                return "";
             return safe(c.getTitle(), "");
         } catch (Exception e) {
             return "";
@@ -425,8 +435,10 @@ public class UserService {
 
     private String getFirstImageUrlSafe(Post post) {
         try {
-            if (post == null) return null;
-            if (post.getImages() == null || post.getImages().isEmpty()) return null;
+            if (post == null)
+                return null;
+            if (post.getImages() == null || post.getImages().isEmpty())
+                return null;
             return post.getImages().get(0).getImageUrl();
         } catch (Exception e) {
             return null;
@@ -434,7 +446,8 @@ public class UserService {
     }
 
     private String trimContentSafe(String content) {
-        if (content == null) return "";
+        if (content == null)
+            return "";
         return content.length() > 30 ? content.substring(0, 30) + "..." : content;
     }
 
@@ -453,7 +466,8 @@ public class UserService {
                 .map(Family::getFamilyId)
                 .collect(Collectors.toList());
 
-        if (familyIds.isEmpty()) return false;
+        if (familyIds.isEmpty())
+            return false;
 
         LocalDateTime 기준 = (lastCheckedAt != null) ? lastCheckedAt : LocalDateTime.MIN;
 
@@ -472,7 +486,8 @@ public class UserService {
                 .map(Family::getFamilyId)
                 .collect(Collectors.toList());
 
-        if (familyIds.isEmpty()) return 0L;
+        if (familyIds.isEmpty())
+            return 0L;
 
         LocalDateTime 기준 = (lastCheckedAt != null) ? lastCheckedAt : LocalDateTime.MIN;
 
@@ -483,7 +498,8 @@ public class UserService {
     @Transactional(readOnly = true)
     public long getChatUnreadCount(Long userId) {
         List<UserChatRoom> links = userChatRoomRepository.findByUserId(userId);
-        if (links == null || links.isEmpty()) return 0L;
+        if (links == null || links.isEmpty())
+            return 0L;
 
         long total = 0L;
 
@@ -527,7 +543,8 @@ public class UserService {
     @Transactional
     public boolean updatePostNotificationSetting(Long userId, boolean isOn) {
         Optional<User> optionalUser = userRepository.findById(userId);
-        if (optionalUser.isEmpty()) return false;
+        if (optionalUser.isEmpty())
+            return false;
 
         User user = optionalUser.get();
         user.setIsPostNotificationOn(isOn);
@@ -538,7 +555,8 @@ public class UserService {
     @Transactional
     public boolean updateCommentNotificationSetting(Long userId, boolean isOn) {
         Optional<User> optionalUser = userRepository.findById(userId);
-        if (optionalUser.isEmpty()) return false;
+        if (optionalUser.isEmpty())
+            return false;
 
         User user = optionalUser.get();
         user.setIsCommentNotificationOn(isOn);
@@ -549,7 +567,8 @@ public class UserService {
     @Transactional
     public boolean updateChatNotificationSetting(Long userId, boolean isOn) {
         Optional<User> userOpt = userRepository.findById(userId);
-        if (userOpt.isEmpty()) return false;
+        if (userOpt.isEmpty())
+            return false;
 
         User user = userOpt.get();
         user.setIsChatNotificationOn(isOn);
@@ -566,7 +585,8 @@ public class UserService {
     }
 
     private Date parseDateTime(String birth) {
-        if (birth == null || birth.isEmpty()) return null;
+        if (birth == null || birth.isEmpty())
+            return null;
 
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
