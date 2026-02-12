@@ -5,10 +5,12 @@ import com.example.kinover_backend.entity.User;
 import com.example.kinover_backend.repository.UserRepository;
 import com.example.kinover_backend.security.AppleTokenVerifier;
 import com.example.kinover_backend.security.AppleUserClaims;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 public class AppleUserService {
@@ -16,6 +18,12 @@ public class AppleUserService {
     private final AppleTokenVerifier appleTokenVerifier;
     private final UserRepository userRepository;
     private final TokenService tokenService;
+
+    // ✅ UserService랑 동일한 기본 이미지 파일명
+    private static final String DEFAULT_USER_IMAGE = "user.png";
+
+    @Value("${cloudfront.domain}")
+    private String cloudFrontDomain;
 
     public AppleUserService(
             AppleTokenVerifier appleTokenVerifier,
@@ -28,57 +36,82 @@ public class AppleUserService {
 
     @Transactional
     public LoginResponseDto processAppleLogin(String identityToken) {
-        // 1) 애플 identityToken 검증 + 클레임 추출
+
         AppleUserClaims claims = appleTokenVerifier.verify(identityToken);
 
-        // 2) sub = 애플 유저 고유 식별자(핵심)
         String appleSub = claims.getSub();
-        String email = claims.getEmail(); // 첫 로그인에만 올 수도 있음(없을 수 있음)
+        String email = claims.getEmail();
 
-        // 3) appleId로 유저 조회 (없으면 회원가입)
         User user = userRepository.findByAppleId(appleSub)
                 .orElseGet(() -> {
+
                     User newUser = new User();
 
-                    // ⚠️ 중요: 현재 엔티티는 @GeneratedValue가 없어서 직접 userId 세팅 필요
                     newUser.setUserId(generateUserId());
-
                     newUser.setAppleId(appleSub);
                     newUser.setEmail(email);
 
-                    newUser.setCreatedAt(new Date());
-                    newUser.setUpdatedAt(new Date());
+                    Date now = new Date();
+                    newUser.setCreatedAt(now);
+                    newUser.setUpdatedAt(now);
 
-                    // 기본값들(원하면 더 세팅)
-                    if (newUser.getIsOnline() == null)
+                    if (newUser.getIsOnline() == null) {
                         newUser.setIsOnline(false);
+                    }
+
+                    // ✅ 기본 프로필 이미지: 탈퇴 유저 이미지와 동일하게 고정
+                    newUser.setImage(buildCloudFrontUrl(DEFAULT_USER_IMAGE));
+
+                    // ✅ 기본 닉네임 생성
+                    if (isBlank(newUser.getName())) {
+                        newUser.setName(generateDefaultName());
+                    }
 
                     return userRepository.save(newUser);
                 });
 
-        // 4) 기존 유저인데 email 비어있고 이번에 들어오면 업데이트
-        if ((user.getEmail() == null || user.getEmail().isBlank())
-                && email != null && !email.isBlank()) {
+        // 기존 유저인데 이메일 없고 이번에 들어오면 세팅
+        if (isBlank(user.getEmail()) && !isBlank(email)) {
             user.setEmail(email);
         }
 
-        // 5) 우리 서비스 JWT 발급
+        // 기존 유저인데 image가 비어있으면 보정 (탈퇴 기본 이미지로 고정)
+        if (isBlank(user.getImage())) {
+            user.setImage(buildCloudFrontUrl(DEFAULT_USER_IMAGE));
+        }
+
         String jwt = tokenService.issueJwt(user);
 
-        // 6) hasFamily 판단 (userFamilyList로)
-        boolean hasFamily = user.getUserFamilyList() != null && !user.getUserFamilyList().isEmpty();
+        boolean hasFamily =
+                user.getUserFamilyList() != null &&
+                !user.getUserFamilyList().isEmpty();
 
-        // 7) DTO 반환 (지윤 DTO 구조에 딱 맞게)
         return new LoginResponseDto(jwt, hasFamily);
+    }
+
+    // ✅ cloudFrontDomain 끝에 / 있든 없든 안전하게 합치기
+    private String buildCloudFrontUrl(String path) {
+        if (cloudFrontDomain == null) return path;
+        String base = cloudFrontDomain.endsWith("/") ? cloudFrontDomain : cloudFrontDomain + "/";
+        String p = path.startsWith("/") ? path.substring(1) : path;
+        return base + p;
+    }
+
+    private String generateDefaultName() {
+        int suffix = ThreadLocalRandom.current().nextInt(1000, 9999);
+        return "키노버 유저" + suffix;
+    }
+
+    private boolean isBlank(String s) {
+        return s == null || s.isBlank();
     }
 
     private Long generateUserId() {
         long id;
         do {
-            // 13자리 시간 + 0~999 랜덤을 섞어서 충돌 확률 줄이기
-            id = System.currentTimeMillis() * 1000L + (long) (Math.random() * 1000);
+            id = System.currentTimeMillis() * 1000L
+                    + (long) (Math.random() * 1000);
         } while (userRepository.existsByUserId(id));
         return id;
     }
-
 }
