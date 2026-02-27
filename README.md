@@ -1,4 +1,7 @@
-# <img src="https://avatars.githubusercontent.com/u/206313018?s=200&v=4" width="50"/> Kinover 백엔드
+<h1>
+  <img src="https://avatars.githubusercontent.com/u/206313018?s=200&v=4" width="50" alt="Kinover Logo" />
+  Kinover 백엔드
+</h1>
 
 **Kinover**는 가족만을 위한 비공개 SNS 서비스입니다.  
 이 저장소는 Kinover 앱의 백엔드 서버 코드이며, Spring Boot 기반으로 구축되었습니다.
@@ -7,40 +10,51 @@
 
 ## 주요 기술 스택
 
-- **Spring Boot 3.4.2v**
-- **MariaDB** (JPA/Hibernate)
-- **Redis** (실시간 메시지 처리용 Pub/Sub)
-- **WebSocket** (실시간 채팅)
-- **AWS S3** (이미지 업로드, Presigned URL)
-- **JWT 인증** (Spring Security 기반)
-- **FCM** (푸시 알림)
+- **Java 17**
+- **Spring Boot 3.4.2**
+- **Spring Data JPA / Hibernate**
+- **MariaDB**
+- **Spring Security + JWT** (JJWT, java-jwt)
+- **WebSocket**
+- **Redis Pub/Sub** (Spring Data Redis, Redisson)
+- **AWS S3** (Presigned URL 기반 업로드)
+- **FCM** (Firebase Cloud Messaging)
+- **Swagger/OpenAPI** (springdoc-openapi)
+- **MapStruct**
+- **Lombok**
+- **GitHub Actions** (CI/CD)
 - **Amazon EC2 + Nginx + Certbot** (HTTPS 배포 환경)
 
 <br/>
 
 ## 주요 기능
 
-- 가족 단위 사용자 시스템
-- 게시글/댓글 CRUD 및 멀티 이미지 업로드
+- 가족 단위 사용자/권한 시스템
+- 카카오 로그인 + JWT 인증
+- 가족 채팅방 및 메시지 관리
 - 실시간 채팅 (WebSocket + Redis Pub/Sub)
+- 가족 일정 등록/수정/조회
+- 이미지 업로드 (S3 + Presigned URL)
 - FCM 푸시 알림
-- 사용자 접속 상태 실시간 표시
-- 가족별 공지사항 관리
-- 카테고리 커스터마이징
-- Swagger UI API 문서 제공 (`/swagger-ui/index.html#/`)
+- 추억(Memory) 및 댓글 관리
+- 챌린지/추천 챌린지 관리
+- OpenAI 기반 AI 대화 API 연동
+- Swagger UI API 문서 제공 (`/swagger-ui/index.html`)
 
 <br/>
 
 ## 배포 환경
 
 - Ubuntu 22.04 on Amazon EC2
-- Nginx를 통한 리버스 프록시 및 HTTPS 적용 (`kinover.shop`)
-- GitHub Actions를 통한 CI/CD, EC2 로컬 빌드 및 배포
+- Nginx 리버스 프록시 및 HTTPS 적용
+- GitHub Actions 기반 빌드/배포 자동화
+- 배포 방식: JAR 산출물 + `.env` 전달 후 원격 재기동
 
 <br/>
 
 ## 실행 방법
 
 ```bash
-./gradlew build
+./gradlew clean build
 nohup java -Duser.timezone=Asia/Seoul -jar build/libs/kinover_backend-0.0.1-SNAPSHOT.jar > nohup.out 2>&1 &
+```
