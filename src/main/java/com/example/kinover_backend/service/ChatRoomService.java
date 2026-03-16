@@ -6,13 +6,17 @@ import com.example.kinover_backend.entity.*;
 import com.example.kinover_backend.enums.ChatBotPersonality;
 import com.example.kinover_backend.enums.KinoType;
 import com.example.kinover_backend.enums.MessageType;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.example.kinover_backend.repository.*;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -22,6 +26,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ChatRoomService {
 
+    private static final String CHAT_MESSAGES_TOPIC = "chat:messages";
+
     private final ChatRoomRepository chatRoomRepository;
     private final FamilyRepository familyRepository;
     private final UserChatRoomRepository userChatRoomRepository;
@@ -29,6 +35,8 @@ public class ChatRoomService {
     private final UserRepository userRepository;
     private final MessageRepository messageRepository;
     private final S3Service s3Service;
+    private final StringRedisTemplate redisTemplate;
+    private final ObjectMapper objectMapper;
 
     @Value("${cloudfront.domain}")
     private String cloudFrontDomain;
@@ -109,7 +117,8 @@ public class ChatRoomService {
         // ✅ 최신 메시지
         messageRepository.findTopByChatRoom_ChatRoomIdOrderByCreatedAtDesc(chatRoomId)
                 .ifPresent(message -> {
-                    if (message.getMessageType() == MessageType.text) {
+                    if (message.getMessageType() == MessageType.text
+                            || message.getMessageType() == MessageType.system) {
                         dto.setLatestMessageContent(message.getContent());
                     } else if (message.getMessageType() == MessageType.image) {
                         int count = (message.getContent() == null || message.getContent().isBlank())
@@ -298,7 +307,8 @@ public class ChatRoomService {
             // ✅ 최신 메시지
             messageRepository.findTopByChatRoom_ChatRoomIdOrderByCreatedAtDesc(chatRoom.getChatRoomId())
                     .ifPresent(message -> {
-                        if (message.getMessageType() == MessageType.text) {
+                        if (message.getMessageType() == MessageType.text
+                                || message.getMessageType() == MessageType.system) {
                             dto.setLatestMessageContent(message.getContent());
                         } else if (message.getMessageType() == MessageType.image) {
                             int count = (message.getContent() == null || message.getContent().isBlank())
@@ -419,6 +429,15 @@ public class ChatRoomService {
         ChatRoom chatRoom = chatRoomRepository.findById(chatRoomId)
                 .orElseThrow(() -> new RuntimeException("채팅방을 찾을 수 없습니다."));
 
+        boolean wasMember = userChatRoomRepository
+                .findByUser_UserIdAndChatRoom_ChatRoomId(userId, chatRoomId)
+                .isPresent();
+        LocalDateTime leftAt = LocalDateTime.now();
+
+        if (!wasMember) {
+            return;
+        }
+
         userChatRoomRepository.deleteByUserAndChatRoom(user, chatRoom);
 
         int remainingUsers = userChatRoomRepository.countByChatRoom(chatRoom);
@@ -450,7 +469,11 @@ public class ChatRoomService {
                 s3Service.deleteImageFromS3(s3Key);
             }
         } else {
+            chatRoom.setFamilyType(remainingUsers > 2 ? "family" : "personal");
+            chatRoomRepository.save(chatRoom);
             refreshDisplayRoomNamesIfNotCustom(chatRoomId);
+            MessageDTO leaveMessage = saveRoomLeaveMessage(chatRoom, user, leftAt);
+            publishMessageAfterCommit(leaveMessage);
         }
     }
 
@@ -603,5 +626,72 @@ public class ChatRoomService {
         }
 
         dto.setRoomName(display);
+    }
+
+    private MessageDTO saveRoomLeaveMessage(ChatRoom chatRoom, User user, LocalDateTime leftAt) {
+        String userName = resolveUserName(user);
+
+        Message message = new Message();
+        message.setMessageId(UUID.randomUUID());
+        message.setChatRoom(chatRoom);
+        message.setSender(user);
+        message.setMessageType(MessageType.system);
+        message.setContent(userName + "님이 나갔습니다");
+        message.setCreatedAt(leftAt);
+
+        Message saved = messageRepository.save(message);
+
+        MessageDTO dto = new MessageDTO();
+        dto.setMessageId(saved.getMessageId());
+        dto.setChatRoomId(saved.getChatRoom().getChatRoomId());
+        dto.setSenderId(saved.getSender().getUserId());
+        dto.setSenderName(userName);
+        dto.setSenderImage(saved.getSender().getImage());
+        dto.setMessageType(saved.getMessageType());
+        dto.setContent(saved.getContent());
+        dto.setImageUrls(null);
+        dto.setMentionUserIds(null);
+        dto.setCreatedAt(saved.getCreatedAt());
+        return dto;
+    }
+
+    private void publishMessageAfterCommit(MessageDTO messageDto) {
+        String payload;
+        try {
+            payload = objectMapper.writeValueAsString(messageDto);
+        } catch (Exception e) {
+            throw new RuntimeException("채팅방 나가기 시스템 메시지 직렬화에 실패했습니다.", e);
+        }
+
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    publishChatEvent(payload);
+                }
+            });
+            return;
+        }
+
+        publishChatEvent(payload);
+    }
+
+    private void publishChatEvent(String payload) {
+        try {
+            redisTemplate.convertAndSend(CHAT_MESSAGES_TOPIC, payload);
+        } catch (Exception e) {
+            System.out.println("[ChatRoomService] failed to publish chat event: " + e.getMessage());
+        }
+    }
+
+    private String resolveUserName(User user) {
+        if (user == null) return "알 수 없는 사용자";
+
+        String userName = user.getName();
+        if (userName == null || userName.isBlank()) {
+            return "알 수 없는 사용자";
+        }
+
+        return userName;
     }
 }

@@ -2,6 +2,7 @@ package com.example.kinover_backend.redis;
 
 import com.example.kinover_backend.dto.MessageDTO;
 import com.example.kinover_backend.dto.UserDTO;
+import com.example.kinover_backend.enums.MessageType;
 import com.example.kinover_backend.service.ChatRoomService;
 import com.example.kinover_backend.service.FcmNotificationService;
 import com.example.kinover_backend.websocket.WebSocketMessageHandler;
@@ -38,24 +39,7 @@ public class ChatMessageSubscriber implements MessageListener {
             
             // 2. 만약 읽음 이벤트(room:read)라면?
             if (jsonNode.has("type") && "room:read".equals(jsonNode.get("type").asText())) {
-                
-                // "읽음 처리"는 채팅방에 있는 사람들에게 실시간 전송만 하면 됨 (FCM 불필요)
-                String chatRoomIdStr = jsonNode.get("chatRoomId").asText();
-                UUID chatRoomId = UUID.fromString(chatRoomIdStr);
-
-                List<UserDTO> participants = chatRoomService.getUsersByChatRoom(chatRoomId);
-
-                for (UserDTO user : participants) {
-                    Long userId = user.getUserId();
-                    Set<WebSocketSession> sessions = webSocketMessageHandler.getSessionsByUserId(userId);
-                    for (WebSocketSession session : sessions) {
-                        if (session != null && session.isOpen()) {
-                            // 그대로 클라이언트에게 전달 (클라이언트가 type: room:read를 보고 처리)
-                            session.sendMessage(new TextMessage(json));
-                        }
-                    }
-                }
-                // 읽음 이벤트는 여기서 종료
+                broadcastEventToRoomParticipants(json, jsonNode);
                 return;
             }
 
@@ -77,7 +61,7 @@ public class ChatMessageSubscriber implements MessageListener {
                                 + ", sessionId=" + session.getId());
                     }
                 }
-                if (sessions.isEmpty()) {
+                if (sessions.isEmpty() && messageDTO.getMessageType() != MessageType.system) {
                         // WebSocket 미연결 시 FCM 발송 조건 체크
                         System.out.println("[WebSocket 닫힘 → FCM 후보] userId=" + userId);
                         if (fcmNotificationService.isChatRoomNotificationOn(userId, messageDTO.getChatRoomId())) {
@@ -90,6 +74,26 @@ public class ChatMessageSubscriber implements MessageListener {
             }
         } catch (Exception e) {
             System.out.println("[ChatMessageSubscriber 오류] " + e.getMessage());
+        }
+    }
+
+    private void broadcastEventToRoomParticipants(String json, JsonNode jsonNode) throws Exception {
+        if (!jsonNode.hasNonNull("chatRoomId")) {
+            return;
+        }
+
+        UUID chatRoomId = UUID.fromString(jsonNode.get("chatRoomId").asText());
+        List<UserDTO> participants = chatRoomService.getUsersByChatRoom(chatRoomId);
+
+        for (UserDTO user : participants) {
+            Long userId = user.getUserId();
+            Set<WebSocketSession> sessions = webSocketMessageHandler.getSessionsByUserId(userId);
+
+            for (WebSocketSession session : sessions) {
+                if (session != null && session.isOpen()) {
+                    session.sendMessage(new TextMessage(json));
+                }
+            }
         }
     }
 }

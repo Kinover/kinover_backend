@@ -92,6 +92,10 @@ public class MessageService {
     }
 
     private void sendChatPushNotifications(MessageDTO messageDtoFromDb) {
+        if (messageDtoFromDb.getMessageType() == MessageType.system) {
+            return;
+        }
+
         List<UserDTO> users = chatRoomService.getUsersByChatRoom(messageDtoFromDb.getChatRoomId());
 
         // ✅ 멘션 대상 set
