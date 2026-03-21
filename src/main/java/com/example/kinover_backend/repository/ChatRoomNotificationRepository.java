@@ -11,4 +11,7 @@ import java.util.UUID;
 public interface ChatRoomNotificationRepository extends JpaRepository<ChatRoomNotificationSetting, Long> {
     Optional<ChatRoomNotificationSetting> findByUserAndChatRoom(User user, ChatRoom chatRoom);
     Optional<ChatRoomNotificationSetting> findByUser_UserIdAndChatRoom_ChatRoomId(Long userId, UUID chatRoomId);
+    long deleteByUser_UserId(Long userId);
+    long deleteByUser_UserIdAndChatRoom_ChatRoomId(Long userId, UUID chatRoomId);
+    long deleteByChatRoom_ChatRoomId(UUID chatRoomId);
 }

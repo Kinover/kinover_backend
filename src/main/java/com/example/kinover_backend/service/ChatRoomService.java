@@ -117,8 +117,7 @@ public class ChatRoomService {
         // ✅ 최신 메시지
         messageRepository.findTopByChatRoom_ChatRoomIdOrderByCreatedAtDesc(chatRoomId)
                 .ifPresent(message -> {
-                    if (message.getMessageType() == MessageType.text
-                            || message.getMessageType() == MessageType.system) {
+                    if (message.getMessageType() == MessageType.text) {
                         dto.setLatestMessageContent(message.getContent());
                     } else if (message.getMessageType() == MessageType.image) {
                         int count = (message.getContent() == null || message.getContent().isBlank())
@@ -307,8 +306,7 @@ public class ChatRoomService {
             // ✅ 최신 메시지
             messageRepository.findTopByChatRoom_ChatRoomIdOrderByCreatedAtDesc(chatRoom.getChatRoomId())
                     .ifPresent(message -> {
-                        if (message.getMessageType() == MessageType.text
-                                || message.getMessageType() == MessageType.system) {
+                        if (message.getMessageType() == MessageType.text) {
                             dto.setLatestMessageContent(message.getContent());
                         } else if (message.getMessageType() == MessageType.image) {
                             int count = (message.getContent() == null || message.getContent().isBlank())
@@ -438,6 +436,7 @@ public class ChatRoomService {
             return;
         }
 
+        chatRoomNotificationRepository.deleteByUser_UserIdAndChatRoom_ChatRoomId(userId, chatRoomId);
         userChatRoomRepository.deleteByUserAndChatRoom(user, chatRoom);
 
         int remainingUsers = userChatRoomRepository.countByChatRoom(chatRoom);
@@ -463,6 +462,7 @@ public class ChatRoomService {
             }
 
             messageRepository.deleteAll(messages);
+            chatRoomNotificationRepository.deleteByChatRoom_ChatRoomId(chatRoomId);
             chatRoomRepository.delete(chatRoom);
 
             for (String s3Key : s3KeysToDelete) {
@@ -635,7 +635,8 @@ public class ChatRoomService {
         message.setMessageId(UUID.randomUUID());
         message.setChatRoom(chatRoom);
         message.setSender(user);
-        message.setMessageType(MessageType.system);
+        message.setMessageType(MessageType.text);
+        message.setSystemMessage(true);
         message.setContent(userName + "님이 나갔습니다");
         message.setCreatedAt(leftAt);
 
@@ -648,6 +649,7 @@ public class ChatRoomService {
         dto.setSenderName(userName);
         dto.setSenderImage(saved.getSender().getImage());
         dto.setMessageType(saved.getMessageType());
+        dto.setSystemMessage(Boolean.TRUE);
         dto.setContent(saved.getContent());
         dto.setImageUrls(null);
         dto.setMentionUserIds(null);

@@ -37,6 +37,8 @@ public interface UserFamilyRepository extends JpaRepository<UserFamily, UUID> {
 
     List<UserFamily> findAllByUser_UserId(Long userId);
 
+    long deleteByUser_UserId(Long userId);
+
     @Query("SELECT uf.user FROM UserFamily uf WHERE uf.family.familyId = :familyId")
     List<User> findUsersByFamilyId(@Param("familyId") UUID familyId);
 

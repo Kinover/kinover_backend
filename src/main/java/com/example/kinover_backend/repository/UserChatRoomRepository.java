@@ -37,6 +37,9 @@ public interface UserChatRoomRepository extends JpaRepository<UserChatRoom, UUID
     @Query("SELECT ucr FROM UserChatRoom ucr JOIN FETCH ucr.user WHERE ucr.chatRoom.chatRoomId = :chatRoomId")
     List<UserChatRoom> findByChatRoomIdWithUser(@Param("chatRoomId") UUID chatRoomId);
 
+    @Query("SELECT DISTINCT ucr.chatRoom.chatRoomId FROM UserChatRoom ucr WHERE ucr.user.userId = :userId")
+    List<UUID> findChatRoomIdsByUserId(@Param("userId") Long userId);
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
         UPDATE UserChatRoom ucr
@@ -49,17 +52,13 @@ public interface UserChatRoomRepository extends JpaRepository<UserChatRoom, UUID
                                @Param("userId") Long userId,
                                @Param("lastReadAt") LocalDateTime lastReadAt);
 
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
         DELETE FROM UserChatRoom ucr
          WHERE ucr.user.userId = :userId
-           AND ucr.chatRoom.chatRoomId IN (
-               SELECT sub.chatRoom.chatRoomId
-                 FROM UserChatRoom sub
-                WHERE sub.user.userId = :botId
-           )
+           AND ucr.chatRoom.chatRoomId IN :chatRoomIds
     """)
-    void deleteCommonChatRoomWithBot(@Param("userId") Long userId, @Param("botId") Long botId);
+    void deleteByUserIdAndChatRoomIds(@Param("userId") Long userId, @Param("chatRoomIds") List<UUID> chatRoomIds);
 
     @Query("""
       select ucr

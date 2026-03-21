@@ -23,6 +23,7 @@ public class MessageDTO {
     private String senderImage;
 
     private MessageType messageType;
+    private Boolean systemMessage;
 
     // ✅ 통일: imageUrls
     private List<String> imageUrls;

@@ -39,6 +39,8 @@ public class UserService {
     private final NotificationRepository notificationRepository;
     private final PostRepository postRepository;
     private final CommentRepository commentRepository;
+    private final FcmTokenRepository fcmTokenRepository;
+    private final ChatRoomNotificationRepository chatRoomNotificationRepository;
     private final ObjectMapper objectMapper;
     private final StringRedisTemplate redisTemplate;
     private final ObjectProvider<WebSocketStatusHandler> statusHandlerProvider;
@@ -141,6 +143,16 @@ public class UserService {
         return randomId;
     }
 
+    private void deleteSharedBotChatRooms(Long userId, Long botId) {
+        // MariaDB blocks DELETE ... IN (subquery from the same table),
+        // so read the bot room IDs first and delete in a second query.
+        List<UUID> botChatRoomIds = userChatRoomRepository.findChatRoomIdsByUserId(botId);
+        if (botChatRoomIds == null || botChatRoomIds.isEmpty()) {
+            return;
+        }
+        userChatRoomRepository.deleteByUserIdAndChatRoomIds(userId, botChatRoomIds);
+    }
+
     public User updateUserFromKakao(User user, KakaoUserDto kakaoUserDto) {
         user.setName(kakaoUserDto.getNickname());
         user.setEmail(kakaoUserDto.getEmail());
@@ -166,11 +178,14 @@ public class UserService {
 
     @Transactional
     public void deleteUserById(Long userId) {
-        User user = userRepository.findById(userId)
+        User user = userRepository.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("존재하지 않는 유저입니다."));
 
         Long chatbotId = 9999999999L;
-        userChatRoomRepository.deleteCommonChatRoomWithBot(userId, chatbotId);
+        deleteSharedBotChatRooms(userId, chatbotId);
+        chatRoomNotificationRepository.deleteByUser_UserId(userId);
+        fcmTokenRepository.deleteByUser_UserId(userId);
+        userFamilyRepository.deleteByUser_UserId(userId);
 
         user.setName("탈퇴했음");
         user.setImage(cloudFrontDomain + DELETED_USER_IMAGE);
@@ -179,11 +194,16 @@ public class UserService {
         user.setPwd(null);
         user.setPhoneNumber(null);
         user.setTrait(null);
-        user.setEmail(null);
+        user.setEmotion(null);
+        user.setEmotionUpdatedAt(null);
+        user.setLastActiveAt(null);
+        user.setLastNotificationCheckedAt(null);
+        user.setIsOnline(false);
+        user.setIsPostNotificationOn(false);
+        user.setIsCommentNotificationOn(false);
+        user.setIsChatNotificationOn(false);
         user.setKakaoId(null);
-
-        List<UserFamily> toRemove = userFamilyRepository.findAllByUser_UserId(userId);
-        userFamilyRepository.deleteAll(toRemove);
+        user.setAppleId(null);
 
         userRepository.save(user);
     }

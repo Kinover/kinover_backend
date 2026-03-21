@@ -9,7 +9,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -105,24 +104,23 @@ public class CommentService {
         }
     }
 
+    @Transactional(readOnly = true)
     public List<CommentDTO> getCommentsForPost(UUID postId) {
-        Post post = postRepository.findById(postId)
-                .orElseThrow(() -> new RuntimeException("게시물 없음"));
+        if (!postRepository.existsById(postId)) {
+            throw new RuntimeException("게시물 없음");
+        }
 
-        return commentRepository.findByPostOrderByCreatedAtAsc(post)
+        return commentRepository.findCommentDtosByPostIdOrderByCreatedAtAsc(postId)
                 .stream()
-                .map(comment -> {
-                    CommentDTO dto = new CommentDTO();
-                    dto.setCommentId(comment.getCommentId());
-                    dto.setPostId(postId);
-                    dto.setContent(comment.getContent());
-                    dto.setAuthorId(comment.getAuthor().getUserId());
-                    dto.setAuthorName(comment.getAuthor().getName());
-                    dto.setAuthorImage(comment.getAuthor().getImage());
-                    dto.setCreatedAt(comment.getCreatedAt());
-                    return dto;
+                .peek(dto -> {
+                    if (dto.getAuthorName() == null || dto.getAuthorName().isBlank()) {
+                        dto.setAuthorName("알 수 없는 사용자");
+                    }
+                    if (dto.getAuthorImage() == null) {
+                        dto.setAuthorImage("");
+                    }
                 })
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Transactional

@@ -56,6 +56,7 @@ public class MessageService {
         message.setChatRoom(chatRoom);
         message.setSender(sender);
         message.setMessageType(dto.getMessageType());
+        message.setSystemMessage(Boolean.TRUE.equals(dto.getSystemMessage()));
 
         // ✅ 이미지/비디오 content 처리
         if (dto.getMessageType() == MessageType.image || dto.getMessageType() == MessageType.video) {
@@ -92,7 +93,7 @@ public class MessageService {
     }
 
     private void sendChatPushNotifications(MessageDTO messageDtoFromDb) {
-        if (messageDtoFromDb.getMessageType() == MessageType.system) {
+        if (Boolean.TRUE.equals(messageDtoFromDb.getSystemMessage())) {
             return;
         }
 
@@ -139,6 +140,7 @@ public class MessageService {
         responseDto.setSenderName(saved.getSender().getName());
         responseDto.setSenderImage(saved.getSender().getImage());
         responseDto.setMessageType(saved.getMessageType());
+        responseDto.setSystemMessage(Boolean.TRUE.equals(saved.getSystemMessage()));
         responseDto.setCreatedAt(saved.getCreatedAt());
 
         if (saved.getMessageType() == MessageType.image || saved.getMessageType() == MessageType.video) {

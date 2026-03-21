@@ -27,6 +27,9 @@ public class Message {
     @Column(nullable = false)
     private MessageType messageType;
 
+    @Column(name = "is_system_message", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private Boolean systemMessage = false;
+
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "chat_room_id", nullable = false)
     private ChatRoom chatRoom;

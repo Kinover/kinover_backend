@@ -2,7 +2,6 @@ package com.example.kinover_backend.redis;
 
 import com.example.kinover_backend.dto.MessageDTO;
 import com.example.kinover_backend.dto.UserDTO;
-import com.example.kinover_backend.enums.MessageType;
 import com.example.kinover_backend.service.ChatRoomService;
 import com.example.kinover_backend.service.FcmNotificationService;
 import com.example.kinover_backend.websocket.WebSocketMessageHandler;
@@ -61,7 +60,7 @@ public class ChatMessageSubscriber implements MessageListener {
                                 + ", sessionId=" + session.getId());
                     }
                 }
-                if (sessions.isEmpty() && messageDTO.getMessageType() != MessageType.system) {
+                if (sessions.isEmpty() && !Boolean.TRUE.equals(messageDTO.getSystemMessage())) {
                         // WebSocket 미연결 시 FCM 발송 조건 체크
                         System.out.println("[WebSocket 닫힘 → FCM 후보] userId=" + userId);
                         if (fcmNotificationService.isChatRoomNotificationOn(userId, messageDTO.getChatRoomId())) {
