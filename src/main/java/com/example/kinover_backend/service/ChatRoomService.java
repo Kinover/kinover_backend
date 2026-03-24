@@ -488,12 +488,15 @@ public class ChatRoomService {
         ChatRoom chatRoom = optionalChatRoom.get();
         if (!Boolean.TRUE.equals(chatRoom.isKino())) return false;
 
+        ChatBotPersonality resolvedPersonality = KinoBotProfile.normalizePersonality(personality);
+
         messageRepository.deleteByChatRoom(chatRoom);
 
-        chatRoom.setPersonality(personality);
-        chatRoom.setKinoType(mapPersonalityToKinoType(personality));
+        chatRoom.setPersonality(resolvedPersonality);
+        chatRoom.setKinoType(KinoBotProfile.kinoTypeFor(resolvedPersonality));
 
         chatRoomRepository.save(chatRoom);
+        sendKinoOpeningMessage(chatRoom);
         return true;
     }
 
@@ -529,12 +532,23 @@ public class ChatRoomService {
         return true;
     }
 
-    private KinoType mapPersonalityToKinoType(ChatBotPersonality personality) {
-        return switch (personality) {
-            case SUNNY -> KinoType.YELLOW_KINO;
-            case SERENE -> KinoType.BLUE_KINO;
-            case SNUGGLE -> KinoType.PINK_KINO;
-        };
+    public void sendKinoOpeningMessage(UUID chatRoomId) {
+        ChatRoom chatRoom = chatRoomRepository.findById(chatRoomId)
+                .orElseThrow(() -> new RuntimeException("ChatRoom not found: " + chatRoomId));
+
+        sendKinoOpeningMessage(chatRoom);
+    }
+
+    private void sendKinoOpeningMessage(ChatRoom chatRoom) {
+        if (chatRoom == null || !chatRoom.isKino()) {
+            return;
+        }
+
+        User kino = userRepository.findById(KinoBotProfile.KINO_USER_ID)
+                .orElseThrow(() -> new IllegalStateException("Kino user not found"));
+
+        MessageDTO openingMessage = saveKinoOpeningMessage(chatRoom, kino);
+        publishMessageAfterCommit(openingMessage);
     }
 
     // =========================================================
@@ -650,6 +664,32 @@ public class ChatRoomService {
         dto.setSenderImage(saved.getSender().getImage());
         dto.setMessageType(saved.getMessageType());
         dto.setSystemMessage(Boolean.TRUE);
+        dto.setContent(saved.getContent());
+        dto.setImageUrls(null);
+        dto.setMentionUserIds(null);
+        dto.setCreatedAt(saved.getCreatedAt());
+        return dto;
+    }
+
+    private MessageDTO saveKinoOpeningMessage(ChatRoom chatRoom, User kino) {
+        Message message = new Message();
+        message.setMessageId(UUID.randomUUID());
+        message.setChatRoom(chatRoom);
+        message.setSender(kino);
+        message.setMessageType(MessageType.text);
+        message.setSystemMessage(Boolean.FALSE);
+        message.setContent(KinoBotProfile.openingMessage(chatRoom.getPersonality()));
+
+        Message saved = messageRepository.save(message);
+
+        MessageDTO dto = new MessageDTO();
+        dto.setMessageId(saved.getMessageId());
+        dto.setChatRoomId(saved.getChatRoom().getChatRoomId());
+        dto.setSenderId(saved.getSender().getUserId());
+        dto.setSenderName(resolveUserName(saved.getSender()));
+        dto.setSenderImage(saved.getSender().getImage());
+        dto.setMessageType(saved.getMessageType());
+        dto.setSystemMessage(Boolean.FALSE);
         dto.setContent(saved.getContent());
         dto.setImageUrls(null);
         dto.setMentionUserIds(null);
