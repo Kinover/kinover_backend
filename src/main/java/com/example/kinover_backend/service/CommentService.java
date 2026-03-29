@@ -76,20 +76,16 @@ public class CommentService {
         recipients.remove(dto.getAuthorId());
 
         // =========================================================
-        // ✅ (B) 멘션 알림은 별도(설정 무시 추천)
+        // ✅ (B) 멘션 알림
         // =========================================================
-        // CommentDTO에 mentionUserIds 같은 필드를 두는 걸 추천.
-        // 지금 dto에 없으니, "프론트가 멘션 유저ID 리스트를 같이 보내는 구조"로 바꿔야 깔끔해.
-        //
-        // 예시:
-        // List<Long> mentionUserIds = dto.getMentionUserIds();
-        // if (mentionUserIds != null) {
-        //   for (Long uid : new HashSet<>(mentionUserIds)) {
-        //     if (uid != null && !uid.equals(dto.getAuthorId())) {
-        //       fcmNotificationService.sendMentionCommentNotification(uid, dto);
-        //     }
-        //   }
-        // }
+        List<Long> mentionUserIds = dto.getMentionUserIds();
+        if (mentionUserIds != null) {
+            for (Long uid : new HashSet<>(mentionUserIds)) {
+                if (uid != null && !uid.equals(dto.getAuthorId())) {
+                    fcmNotificationService.sendMentionCommentNotification(uid, dto);
+                }
+            }
+        }
 
         // =========================================================
         // ✅ (C) 댓글 일반 알림 발송(유저 설정 ON인 경우에만)
