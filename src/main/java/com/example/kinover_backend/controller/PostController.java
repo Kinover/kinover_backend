@@ -185,4 +185,19 @@ public class PostController {
     public ResponseEntity<List<CommentDTO>> getCommentsByPost(@PathVariable UUID postId) {
         return ResponseEntity.ok(commentService.getCommentsForPost(postId));
     }
+
+    @PostMapping("/{postId}/comments")
+    public ResponseEntity<Void> createCommentByPost(
+            @RequestHeader("Authorization") String authHeader,
+            @PathVariable UUID postId,
+            @RequestBody CommentDTO dto) {
+        Long authenticatedUserId = extractUserIdOrUnauthorized(authHeader);
+        if (authenticatedUserId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        if (dto.getAuthorId() == null || !authenticatedUserId.equals(dto.getAuthorId())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        dto.setPostId(postId);
+        commentService.createComment(dto);
+        return ResponseEntity.ok().build();
+    }
 }
