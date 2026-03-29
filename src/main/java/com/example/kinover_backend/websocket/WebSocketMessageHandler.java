@@ -8,6 +8,7 @@ import com.example.kinover_backend.enums.MessageType;
 import com.example.kinover_backend.service.ChatRoomService;
 import com.example.kinover_backend.service.MessageService;
 import com.example.kinover_backend.service.OpenAiService;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 // import lombok.RequiredArgsConstructor; // 제거
 import org.springframework.context.annotation.Lazy; // 추가
@@ -47,7 +48,7 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
             OpenAiService openAiService,
             ChatRoomService chatRoomService,
             @Lazy StringRedisTemplate redisTemplate, // 순환 참조 끊기
-            @Lazy ChannelTopic channelTopic          // 순환 참조 끊기
+            @Lazy ChannelTopic channelTopic // 순환 참조 끊기
     ) {
         this.jwtUtil = jwtUtil;
         this.messageService = messageService;
@@ -93,6 +94,10 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
     @SuppressWarnings("unchecked")
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
         URI uri = session.getUri();
+        // String payload = message.getPayload();
+        // JsonNode json = objectMapper.readTree(payload);
+        // String type = json.path("type").asText("");
+
         if (uri == null) {
             session.close(CloseStatus.BAD_DATA);
             return;
@@ -115,6 +120,11 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
         Map<String, Object> map = objectMapper.readValue(rawPayload, Map.class);
         String type = map.get("type") != null ? String.valueOf(map.get("type")) : "message:new";
 
+        // ✅ heartbeat ping 처리
+        if ("ping".equals(type)) {
+            session.sendMessage(new TextMessage("{\"type\":\"pong\"}"));
+            return;
+        }
         // =========================
         // A) 읽음 이벤트
         // =========================
@@ -169,8 +179,7 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
         if (updated) {
             broadcastToRoomMembers(
                     dto.getChatRoomId(),
-                    makeReadBroadcastPayload(dto.getChatRoomId(), userId, lastReadAt)
-            );
+                    makeReadBroadcastPayload(dto.getChatRoomId(), userId, lastReadAt));
         }
 
         if (chatRoomService.isKinoRoom(dto.getChatRoomId())) {
@@ -190,18 +199,22 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         URI uri = session.getUri();
-        if (uri == null) return;
+        if (uri == null)
+            return;
 
         String token = getQueryParam(uri, "token");
-        if (token == null) return;
+        if (token == null)
+            return;
 
         Long userId = jwtUtil.getUserIdFromToken(token);
-        if (userId == null) return;
+        if (userId == null)
+            return;
 
         Set<WebSocketSession> userSessions = sessions.get(userId);
         if (userSessions != null) {
             userSessions.remove(session);
-            if (userSessions.isEmpty()) sessions.remove(userId);
+            if (userSessions.isEmpty())
+                sessions.remove(userId);
         }
 
         System.out.println("[WS CLOSE] userId=" + userId + ", sessionId=" + session.getId());
@@ -213,7 +226,8 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
 
     private String getQueryParam(URI uri, String key) {
         String query = uri.getQuery();
-        if (query == null) return null;
+        if (query == null)
+            return null;
 
         for (String param : query.split("&")) {
             String[] pair = param.split("=", 2);
@@ -230,7 +244,8 @@ public class WebSocketMessageHandler extends TextWebSocketHandler {
             Set<WebSocketSession> ss = getSessionsByUserId(memberId);
             for (WebSocketSession s : ss) {
                 try {
-                    if (s.isOpen()) s.sendMessage(new TextMessage(payload));
+                    if (s.isOpen())
+                        s.sendMessage(new TextMessage(payload));
                 } catch (Exception ignored) {
                 }
             }
