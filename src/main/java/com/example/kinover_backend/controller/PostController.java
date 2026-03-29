@@ -1,8 +1,10 @@
 package com.example.kinover_backend.controller;
 
 import com.example.kinover_backend.JwtUtil;
+import com.example.kinover_backend.dto.CommentDTO;
 import com.example.kinover_backend.dto.PostDTO;
 import com.example.kinover_backend.dto.UpdatePostRequest;
+import com.example.kinover_backend.service.CommentService;
 import com.example.kinover_backend.service.PostService;
 import com.example.kinover_backend.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -24,6 +26,7 @@ import java.util.UUID;
 public class PostController {
 
     private final PostService postService;
+    private final CommentService commentService;
     private final UserService userService;
     private final JwtUtil jwtUtil;
 
@@ -176,5 +179,10 @@ public class PostController {
 
         postService.updatePost(postId, authenticatedUserId, request);
         return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/{postId}/comments")
+    public ResponseEntity<List<CommentDTO>> getCommentsByPost(@PathVariable UUID postId) {
+        return ResponseEntity.ok(commentService.getCommentsForPost(postId));
     }
 }
