@@ -79,18 +79,22 @@ public class CommentService {
         // ✅ (B) 멘션 알림
         // =========================================================
         List<Long> mentionUserIds = dto.getMentionUserIds();
+        Set<Long> mentionTargets = new HashSet<>();
         if (mentionUserIds != null) {
-            for (Long uid : new HashSet<>(mentionUserIds)) {
+            for (Long uid : mentionUserIds) {
                 if (uid != null && !uid.equals(dto.getAuthorId())) {
+                    mentionTargets.add(uid);
                     fcmNotificationService.sendMentionCommentNotification(uid, dto);
                 }
             }
         }
 
         // =========================================================
-        // ✅ (C) 댓글 일반 알림 발송(유저 설정 ON인 경우에만)
+        // ✅ (C) 댓글 일반 알림 발송(멘션 대상자 제외, 유저 설정 ON인 경우에만)
         // =========================================================
         for (Long uid : recipients) {
+            if (mentionTargets.contains(uid)) continue;
+
             User member = userRepository.findById(uid).orElse(null);
             if (member == null) continue;
 

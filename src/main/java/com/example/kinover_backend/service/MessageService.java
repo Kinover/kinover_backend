@@ -79,6 +79,9 @@ public class MessageService {
         // ✅ 저장된 값 기반 DTO (createdAt 포함) -> Redis + Push 통일
         MessageDTO responseDto = getMessageDTO(saved);
 
+        // ✅ mentionUserIds는 엔티티에 저장되지 않으므로 원본 dto에서 복원
+        responseDto.setMentionUserIds(dto.getMentionUserIds());
+
         // ✅ Redis 발행
         try {
             String json = objectMapper.writeValueAsString(responseDto);
