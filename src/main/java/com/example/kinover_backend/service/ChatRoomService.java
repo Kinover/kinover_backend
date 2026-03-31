@@ -262,6 +262,9 @@ public class ChatRoomService {
                 .filter(id -> !existingUserIds.contains(id))
                 .collect(Collectors.toList());
 
+        List<MessageDTO> joinMessages = new ArrayList<>();
+        LocalDateTime joinedAt = LocalDateTime.now();
+
         for (Long userId : newUserIds) {
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new RuntimeException("유저를 찾을 수 없습니다: " + userId));
@@ -271,9 +274,11 @@ public class ChatRoomService {
             ucr.setChatRoom(chatRoom);
 
             // ✅ 신규 초대 정책
-            ucr.setLastReadAt(LocalDateTime.now());
+            ucr.setLastReadAt(joinedAt);
 
             userChatRoomRepository.save(ucr);
+
+            joinMessages.add(saveRoomJoinMessage(chatRoom, user, joinedAt));
         }
 
         int memberCount = userChatRoomRepository.countByChatRoom(chatRoom);
@@ -282,6 +287,10 @@ public class ChatRoomService {
 
         // ✅ 멤버 변경 이후: 커스텀 이름 아닌 사람들만 기본 표시 이름 갱신
         refreshDisplayRoomNamesIfNotCustom(chatRoomId);
+
+        for (MessageDTO joinMessage : joinMessages) {
+            publishMessageAfterCommit(joinMessage);
+        }
 
         ChatRoomDTO dto = chatRoomMapper.toDTO(chatRoom);
         applyDisplayRoomName(dto, requesterId);
@@ -640,6 +649,35 @@ public class ChatRoomService {
         }
 
         dto.setRoomName(display);
+    }
+
+    private MessageDTO saveRoomJoinMessage(ChatRoom chatRoom, User user, LocalDateTime joinedAt) {
+        String userName = resolveUserName(user);
+
+        Message message = new Message();
+        message.setMessageId(UUID.randomUUID());
+        message.setChatRoom(chatRoom);
+        message.setSender(user);
+        message.setMessageType(MessageType.text);
+        message.setSystemMessage(true);
+        message.setContent(userName + "님이 입장했습니다");
+        message.setCreatedAt(joinedAt);
+
+        Message saved = messageRepository.save(message);
+
+        MessageDTO dto = new MessageDTO();
+        dto.setMessageId(saved.getMessageId());
+        dto.setChatRoomId(saved.getChatRoom().getChatRoomId());
+        dto.setSenderId(saved.getSender().getUserId());
+        dto.setSenderName(userName);
+        dto.setSenderImage(saved.getSender().getImage());
+        dto.setMessageType(saved.getMessageType());
+        dto.setSystemMessage(Boolean.TRUE);
+        dto.setContent(saved.getContent());
+        dto.setImageUrls(null);
+        dto.setMentionUserIds(null);
+        dto.setCreatedAt(saved.getCreatedAt());
+        return dto;
     }
 
     private MessageDTO saveRoomLeaveMessage(ChatRoom chatRoom, User user, LocalDateTime leftAt) {
