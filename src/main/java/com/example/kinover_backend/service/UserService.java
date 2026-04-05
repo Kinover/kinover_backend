@@ -19,6 +19,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.example.kinover_backend.controller.NotFoundException;
+import com.example.kinover_backend.util.UserEmotionExpiry;
 
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
@@ -63,6 +64,19 @@ public class UserService {
      * - 없으면 null
      * - 실패해도 null로 방어해서 userinfo가 죽지 않게
      */
+    /**
+     * 감정 설정 후 24시간이 지난 경우 DB에서 제거한다.
+     */
+    @Transactional
+    public void expireStaleEmotionIfNeeded(User user) {
+        if (user == null || !UserEmotionExpiry.isStale(user)) {
+            return;
+        }
+        user.setEmotion(null);
+        user.setEmotionUpdatedAt(null);
+        userRepository.save(user);
+    }
+
     private UUID resolveLatestFamilyId(Long userId) {
         try {
             List<UUID> ids = userFamilyRepository.findLatestFamilyIdByUserId(
@@ -79,6 +93,8 @@ public class UserService {
     public UserDTO getUserById(Long userId) {
         User user = userRepository.findByUserId(userId)
                 .orElseThrow(() -> new NotFoundException("User not found with id: " + userId));
+
+        expireStaleEmotionIfNeeded(user);
 
         UserDTO dto = new UserDTO(user);
 
@@ -208,6 +224,7 @@ public class UserService {
         userRepository.save(user);
     }
 
+    @Transactional
     public UserDTO modifyUser(UserDTO userDTO) {
         if (userDTO.getUserId() == null) {
             throw new IllegalArgumentException("User ID must not be null");
@@ -215,6 +232,8 @@ public class UserService {
 
         User user = userRepository.findById(userDTO.getUserId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
+
+        expireStaleEmotionIfNeeded(user);
 
         if (userDTO.getName() != null)
             user.setName(userDTO.getName());
@@ -618,9 +637,12 @@ public class UserService {
         }
     }
 
+    @Transactional
     public UserDTO updateUserProfile(Long userId, UpdateProfileRequest req) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+
+        expireStaleEmotionIfNeeded(user);
 
         if (req.getName() != null && !req.getName().isBlank())
             user.setName(req.getName());

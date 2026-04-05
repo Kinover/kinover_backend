@@ -29,27 +29,35 @@ public class UserFamilyService {
     private final UserChatRoomRepository userChatRoomRepository;
     private final FamilyRepository familyRepository;
     private final ChatRoomService chatRoomService;
+    private final UserService userService;
 
     public UserFamilyService(UserFamilyRepository userFamilyRepository,
                              UserRepository userRepository,
                              ChatRoomRepository chatRoomRepository,
                              UserChatRoomRepository userChatRoomRepository,
                              FamilyRepository familyRepository,
-                             ChatRoomService chatRoomService) {
+                             ChatRoomService chatRoomService,
+                             UserService userService) {
         this.userFamilyRepository = userFamilyRepository;
         this.userRepository = userRepository;
         this.chatRoomRepository = chatRoomRepository;
         this.userChatRoomRepository = userChatRoomRepository;
         this.familyRepository = familyRepository;
         this.chatRoomService = chatRoomService;
+        this.userService = userService;
     }
 
+    @Transactional
     public List<UserDTO> getUsersByFamilyId(UUID familyId) {
         List<Long> userIds = userFamilyRepository.findUserIdsByFamilyId(familyId);
         if (userIds.isEmpty()) {
             return List.of();
         }
-        return userRepository.findUsersByIds(userIds).stream()
+        List<User> users = userRepository.findUsersByIds(userIds);
+        for (User u : users) {
+            userService.expireStaleEmotionIfNeeded(u);
+        }
+        return users.stream()
                 .map(UserDTO::new)
                 .collect(Collectors.toList());
     }

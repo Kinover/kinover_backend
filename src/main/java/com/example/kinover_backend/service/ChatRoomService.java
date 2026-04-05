@@ -33,6 +33,7 @@ public class ChatRoomService {
     private final UserChatRoomRepository userChatRoomRepository;
     private final ChatRoomNotificationRepository chatRoomNotificationRepository;
     private final UserRepository userRepository;
+    private final UserService userService;
     private final MessageRepository messageRepository;
     private final S3Service s3Service;
     private final StringRedisTemplate redisTemplate;
@@ -381,9 +382,13 @@ public class ChatRoomService {
     // =========================
     // 특정 채팅방 유저 조회
     // =========================
-    @Transactional(readOnly = true)
+    @Transactional
     public List<UserDTO> getUsersByChatRoom(UUID chatRoomId) {
-        return userChatRoomRepository.findUsersByChatRoomId(chatRoomId).stream()
+        List<User> users = userChatRoomRepository.findUsersByChatRoomId(chatRoomId);
+        for (User u : users) {
+            userService.expireStaleEmotionIfNeeded(u);
+        }
+        return users.stream()
                 .map(UserDTO::new)
                 .collect(Collectors.toList());
     }

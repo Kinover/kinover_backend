@@ -2,6 +2,7 @@ package com.example.kinover_backend.dto;
 
 import com.example.kinover_backend.entity.User;
 import com.example.kinover_backend.enums.UserEmotion;
+import com.example.kinover_backend.util.UserEmotionExpiry;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -30,11 +31,16 @@ public class UserDTO {
         this.name = user.getName();
         this.birth = user.getBirth();
         this.email = user.getEmail();
-        this.emotion = user.getEmotion();
+        if (UserEmotionExpiry.isStale(user)) {
+            this.emotion = null;
+            this.emotionUpdatedAt = null;
+        } else {
+            this.emotion = user.getEmotion();
+            this.emotionUpdatedAt = user.getEmotionUpdatedAt();
+        }
         this.image = user.getImage();
         this.phoneNumber = user.getPhoneNumber();
         this.trait = user.getTrait();
-        this.emotionUpdatedAt = user.getEmotionUpdatedAt();
         // ❌ familyId는 여기서 건드리지 말기
     }
 }
