@@ -1,5 +1,6 @@
 package com.example.kinover_backend.service;
 
+import com.example.kinover_backend.controller.DuplicateSocialProviderException;
 import com.example.kinover_backend.dto.LoginResponseDto;
 import com.example.kinover_backend.entity.User;
 import com.example.kinover_backend.repository.UserRepository;
@@ -44,6 +45,14 @@ public class AppleUserService {
 
         User user = userRepository.findByAppleId(appleSub)
                 .orElseGet(() -> {
+                    // 같은 이메일로 Kakao 계정이 이미 존재하면 409
+                    if (email != null && !email.isBlank()) {
+                        userRepository.findByEmail(email).ifPresent(existing -> {
+                            if (existing.getKakaoId() != null) {
+                                throw new DuplicateSocialProviderException("KAKAO");
+                            }
+                        });
+                    }
 
                     User newUser = new User();
 

@@ -1,5 +1,6 @@
 package com.example.kinover_backend.controller;
 
+import com.example.kinover_backend.dto.DuplicateSocialProviderResponseDTO;
 import com.example.kinover_backend.dto.ErrorResponseDTO;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -13,6 +14,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @ExceptionHandler(DuplicateSocialProviderException.class)
+    public ResponseEntity<DuplicateSocialProviderResponseDTO> duplicateSocialProvider(DuplicateSocialProviderException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new DuplicateSocialProviderResponseDTO("DUPLICATE_SOCIAL_PROVIDER", e.getProvider()));
+    }
 
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<ErrorResponseDTO> badRequest(BadRequestException e) {

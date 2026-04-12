@@ -1,6 +1,7 @@
 package com.example.kinover_backend.service;
 
 import com.example.kinover_backend.JwtUtil;
+import com.example.kinover_backend.controller.DuplicateSocialProviderException;
 import com.example.kinover_backend.dto.KakaoUserDto;
 import com.example.kinover_backend.dto.LoginResponseDto;
 import com.example.kinover_backend.entity.User;
@@ -38,7 +39,18 @@ public class KakaoUserService {
         // 2) kakaoId 기준으로 유저 조회/생성/업데이트 (혼용 금지)
         User user = userRepository.findByKakaoId(kakaoUserInfo.getKakaoId())
                 .map(existing -> userService.updateUserFromKakao(existing, kakaoUserInfo))
-                .orElseGet(() -> userService.createNewUserFromKakao(kakaoUserInfo));
+                .orElseGet(() -> {
+                    // 같은 이메일로 Apple 계정이 이미 존재하면 409
+                    String email = kakaoUserInfo.getEmail();
+                    if (email != null && !email.isBlank()) {
+                        userRepository.findByEmail(email).ifPresent(existing -> {
+                            if (existing.getAppleId() != null) {
+                                throw new DuplicateSocialProviderException("APPLE");
+                            }
+                        });
+                    }
+                    return userService.createNewUserFromKakao(kakaoUserInfo);
+                });
 
         // 3) JWT에는 "우리 서비스 PK(userId)"만 넣는다
         //    (가족 생성/참여 등 모든 API는 이 userId로 userRepository.findById(userId) 하면 됨)
