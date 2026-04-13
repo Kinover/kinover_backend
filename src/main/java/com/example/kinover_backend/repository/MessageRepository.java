@@ -24,9 +24,28 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
 
     Page<Message> findByChatRoom(ChatRoom chatRoom, Pageable pageable);
 
+    Page<Message> findByChatRoomAndHiddenFalse(ChatRoom chatRoom, Pageable pageable);
+
     void deleteByChatRoom(ChatRoom chatRoom);
 
-    Page<Message> findByChatRoom_ChatRoomIdAndCreatedAtBefore(UUID chatRoomId, LocalDateTime before, Pageable pageable);
+    @Query("""
+            select m from Message m
+            where m.chatRoom.chatRoomId = :chatRoomId
+              and m.createdAt < :before
+              and (m.hidden is null or m.hidden = false)
+              and not exists (
+                select 1 from UserBlock ub
+                where ub.blocker.userId = :viewerId
+                  and ub.blocked.userId = m.sender.userId
+              )
+            order by m.createdAt desc
+        """)
+    Page<Message> findVisibleForViewerBefore(
+            @Param("chatRoomId") UUID chatRoomId,
+            @Param("before") LocalDateTime before,
+            @Param("viewerId") Long viewerId,
+            Pageable pageable
+    );
 
     Optional<Message> findTopByChatRoom_ChatRoomIdOrderByCreatedAtDesc(UUID chatRoomId);
 
@@ -48,11 +67,18 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
             where cr.chatRoomId = :chatRoomId
               and m.messageType in :types
               and (:before is null or m.createdAt < :before)
+              and (m.hidden is null or m.hidden = false)
+              and not exists (
+                select 1 from UserBlock ub
+                where ub.blocker.userId = :viewerId
+                  and ub.blocked.userId = s.userId
+              )
             order by m.createdAt desc
         """)
-    List<Message> findMediaMessagesBefore(
+    List<Message> findMediaMessagesVisibleForViewerBefore(
             @Param("chatRoomId") UUID chatRoomId,
             @Param("types") List<MessageType> types,
             @Param("before") LocalDateTime before,
+            @Param("viewerId") Long viewerId,
             Pageable pageable);
 }

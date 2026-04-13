@@ -5,7 +5,15 @@ import com.example.kinover_backend.dto.UpdatePostRequest;
 import com.example.kinover_backend.entity.*;
 import com.example.kinover_backend.enums.NotificationType;
 import com.example.kinover_backend.enums.PostType;
-import com.example.kinover_backend.repository.*;
+import com.example.kinover_backend.repository.CategoryRepository;
+import com.example.kinover_backend.repository.CommentRepository;
+import com.example.kinover_backend.repository.FamilyRepository;
+import com.example.kinover_backend.repository.NotificationRepository;
+import com.example.kinover_backend.repository.PostImageRepository;
+import com.example.kinover_backend.repository.PostRepository;
+import com.example.kinover_backend.repository.UserBlockRepository;
+import com.example.kinover_backend.repository.UserFamilyRepository;
+import com.example.kinover_backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -27,6 +35,7 @@ public class PostService {
     private final UserFamilyRepository userFamilyRepository;
     private final FcmNotificationService fcmNotificationService;
     private final S3Service s3Service;
+    private final UserBlockRepository userBlockRepository;
 
     @Value("${cloudfront.domain}")
     private String cloudFrontDomain;
@@ -234,8 +243,8 @@ public class PostService {
         UUID familyId = familyIds.get(0);
 
         List<Post> posts = (categoryId == null)
-                ? postRepository.findByFamilyWithImagesOrderByCreatedAtDesc(familyId)
-                : postRepository.findByFamilyAndCategoryWithImagesOrderByCreatedAtDesc(familyId, categoryId);
+                ? postRepository.findByFamilyWithImagesVisibleForViewerOrderByCreatedAtDesc(familyId, userId)
+                : postRepository.findByFamilyAndCategoryWithImagesVisibleForViewerOrderByCreatedAtDesc(familyId, categoryId, userId);
 
         // images 정렬(※ PostDTO.from에서도 정렬한다면 여기 제거 가능)
         for (Post p : posts) {
@@ -433,6 +442,14 @@ public class PostService {
 
         boolean allowed = userFamilyRepository.existsByUser_UserIdAndFamily_FamilyId(userId, familyId);
         if (!allowed) throw new RuntimeException("권한 없음");
+
+        if (Boolean.TRUE.equals(post.getHidden())) {
+            throw new RuntimeException("게시글 없음");
+        }
+        Long authorId = post.getAuthor() != null ? post.getAuthor().getUserId() : null;
+        if (authorId != null && userBlockRepository.existsByBlocker_UserIdAndBlocked_UserId(userId, authorId)) {
+            throw new RuntimeException("게시글 없음");
+        }
 
         List<PostImage> imgs = post.getImages();
         if (imgs != null) {

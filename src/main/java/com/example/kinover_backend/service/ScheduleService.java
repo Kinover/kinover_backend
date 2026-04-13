@@ -8,6 +8,7 @@ import com.example.kinover_backend.entity.User;
 import com.example.kinover_backend.enums.ScheduleType;
 import com.example.kinover_backend.repository.FamilyRepository;
 import com.example.kinover_backend.repository.ScheduleRepository;
+import com.example.kinover_backend.repository.UserBlockRepository;
 import com.example.kinover_backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -16,7 +17,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.util.*;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -26,6 +34,7 @@ public class ScheduleService {
     private final ScheduleRepository scheduleRepository;
     private final UserRepository userRepository;
     private final FamilyRepository familyRepository;
+    private final UserBlockRepository userBlockRepository;
 
     @Transactional(readOnly = true)
     public List<ScheduleDTO> getSchedulesByFilter(ScheduleDTO dto) {
@@ -37,7 +46,8 @@ public class ScheduleService {
             throw new IllegalArgumentException("familyId, date는 필수입니다.");
         }
 
-        List<Schedule> schedules = scheduleRepository.findVisibleSchedulesByFilter(familyId, date, userId);
+        Long viewerId = userId;
+        List<Schedule> schedules = scheduleRepository.findVisibleSchedulesByFilter(familyId, date, userId, viewerId);
 
         // ✅ DTO 생성자에서 participantNames까지 채워짐
         return schedules.stream().map(ScheduleDTO::new).toList();
@@ -106,11 +116,28 @@ public class ScheduleService {
     }
 
     @Transactional(readOnly = true)
-    public Map<LocalDate, Map<String, Long>> getScheduleCountPerDay(UUID familyId, int year, int month) {
+    public Map<LocalDate, Map<String, Long>> getScheduleCountPerDay(UUID familyId, int year, int month, Long viewerUserId) {
         LocalDate startDate = LocalDate.of(year, month, 1);
         LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
 
-        List<Schedule> schedules = scheduleRepository.findByFamily_FamilyIdAndDateBetween(familyId, startDate, endDate);
+        List<Schedule> schedules = scheduleRepository.findByFamily_FamilyIdAndDateBetweenAndHiddenFalse(familyId, startDate, endDate);
+
+        Set<Long> blockedIds = Collections.emptySet();
+        if (viewerUserId != null) {
+            blockedIds = new HashSet<>(userBlockRepository.findBlockedUserIdsByBlockerId(viewerUserId));
+        }
+        final Set<Long> blocked = blockedIds;
+
+        if (!blocked.isEmpty()) {
+            schedules = schedules.stream()
+                    .filter(s -> {
+                        if (s.getCreatedBy() == null) {
+                            return true;
+                        }
+                        return !blocked.contains(s.getCreatedBy().getUserId());
+                    })
+                    .toList();
+        }
 
         Map<LocalDate, List<Schedule>> grouped = schedules.stream().collect(Collectors.groupingBy(Schedule::getDate));
 

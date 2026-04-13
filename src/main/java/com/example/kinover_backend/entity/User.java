@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
+import com.example.kinover_backend.enums.UserAccountStatus;
 import com.example.kinover_backend.enums.UserEmotion;
 
 @Getter
@@ -121,4 +122,8 @@ public class User {
 
     @Column(nullable = false)
     private Boolean phoneVerified = false;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "account_status", nullable = false, length = 20)
+    private UserAccountStatus accountStatus = UserAccountStatus.NORMAL;
 }

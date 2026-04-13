@@ -27,15 +27,32 @@ public interface ScheduleRepository extends JpaRepository<Schedule, UUID> {
         left join s.participants p
         where s.family.familyId = :familyId
           and s.date = :date
+          and (s.hidden is null or s.hidden = false)
           and (
             :userId is null
             or s.type in ('FAMILY', 'ANNIVERSARY')
             or p.userId = :userId
           )
+          and (
+            :viewerId is null
+            or s.createdBy is null
+            or not exists (
+              select 1 from UserBlock ub
+              where ub.blocker.userId = :viewerId
+                and ub.blocked.userId = s.createdBy.userId
+            )
+          )
         """)
     List<Schedule> findVisibleSchedulesByFilter(
         @Param("familyId") UUID familyId,
         @Param("date") LocalDate date,
-        @Param("userId") Long userId
+        @Param("userId") Long userId,
+        @Param("viewerId") Long viewerId
+    );
+
+    List<Schedule> findByFamily_FamilyIdAndDateBetweenAndHiddenFalse(
+            UUID familyId,
+            LocalDate start,
+            LocalDate end
     );
 }

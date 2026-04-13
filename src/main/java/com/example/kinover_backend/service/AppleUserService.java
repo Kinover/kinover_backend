@@ -1,6 +1,8 @@
 package com.example.kinover_backend.service;
 
+import com.example.kinover_backend.controller.AccountBannedException;
 import com.example.kinover_backend.controller.DuplicateSocialProviderException;
+import com.example.kinover_backend.enums.UserAccountStatus;
 import com.example.kinover_backend.dto.LoginResponseDto;
 import com.example.kinover_backend.entity.User;
 import com.example.kinover_backend.repository.UserRepository;
@@ -87,6 +89,10 @@ public class AppleUserService {
         // 기존 유저인데 image가 비어있으면 보정 (탈퇴 기본 이미지로 고정)
         if (isBlank(user.getImage())) {
             user.setImage(buildCloudFrontUrl(DEFAULT_USER_IMAGE));
+        }
+
+        if (UserAccountStatus.BANNED.equals(user.getAccountStatus())) {
+            throw new AccountBannedException();
         }
 
         String jwt = tokenService.issueJwt(user);

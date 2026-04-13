@@ -49,6 +49,9 @@ public class Post {
 
     private int commentCount = 0;
 
+    @Column(name = "is_hidden", nullable = false)
+    private Boolean hidden = false;
+
     // =========================
     // ✅ orphanRemoval 안전 헬퍼
     // - "컬렉션 참조 유지" + 내용만 변경

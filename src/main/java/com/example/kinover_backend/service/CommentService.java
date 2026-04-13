@@ -105,12 +105,12 @@ public class CommentService {
     }
 
     @Transactional(readOnly = true)
-    public List<CommentDTO> getCommentsForPost(UUID postId) {
+    public List<CommentDTO> getCommentsForPost(UUID postId, Long viewerUserId) {
         if (!postRepository.existsById(postId)) {
             throw new RuntimeException("게시물 없음");
         }
 
-        return commentRepository.findCommentDtosByPostIdOrderByCreatedAtAsc(postId)
+        return commentRepository.findCommentDtosByPostIdVisibleForViewerOrderByCreatedAtAsc(postId, viewerUserId)
                 .stream()
                 .peek(dto -> {
                     if (dto.getAuthorName() == null || dto.getAuthorName().isBlank()) {

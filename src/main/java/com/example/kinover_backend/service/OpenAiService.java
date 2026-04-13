@@ -106,7 +106,7 @@ public class OpenAiService {
         String systemPrompt = basePrompt + "\n\n" + personalityPrompt;
 
         PageRequest pageRequest = PageRequest.of(0, historyLimit, Sort.by(Sort.Direction.DESC, "createdAt"));
-        List<Message> recentMessages = new ArrayList<>(messageRepository.findByChatRoom(chatRoom, pageRequest).getContent());
+        List<Message> recentMessages = new ArrayList<>(messageRepository.findByChatRoomAndHiddenFalse(chatRoom, pageRequest).getContent());
         Collections.reverse(recentMessages);
 
         List<Map<String, String>> inputMessages = new ArrayList<>();

@@ -1,7 +1,9 @@
 package com.example.kinover_backend.service;
 
 import com.example.kinover_backend.JwtUtil;
+import com.example.kinover_backend.controller.AccountBannedException;
 import com.example.kinover_backend.controller.DuplicateSocialProviderException;
+import com.example.kinover_backend.enums.UserAccountStatus;
 import com.example.kinover_backend.dto.KakaoUserDto;
 import com.example.kinover_backend.dto.LoginResponseDto;
 import com.example.kinover_backend.entity.User;
@@ -51,6 +53,10 @@ public class KakaoUserService {
                     }
                     return userService.createNewUserFromKakao(kakaoUserInfo);
                 });
+
+        if (UserAccountStatus.BANNED.equals(user.getAccountStatus())) {
+            throw new AccountBannedException();
+        }
 
         // 3) JWT에는 "우리 서비스 PK(userId)"만 넣는다
         //    (가족 생성/참여 등 모든 API는 이 userId로 userRepository.findById(userId) 하면 됨)

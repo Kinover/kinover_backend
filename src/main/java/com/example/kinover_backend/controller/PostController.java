@@ -182,8 +182,16 @@ public class PostController {
     }
 
     @GetMapping("/{postId}/comments")
-    public ResponseEntity<List<CommentDTO>> getCommentsByPost(@PathVariable UUID postId) {
-        return ResponseEntity.ok(commentService.getCommentsForPost(postId));
+    public ResponseEntity<List<CommentDTO>> getCommentsByPost(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable UUID postId
+    ) {
+        Long viewerId = null;
+        String token = extractBearerTokenOrNull(authorizationHeader);
+        if (token != null && jwtUtil.isTokenValid(token)) {
+            viewerId = jwtUtil.getUserIdFromToken(token);
+        }
+        return ResponseEntity.ok(commentService.getCommentsForPost(postId, viewerId));
     }
 
     @PostMapping("/{postId}/comments")

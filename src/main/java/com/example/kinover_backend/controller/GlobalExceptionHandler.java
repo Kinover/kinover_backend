@@ -45,6 +45,12 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponseDTO("FORBIDDEN", e.getMessage()));
     }
 
+    @ExceptionHandler(AccountBannedException.class)
+    public ResponseEntity<ErrorResponseDTO> accountBanned(AccountBannedException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ErrorResponseDTO("ACCOUNT_BANNED", e.getMessage()));
+    }
+
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ErrorResponseDTO> notFound(NotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)

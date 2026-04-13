@@ -108,10 +108,11 @@ public class ScheduleController {
     public ResponseEntity<Map<LocalDate, Map<String, Long>>> getScheduleCountPerDay(
         @RequestParam UUID familyId,
         @RequestParam int year,
-        @RequestParam int month
+        @RequestParam int month,
+        @RequestParam(required = false) Long viewerUserId
     ) {
         Map<LocalDate, Map<String, Long>> countPerDay =
-            scheduleService.getScheduleCountPerDay(familyId, year, month);
+            scheduleService.getScheduleCountPerDay(familyId, year, month, viewerUserId);
         return ResponseEntity.ok(countPerDay);
     }
 }

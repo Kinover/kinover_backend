@@ -1,6 +1,11 @@
 package com.example.kinover_backend.config;
 
 import com.example.kinover_backend.JwtUtil;
+import com.example.kinover_backend.dto.ErrorResponseDTO;
+import com.example.kinover_backend.entity.User;
+import com.example.kinover_backend.enums.UserAccountStatus;
+import com.example.kinover_backend.repository.UserRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,9 +26,13 @@ import java.util.List;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
+    private final UserRepository userRepository;
+    private final ObjectMapper objectMapper;
 
-    public JwtAuthenticationFilter(JwtUtil jwtUtil) {
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, UserRepository userRepository, ObjectMapper objectMapper) {
         this.jwtUtil = jwtUtil;
+        this.userRepository = userRepository;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -42,7 +51,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         // ✅ 로그인 요청은 패스
-        if ("/api/login/kakao".equals(uri)) {
+        if ("/api/login/kakao".equals(uri) || "/api/login/apple".equals(uri)) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -72,6 +81,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // ✅ 유효한 토큰이면 인증 세팅
         try {
             Long userId = jwtUtil.getUserIdFromToken(token);
+
+            User user = userRepository.findById(userId).orElse(null);
+            if (user == null) {
+                sendUnauthorized(response, "USER_NOT_FOUND");
+                return;
+            }
+            if (UserAccountStatus.BANNED.equals(user.getAccountStatus())) {
+                sendAccountBanned(response);
+                return;
+            }
 
             var authorities = List.of(new SimpleGrantedAuthority("ROLE_USER"));
             UsernamePasswordAuthenticationToken authentication =
@@ -105,5 +124,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setContentType("text/plain;charset=UTF-8");
         response.getWriter().write(code);
+    }
+
+    private void sendAccountBanned(HttpServletResponse response) throws IOException {
+        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setContentType("application/json;charset=UTF-8");
+        response.getWriter().write(objectMapper.writeValueAsString(
+                new ErrorResponseDTO("ACCOUNT_BANNED", "계정이 제재되어 이용할 수 없습니다.")
+        ));
     }
 }

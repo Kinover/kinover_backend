@@ -229,7 +229,7 @@ public class ChatRoomController {
         Long userId = getUserIdFromAuth(authorizationHeader);
         requireMember(chatRoomId, userId);
 
-        return messageService.fetchMessagesBefore(chatRoomId, before, limit);
+        return messageService.fetchMessagesBefore(chatRoomId, before, limit, userId);
     }
 
     // =========================
@@ -400,7 +400,7 @@ public class ChatRoomController {
         Long userId = getUserIdFromAuth(authorizationHeader);
         requireMember(chatRoomId, userId);
 
-        ChatRoomMediaResponseDTO dto = messageService.fetchChatRoomMedia(chatRoomId, type, before, limit);
+        ChatRoomMediaResponseDTO dto = messageService.fetchChatRoomMedia(chatRoomId, type, before, limit, userId);
         return ResponseEntity.ok(dto);
     }
 }

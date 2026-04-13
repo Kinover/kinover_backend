@@ -31,4 +31,7 @@ public class Comment {
 
     @Column(name = "created_at", columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP", updatable = false, insertable = false)
     private Date createdAt;
+
+    @Column(name = "is_hidden", nullable = false)
+    private Boolean hidden = false;
 }

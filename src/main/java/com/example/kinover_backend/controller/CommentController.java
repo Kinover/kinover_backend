@@ -41,8 +41,18 @@ public class CommentController {
     }
 
     @GetMapping("/{postId}")
-    public ResponseEntity<List<CommentDTO>> getComments(@PathVariable UUID postId) {
-        return ResponseEntity.ok(commentService.getCommentsForPost(postId));
+    public ResponseEntity<List<CommentDTO>> getComments(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable UUID postId
+    ) {
+        Long viewerId = null;
+        if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
+            String token = authorizationHeader.substring("Bearer ".length()).trim();
+            if (!token.isEmpty() && jwtUtil.isTokenValid(token)) {
+                viewerId = jwtUtil.getUserIdFromToken(token);
+            }
+        }
+        return ResponseEntity.ok(commentService.getCommentsForPost(postId, viewerId));
     }
 
     @DeleteMapping("/{commentId}")

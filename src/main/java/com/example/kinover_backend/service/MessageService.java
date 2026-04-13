@@ -164,12 +164,12 @@ public class MessageService {
         return responseDto;
     }
 
-    public List<MessageDTO> fetchMessagesBefore(UUID chatRoomId, LocalDateTime before, int limit) {
+    public List<MessageDTO> fetchMessagesBefore(UUID chatRoomId, LocalDateTime before, int limit, Long viewerUserId) {
         PageRequest pageRequest = PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
         LocalDateTime beforeTime = (before != null) ? before : LocalDateTime.now();
 
         List<Message> messages = new ArrayList<>(
-                messageRepository.findByChatRoom_ChatRoomIdAndCreatedAtBefore(chatRoomId, beforeTime, pageRequest)
+                messageRepository.findVisibleForViewerBefore(chatRoomId, beforeTime, viewerUserId, pageRequest)
                         .getContent()
         );
 
@@ -187,16 +187,18 @@ public class MessageService {
     public ChatRoomMediaResponseDTO fetchChatRoomMedia(UUID chatRoomId,
                                                        String type, // ALL | IMAGE | VIDEO
                                                        LocalDateTime before,
-                                                       int limit) {
+                                                       int limit,
+                                                       Long viewerUserId) {
 
         int safeLimit = Math.min(Math.max(limit, 1), 50);
         List<MessageType> types = resolveMediaTypes(type);
 
         // ✅ Repository에서 sender/chatRoom까지 fetch join으로 가져옴 (N+1 방지)
-        List<Message> messages = messageRepository.findMediaMessagesBefore(
+        List<Message> messages = messageRepository.findMediaMessagesVisibleForViewerBefore(
                 chatRoomId,
                 types,
                 before,
+                viewerUserId,
                 PageRequest.of(0, safeLimit)
         );
 

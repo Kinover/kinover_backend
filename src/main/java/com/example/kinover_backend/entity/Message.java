@@ -30,6 +30,9 @@ public class Message {
     @Column(name = "is_system_message", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
     private Boolean systemMessage = false;
 
+    @Column(name = "is_hidden", nullable = false)
+    private Boolean hidden = false;
+
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "chat_room_id", nullable = false)
     private ChatRoom chatRoom;
