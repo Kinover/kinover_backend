@@ -30,7 +30,10 @@ public class ReportController {
         return jwtUtil.getUserIdFromToken(token);
     }
 
-    @Operation(summary = "콘텐츠/유저 신고")
+    @Operation(
+            summary = "콘텐츠/유저 신고",
+            description = "Authorization: Bearer 필수(401). 성공 시 신고자→대상 작성자(또는 USER 신고의 targetUserId) 방향 자동 차단이 같은 요청 트랜잭션에서 저장되며, "
+                    + "커밋 직후 GET /api/blocks에 해당 userId가 포함됩니다(비동기 큐 없음; 읽기 복제본 사용 시 복제 지연만 고려).")
     @PostMapping
     public ResponseEntity<Void> report(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,

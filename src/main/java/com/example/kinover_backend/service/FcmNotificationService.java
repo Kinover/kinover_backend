@@ -21,10 +21,10 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
 // ✅ 분리된 enum
 import com.example.kinover_backend.enums.PushType;
+import com.example.kinover_backend.util.NotificationMembershipCutoffs;
 
 @Service
 @RequiredArgsConstructor
@@ -62,23 +62,26 @@ public class FcmNotificationService {
                 .orElse(true);
     }
 
-    // ✅ 벨(종) unreadCount: Notification 테이블 기준 (채팅 제외)
+    // ✅ 벨(종) unreadCount: Notification 테이블 기준 (채팅 제외), 가족 가입 시점 이전 알림은 제외
     private long calcBellUnreadCount(Long userId) {
         User user = userRepository.findById(userId).orElseThrow();
 
-        LocalDateTime lastCheckedAt = user.getLastNotificationCheckedAt();
-        LocalDateTime 기준 = (lastCheckedAt != null) ? lastCheckedAt : LocalDateTime.MIN;
+        List<UserFamily> memberships = userFamilyRepository.findAllByUser_UserId(userId);
+        if (memberships.isEmpty()) {
+            return 0L;
+        }
 
-        List<UUID> familyIds = userFamilyRepository.findFamiliesByUserId(userId).stream()
-                .map(Family::getFamilyId)
-                .collect(Collectors.toList());
-
-        if (familyIds.isEmpty()) return 0L;
-
-        // ✅ 내 알림 제외
-        return notificationRepository.countByFamilyIdInAndCreatedAtAfterAndAuthorIdNot(
-                familyIds, 기준, userId
-        );
+        long total = 0L;
+        for (UserFamily uf : memberships) {
+            if (uf.getFamily() == null || uf.getFamily().getFamilyId() == null) {
+                continue;
+            }
+            LocalDateTime cutoff = NotificationMembershipCutoffs.bellUnreadLowerBound(
+                    user.getLastNotificationCheckedAt(), uf.getJoinedAt());
+            total += notificationRepository.countByFamilyIdAndCreatedAtAfterAndAuthorIdNot(
+                    uf.getFamily().getFamilyId(), cutoff, userId);
+        }
+        return total;
     }
 
     // ✅ 채팅 unreadCount: UserChatRoom.lastReadAt + Message.createdAt 기준

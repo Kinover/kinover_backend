@@ -97,6 +97,7 @@ public class UserFamilyService {
         userFamily.setRole("member");
         userFamily.setFamily(family);
         userFamily.setUser(user);
+        userFamily.setJoinedAt(LocalDateTime.now());
         userFamilyRepository.save(userFamily);
 
         User kino = ensureKinoUserExists();

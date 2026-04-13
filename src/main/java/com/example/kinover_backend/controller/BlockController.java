@@ -32,7 +32,10 @@ public class BlockController {
         return jwtUtil.getUserIdFromToken(token);
     }
 
-    @Operation(summary = "내가 차단한 유저 ID 목록", description = "앱 로드 시 캐싱·클라이언트 필터용")
+    @Operation(
+            summary = "내가 차단한 유저 ID 목록",
+            description = "Authorization: Bearer 필수(401). 응답 본문은 Long 배열 JSON만 사용합니다(예: [1,2,3]). "
+                    + "DB의 차단 테이블이 진실이며, POST /api/blocks·DELETE /api/blocks/{id}·신고 후 자동 차단이 커밋된 직후 동일 트랜잭션 경로로 조회되므로 지연은 DB 커밋·레플리카 지연 수준입니다.")
     @GetMapping
     public ResponseEntity<List<Long>> listBlocked(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader

@@ -27,7 +27,9 @@ public class UserFamilyController {
         this.userFamilyService = userFamilyService;
     }
 
-    @Operation(summary = "가족 아이디로 특정 가족에 해당하는 유저 정보 조회", description = "특정 유저 - 특정 가족 정보를 조회합니다.")
+    @Operation(
+            summary = "가족 아이디로 특정 가족에 해당하는 유저 정보 조회",
+            description = "Authorization: Bearer 필수(401). 조회자(viewer)가 차단한 가족 멤버는 응답에서 제외됩니다.")
     @PostMapping("/familyUsers/{familyId}") // GET에서 POST로 변경
     public List<UserDTO> getUserFamily(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,

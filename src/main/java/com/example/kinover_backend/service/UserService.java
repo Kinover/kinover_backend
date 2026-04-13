@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import com.example.kinover_backend.enums.UserAccountStatus;
 import com.example.kinover_backend.controller.NotFoundException;
+import com.example.kinover_backend.util.NotificationMembershipCutoffs;
 import com.example.kinover_backend.util.UserEmotionExpiry;
 
 import java.text.SimpleDateFormat;
@@ -338,10 +339,16 @@ public class UserService {
 
         LocalDateTime lastCheckedAt = user.getLastNotificationCheckedAt();
 
-        List<UUID> familyIds = userFamilyRepository.findFamiliesByUserId(userId).stream()
-                .map(Family::getFamilyId)
-                .collect(Collectors.toList());
+        List<UserFamily> memberships = userFamilyRepository.findAllByUser_UserId(userId);
+        Map<UUID, LocalDateTime> joinedAtByFamilyId = new HashMap<>();
+        for (UserFamily uf : memberships) {
+            if (uf.getFamily() == null || uf.getFamily().getFamilyId() == null) {
+                continue;
+            }
+            joinedAtByFamilyId.put(uf.getFamily().getFamilyId(), uf.getJoinedAt());
+        }
 
+        List<UUID> familyIds = new ArrayList<>(joinedAtByFamilyId.keySet());
         if (familyIds.isEmpty()) {
             return NotificationResponseDTO.builder()
                     .lastCheckedAt(lastCheckedAt)
@@ -359,6 +366,8 @@ public class UserService {
 
         List<Notification> filtered = notifications.stream()
                 .filter(n -> !Objects.equals(n.getAuthorId(), userId))
+                .filter(n -> NotificationMembershipCutoffs.isVisibleForMember(
+                        n.getCreatedAt(), joinedAtByFamilyId.get(n.getFamilyId())))
                 .collect(Collectors.toList());
 
         if (filtered.isEmpty()) {
@@ -516,19 +525,23 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("사용자 없음"));
 
-        LocalDateTime lastCheckedAt = user.getLastNotificationCheckedAt();
-
-        List<UUID> familyIds = userFamilyRepository.findFamiliesByUserId(userId).stream()
-                .map(Family::getFamilyId)
-                .collect(Collectors.toList());
-
-        if (familyIds.isEmpty())
+        List<UserFamily> memberships = userFamilyRepository.findAllByUser_UserId(userId);
+        if (memberships.isEmpty()) {
             return false;
+        }
 
-        LocalDateTime 기준 = (lastCheckedAt != null) ? lastCheckedAt : LocalDateTime.MIN;
-
-        return notificationRepository.existsByFamilyIdInAndCreatedAtAfterAndAuthorIdNot(
-                familyIds, 기준, userId);
+        for (UserFamily uf : memberships) {
+            if (uf.getFamily() == null || uf.getFamily().getFamilyId() == null) {
+                continue;
+            }
+            LocalDateTime cutoff = NotificationMembershipCutoffs.bellUnreadLowerBound(
+                    user.getLastNotificationCheckedAt(), uf.getJoinedAt());
+            if (notificationRepository.existsByFamilyIdAndCreatedAtAfterAndAuthorIdNot(
+                    uf.getFamily().getFamilyId(), cutoff, userId)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Transactional(readOnly = true)
@@ -536,19 +549,22 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("사용자 없음"));
 
-        LocalDateTime lastCheckedAt = user.getLastNotificationCheckedAt();
-
-        List<UUID> familyIds = userFamilyRepository.findFamiliesByUserId(userId).stream()
-                .map(Family::getFamilyId)
-                .collect(Collectors.toList());
-
-        if (familyIds.isEmpty())
+        List<UserFamily> memberships = userFamilyRepository.findAllByUser_UserId(userId);
+        if (memberships.isEmpty()) {
             return 0L;
+        }
 
-        LocalDateTime 기준 = (lastCheckedAt != null) ? lastCheckedAt : LocalDateTime.MIN;
-
-        return notificationRepository.countByFamilyIdInAndCreatedAtAfterAndAuthorIdNot(
-                familyIds, 기준, userId);
+        long total = 0L;
+        for (UserFamily uf : memberships) {
+            if (uf.getFamily() == null || uf.getFamily().getFamilyId() == null) {
+                continue;
+            }
+            LocalDateTime cutoff = NotificationMembershipCutoffs.bellUnreadLowerBound(
+                    user.getLastNotificationCheckedAt(), uf.getJoinedAt());
+            total += notificationRepository.countByFamilyIdAndCreatedAtAfterAndAuthorIdNot(
+                    uf.getFamily().getFamilyId(), cutoff, userId);
+        }
+        return total;
     }
 
     @Transactional(readOnly = true)

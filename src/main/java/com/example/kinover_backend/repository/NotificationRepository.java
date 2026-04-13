@@ -32,4 +32,14 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
             LocalDateTime createdAt,
             Long authorId
     );
+
+    long countByFamilyIdAndCreatedAtAfterAndAuthorIdNot(
+            UUID familyId,
+            LocalDateTime createdAt,
+            Long authorId);
+
+    boolean existsByFamilyIdAndCreatedAtAfterAndAuthorIdNot(
+            UUID familyId,
+            LocalDateTime createdAt,
+            Long authorId);
 }
