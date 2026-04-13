@@ -648,6 +648,28 @@ public class UserService {
         return true;
     }
 
+    /**
+     * 마케팅 알림 수신 동의 — {@link User#getMarketingAgreed()} 와 동일 (DB: marketing_agreed).
+     * 마케팅 FCM/배치는 이 값이 true 인 유저만 대상으로 하면 됨.
+     */
+    @Transactional(readOnly = true)
+    public boolean getMarketingNotificationEnabled(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found with id: " + userId));
+        return Boolean.TRUE.equals(user.getMarketingAgreed());
+    }
+
+    @Transactional
+    public void updateMarketingNotificationSetting(Long userId, boolean isOn) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found with id: " + userId));
+        user.setMarketingAgreed(isOn);
+        if (isOn) {
+            user.setMarketingAgreedAt(new Date());
+        }
+        userRepository.save(user);
+    }
+
     private Date parseDate(String dateStr) {
         try {
             return new SimpleDateFormat("yyyy-MM-dd").parse(dateStr);

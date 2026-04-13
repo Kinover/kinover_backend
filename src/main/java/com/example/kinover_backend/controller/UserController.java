@@ -1,5 +1,6 @@
 package com.example.kinover_backend.controller;
 
+import com.example.kinover_backend.dto.MarketingNotificationPatchRequest;
 import com.example.kinover_backend.dto.NotificationResponseDTO;
 import com.example.kinover_backend.dto.UpdateProfileRequest;
 import com.example.kinover_backend.dto.UserDTO;
@@ -124,5 +125,31 @@ public class UserController {
         Long userId = getAuthUserId();
         return userService.updateUserProfile(userId, request);
         // return ResponseEntity.ok().body("프로필 업데이트가 완료되었습니다.");
+    }
+
+    @Operation(
+            summary = "마케팅 알림 수신 동의 조회",
+            description = "JWT 본인 기준. 값은 DB 컬럼 marketing_agreed 와 동일합니다. (게시글/댓글/채팅 알림 설정과 무관)"
+    )
+    @GetMapping("/marketing-notification")
+    public Map<String, Boolean> getMarketingNotification() {
+        Long userId = getAuthUserId();
+        boolean on = userService.getMarketingNotificationEnabled(userId);
+        return Collections.singletonMap("marketingNotificationEnabled", on);
+    }
+
+    @Operation(
+            summary = "마케팅 알림 수신 동의 변경",
+            description = "본인만 변경 가능. isOn=true 시 marketing_agreed_at 을 갱신합니다."
+    )
+    @PatchMapping("/marketing-notification")
+    public ResponseEntity<Map<String, Boolean>> updateMarketingNotification(
+            @RequestBody MarketingNotificationPatchRequest body) {
+        if (body == null || body.getIsOn() == null) {
+            throw new BadRequestException("isOn 은 필수입니다.");
+        }
+        Long userId = getAuthUserId();
+        userService.updateMarketingNotificationSetting(userId, body.getIsOn());
+        return ResponseEntity.ok(Collections.singletonMap("marketingNotificationEnabled", body.getIsOn()));
     }
 }
