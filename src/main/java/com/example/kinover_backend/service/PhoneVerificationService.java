@@ -1,0 +1,53 @@
+package com.example.kinover_backend.service;
+
+import com.example.kinover_backend.controller.DuplicatePhoneNumberException;
+import com.example.kinover_backend.controller.NotFoundException;
+import com.example.kinover_backend.entity.User;
+import com.example.kinover_backend.repository.UserRepository;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseToken;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@RequiredArgsConstructor
+public class PhoneVerificationService {
+
+    private final UserRepository userRepository;
+
+    @Transactional
+    public void verifyPhone(Long userId, String firebaseIdToken) {
+        // 1) Firebase idToken 검증 후 전화번호 추출
+        FirebaseToken decodedToken;
+        try {
+            decodedToken = FirebaseAuth.getInstance().verifyIdToken(firebaseIdToken);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("유효하지 않은 Firebase 토큰입니다.");
+        }
+
+        String phoneNumber = decodedToken.getClaims()
+                .getOrDefault("phone_number", "").toString();
+
+        if (phoneNumber == null || phoneNumber.isBlank()) {
+            throw new IllegalArgumentException("Firebase 토큰에서 전화번호를 가져올 수 없습니다.");
+        }
+
+        // 2) 현재 유저 조회
+        User currentUser = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("유저를 찾을 수 없습니다."));
+
+        // 3) 동일 전화번호로 가입된 다른 유저 체크 (중복 감지)
+        userRepository.findByPhoneNumber(phoneNumber).ifPresent(existingUser -> {
+            if (!existingUser.getUserId().equals(userId)) {
+                // 기존 유저가 어떤 소셜 제공자인지 파악해서 응답
+                String provider = existingUser.getKakaoId() != null ? "KAKAO" : "APPLE";
+                throw new DuplicatePhoneNumberException(provider);
+            }
+        });
+
+        // 4) 전화번호 저장 + 인증 완료 처리
+        currentUser.setPhoneNumber(phoneNumber);
+        currentUser.setPhoneVerified(true);
+    }
+}

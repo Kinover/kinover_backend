@@ -21,6 +21,12 @@ public class GlobalExceptionHandler {
                 .body(new DuplicateSocialProviderResponseDTO("DUPLICATE_SOCIAL_PROVIDER", e.getProvider()));
     }
 
+    @ExceptionHandler(DuplicatePhoneNumberException.class)
+    public ResponseEntity<DuplicateSocialProviderResponseDTO> duplicatePhoneNumber(DuplicatePhoneNumberException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new DuplicateSocialProviderResponseDTO("DUPLICATE_PHONE_NUMBER", e.getProvider()));
+    }
+
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<ErrorResponseDTO> badRequest(BadRequestException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)

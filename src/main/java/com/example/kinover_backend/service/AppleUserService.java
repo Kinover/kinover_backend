@@ -95,7 +95,9 @@ public class AppleUserService {
                 user.getUserFamilyList() != null &&
                 !user.getUserFamilyList().isEmpty();
 
-        return new LoginResponseDto(jwt, hasFamily);
+        boolean phoneVerified = Boolean.TRUE.equals(user.getPhoneVerified());
+
+        return new LoginResponseDto(jwt, hasFamily, phoneVerified);
     }
 
     // ✅ cloudFrontDomain 끝에 / 있든 없든 안전하게 합치기

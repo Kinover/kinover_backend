@@ -118,4 +118,7 @@ public class User {
 
     @Column(name = "apple_id", unique = true, length = 64)
     private String appleId;
+
+    @Column(nullable = false)
+    private Boolean phoneVerified = false;
 }

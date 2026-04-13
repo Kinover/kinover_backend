@@ -59,10 +59,13 @@ public class KakaoUserService {
         // 4) 가족 여부 확인
         boolean hasFamily = user.getUserFamilyList() != null && !user.getUserFamilyList().isEmpty();
 
+        // 5) 전화번호 인증 여부
+        boolean phoneVerified = Boolean.TRUE.equals(user.getPhoneVerified());
+
         // 디버그: 값 혼용 잡기
         logger.info("LOGIN_OK userId(PK)={}, kakaoId={}", user.getUserId(), kakaoUserInfo.getKakaoId());
 
-        return new LoginResponseDto(token, hasFamily);
+        return new LoginResponseDto(token, hasFamily, phoneVerified);
     }
 
     private KakaoUserDto getKakaoUserInfo(String accessToken) {
