@@ -2,6 +2,7 @@ package com.example.kinover_backend.redis;
 
 import com.example.kinover_backend.dto.MessageDTO;
 import com.example.kinover_backend.dto.UserDTO;
+import com.example.kinover_backend.repository.UserBlockRepository;
 import com.example.kinover_backend.service.ChatRoomService;
 import com.example.kinover_backend.service.FcmNotificationService;
 import com.example.kinover_backend.websocket.WebSocketMessageHandler;
@@ -26,6 +27,7 @@ public class ChatMessageSubscriber implements MessageListener {
     private final ChatRoomService chatRoomService;
     private final ObjectMapper objectMapper;
     private final FcmNotificationService fcmNotificationService;
+    private final UserBlockRepository userBlockRepository;
 
     @Override
     public void onMessage(Message message, byte[] pattern) {
@@ -49,8 +51,14 @@ public class ChatMessageSubscriber implements MessageListener {
                     messageDTO.getChatRoomId()
             );
 
+            Long senderId = messageDTO.getSenderId();
             for (UserDTO user : participants) {
                 Long userId = user.getUserId();
+                if (!Boolean.TRUE.equals(messageDTO.getSystemMessage())
+                        && senderId != null
+                        && userBlockRepository.existsByBlocker_UserIdAndBlocked_UserId(userId, senderId)) {
+                    continue;
+                }
                 Set<WebSocketSession> sessions = webSocketMessageHandler.getSessionsByUserId(userId);
 
                 for (WebSocketSession session : sessions) {

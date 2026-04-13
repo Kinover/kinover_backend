@@ -10,6 +10,7 @@ import com.example.kinover_backend.repository.ChatRoomRepository;
 import com.example.kinover_backend.repository.FamilyRepository;
 import com.example.kinover_backend.repository.UserChatRoomRepository;
 import com.example.kinover_backend.controller.ForbiddenException;
+import com.example.kinover_backend.repository.UserBlockRepository;
 import com.example.kinover_backend.repository.UserFamilyRepository;
 import com.example.kinover_backend.repository.UserRepository;
 import jakarta.transaction.Transactional;
@@ -26,6 +27,7 @@ public class UserFamilyService {
 
     private final UserFamilyRepository userFamilyRepository;
     private final UserRepository userRepository;
+    private final UserBlockRepository userBlockRepository;
     private final ChatRoomRepository chatRoomRepository;
     private final UserChatRoomRepository userChatRoomRepository;
     private final FamilyRepository familyRepository;
@@ -34,6 +36,7 @@ public class UserFamilyService {
 
     public UserFamilyService(UserFamilyRepository userFamilyRepository,
                              UserRepository userRepository,
+                             UserBlockRepository userBlockRepository,
                              ChatRoomRepository chatRoomRepository,
                              UserChatRoomRepository userChatRoomRepository,
                              FamilyRepository familyRepository,
@@ -41,6 +44,7 @@ public class UserFamilyService {
                              UserService userService) {
         this.userFamilyRepository = userFamilyRepository;
         this.userRepository = userRepository;
+        this.userBlockRepository = userBlockRepository;
         this.chatRoomRepository = chatRoomRepository;
         this.userChatRoomRepository = userChatRoomRepository;
         this.familyRepository = familyRepository;
@@ -49,7 +53,7 @@ public class UserFamilyService {
     }
 
     @Transactional
-    public List<UserDTO> getUsersByFamilyId(UUID familyId) {
+    public List<UserDTO> getUsersByFamilyId(UUID familyId, Long viewerUserId) {
         List<Long> userIds = userFamilyRepository.findUserIdsByFamilyId(familyId);
         if (userIds.isEmpty()) {
             return List.of();
@@ -60,6 +64,9 @@ public class UserFamilyService {
         }
         return users.stream()
                 .map(UserDTO::new)
+                .filter(dto -> dto.getUserId() == null
+                        || viewerUserId == null
+                        || !userBlockRepository.existsByBlocker_UserIdAndBlocked_UserId(viewerUserId, dto.getUserId()))
                 .collect(Collectors.toList());
     }
 

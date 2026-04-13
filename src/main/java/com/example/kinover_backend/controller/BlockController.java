@@ -10,6 +10,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @Tag(name = "차단", description = "유저 간 차단 API")
 @RestController
 @RequiredArgsConstructor
@@ -28,6 +30,18 @@ public class BlockController {
             return null;
         }
         return jwtUtil.getUserIdFromToken(token);
+    }
+
+    @Operation(summary = "내가 차단한 유저 ID 목록", description = "앱 로드 시 캐싱·클라이언트 필터용")
+    @GetMapping
+    public ResponseEntity<List<Long>> listBlocked(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader
+    ) {
+        Long userId = userIdFromAuth(authorizationHeader);
+        if (userId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        return ResponseEntity.ok(userBlockService.listBlockedUserIds(userId));
     }
 
     @Operation(summary = "유저 차단")

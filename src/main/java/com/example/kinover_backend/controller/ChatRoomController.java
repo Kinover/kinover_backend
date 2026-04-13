@@ -286,7 +286,7 @@ public class ChatRoomController {
         Long userId = getUserIdFromAuth(authorizationHeader);
         requireMember(chatRoomId, userId);
 
-        return chatRoomService.getUsersByChatRoom(chatRoomId);
+        return chatRoomService.getUsersByChatRoomForViewer(chatRoomId, userId);
     }
 
     // =========================

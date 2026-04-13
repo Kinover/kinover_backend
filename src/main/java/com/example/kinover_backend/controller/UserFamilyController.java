@@ -6,7 +6,9 @@ import com.example.kinover_backend.service.UserFamilyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.UUID;
@@ -28,11 +30,16 @@ public class UserFamilyController {
     @Operation(summary = "가족 아이디로 특정 가족에 해당하는 유저 정보 조회", description = "특정 유저 - 특정 가족 정보를 조회합니다.")
     @PostMapping("/familyUsers/{familyId}") // GET에서 POST로 변경
     public List<UserDTO> getUserFamily(
-            @RequestHeader("Authorization") String authorizationHeader, // 헤더에서 Authorization 받기
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             @Parameter(description = "가족 아이디", required = true)
             @PathVariable UUID familyId) {
 
-        List<UserDTO> userList = userFamilyService.getUsersByFamilyId(familyId);
-        return userList;
+        if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        }
+        String token = authorizationHeader.substring("Bearer ".length()).trim();
+        Long viewerId = jwtUtil.getUserIdFromToken(token);
+
+        return userFamilyService.getUsersByFamilyId(familyId, viewerId);
     }
 }

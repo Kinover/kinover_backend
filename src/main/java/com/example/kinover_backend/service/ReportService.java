@@ -5,7 +5,6 @@ import com.example.kinover_backend.entity.Report;
 import com.example.kinover_backend.entity.User;
 import com.example.kinover_backend.enums.ReportStatus;
 import com.example.kinover_backend.enums.ReportTargetType;
-import com.example.kinover_backend.enums.ReportTargetType;
 import com.example.kinover_backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,6 +23,7 @@ public class ReportService {
     private final CommentRepository commentRepository;
     private final MessageRepository messageRepository;
     private final ScheduleRepository scheduleRepository;
+    private final UserBlockService userBlockService;
 
     @Value("${moderation.report.auto-hide-threshold:3}")
     private int autoHideThreshold;
@@ -94,6 +94,39 @@ public class ReportService {
 
         reportRepository.save(report);
         applyAutoHideIfThresholdReached(req.getTargetType(), req.getTargetUuid());
+        autoBlockReporterAgainstReportedUser(reporterId, req);
+    }
+
+    /**
+     * 신고 성공 시 신고자 → 콘텐츠 작성자(또는 대상 유저) 방향으로 자동 차단
+     */
+    private void autoBlockReporterAgainstReportedUser(Long reporterId, CreateReportRequest req) {
+        Long targetUserId = resolveReportedUserId(req);
+        if (targetUserId == null || targetUserId.equals(reporterId)) {
+            return;
+        }
+        userBlockService.blockUser(reporterId, targetUserId);
+    }
+
+    private Long resolveReportedUserId(CreateReportRequest req) {
+        if (req.getTargetType() == null) {
+            return null;
+        }
+        return switch (req.getTargetType()) {
+            case USER -> req.getTargetUserId();
+            case POST -> postRepository.findById(req.getTargetUuid())
+                    .map(p -> p.getAuthor() != null ? p.getAuthor().getUserId() : null)
+                    .orElse(null);
+            case COMMENT -> commentRepository.findById(req.getTargetUuid())
+                    .map(c -> c.getAuthor() != null ? c.getAuthor().getUserId() : null)
+                    .orElse(null);
+            case MESSAGE -> messageRepository.findById(req.getTargetUuid())
+                    .map(m -> m.getSender() != null ? m.getSender().getUserId() : null)
+                    .orElse(null);
+            case SCHEDULE -> scheduleRepository.findById(req.getTargetUuid())
+                    .map(s -> s.getCreatedBy() != null ? s.getCreatedBy().getUserId() : null)
+                    .orElse(null);
+        };
     }
 
     private void applyAutoHideIfThresholdReached(ReportTargetType type, UUID targetUuid) {

@@ -9,6 +9,7 @@ import com.example.kinover_backend.entity.Message;
 import com.example.kinover_backend.enums.MessageType;
 import com.example.kinover_backend.repository.ChatRoomRepository;
 import com.example.kinover_backend.repository.MessageRepository;
+import com.example.kinover_backend.repository.UserBlockRepository;
 import com.example.kinover_backend.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ public class MessageService {
     private final MessageRepository messageRepository;
     private final ChatRoomRepository chatRoomRepository;
     private final UserRepository userRepository;
+    private final UserBlockRepository userBlockRepository;
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
 
@@ -102,18 +104,23 @@ public class MessageService {
 
         List<UserDTO> users = chatRoomService.getUsersByChatRoom(messageDtoFromDb.getChatRoomId());
 
+        Long senderId = messageDtoFromDb.getSenderId();
+
         // ✅ 멘션 대상 set
         Set<Long> mentionTargets = Optional.ofNullable(messageDtoFromDb.getMentionUserIds())
                 .orElse(List.of())
                 .stream()
                 .filter(Objects::nonNull)
-                .filter(id -> !id.equals(messageDtoFromDb.getSenderId()))
+                .filter(id -> !id.equals(senderId))
                 .collect(Collectors.toSet());
 
         // ✅ 수신자별 "이미 읽음이면 푸시 스킵"
         for (UserDTO u : users) {
             Long receiverId = u.getUserId();
-            if (receiverId.equals(messageDtoFromDb.getSenderId())) continue;
+            if (receiverId.equals(senderId)) continue;
+            if (userBlockRepository.existsByBlocker_UserIdAndBlocked_UserId(receiverId, senderId)) {
+                continue;
+            }
 
             LocalDateTime lastReadAt = chatRoomService.getLastReadAt(messageDtoFromDb.getChatRoomId(), receiverId);
             if (lastReadAt != null && messageDtoFromDb.getCreatedAt() != null

@@ -10,6 +10,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class UserBlockService {
@@ -51,5 +53,14 @@ public class UserBlockService {
             throw new BadRequestException("blockerId와 blockedUserId는 필수입니다.");
         }
         userBlockRepository.deleteByBlocker_UserIdAndBlocked_UserId(blockerId, blockedId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Long> listBlockedUserIds(Long blockerId) {
+        if (blockerId == null) {
+            return List.of();
+        }
+        List<Long> ids = userBlockRepository.findBlockedUserIdsByBlockerId(blockerId);
+        return ids == null ? List.of() : List.copyOf(ids);
     }
 }

@@ -219,10 +219,14 @@ public class PostService {
 
         // ✅ 가족 구성원에게 FCM (본인 제외 + 알림 ON인 사람만)
         List<User> familyMembers = userFamilyRepository.findUsersByFamilyId(familyId);
+        Long authorUserId = author.getUserId();
         for (User member : familyMembers) {
             if (member == null) continue;
             if (!member.getUserId().equals(authenticatedUserId)
                     && Boolean.TRUE.equals(member.getIsPostNotificationOn())) {
+                if (userBlockRepository.existsByBlocker_UserIdAndBlocked_UserId(member.getUserId(), authorUserId)) {
+                    continue;
+                }
                 fcmNotificationService.sendPostNotification(member.getUserId(), postDTO);
             }
         }

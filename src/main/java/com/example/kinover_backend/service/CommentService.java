@@ -3,7 +3,12 @@ package com.example.kinover_backend.service;
 import com.example.kinover_backend.dto.CommentDTO;
 import com.example.kinover_backend.entity.*;
 import com.example.kinover_backend.enums.NotificationType;
-import com.example.kinover_backend.repository.*;
+import com.example.kinover_backend.repository.CommentRepository;
+import com.example.kinover_backend.repository.NotificationRepository;
+import com.example.kinover_backend.repository.PostRepository;
+import com.example.kinover_backend.repository.UserBlockRepository;
+import com.example.kinover_backend.repository.UserFamilyRepository;
+import com.example.kinover_backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +28,7 @@ public class CommentService {
 
     private final UserFamilyRepository userFamilyRepository; // (현재 코드에선 미사용이지만 기존 주입 유지)
     private final FcmNotificationService fcmNotificationService;
+    private final UserBlockRepository userBlockRepository;
 
     @Transactional
     public void createComment(CommentDTO dto) {
@@ -80,11 +86,14 @@ public class CommentService {
         // =========================================================
         List<Long> mentionUserIds = dto.getMentionUserIds();
         Set<Long> mentionTargets = new HashSet<>();
+        Long commentAuthorId = author.getUserId();
         if (mentionUserIds != null) {
             for (Long uid : mentionUserIds) {
                 if (uid != null && !uid.equals(dto.getAuthorId())) {
                     mentionTargets.add(uid);
-                    fcmNotificationService.sendMentionCommentNotification(uid, dto);
+                    if (!userBlockRepository.existsByBlocker_UserIdAndBlocked_UserId(uid, commentAuthorId)) {
+                        fcmNotificationService.sendMentionCommentNotification(uid, dto);
+                    }
                 }
             }
         }
@@ -99,6 +108,9 @@ public class CommentService {
             if (member == null) continue;
 
             if (Boolean.TRUE.equals(member.getIsCommentNotificationOn())) {
+                if (userBlockRepository.existsByBlocker_UserIdAndBlocked_UserId(uid, commentAuthorId)) {
+                    continue;
+                }
                 fcmNotificationService.sendCommentNotification(uid, dto);
             }
         }

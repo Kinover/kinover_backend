@@ -7,7 +7,13 @@ import com.example.kinover_backend.enums.ChatBotPersonality;
 import com.example.kinover_backend.enums.KinoType;
 import com.example.kinover_backend.enums.MessageType;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.example.kinover_backend.repository.*;
+import com.example.kinover_backend.repository.ChatRoomNotificationRepository;
+import com.example.kinover_backend.repository.ChatRoomRepository;
+import com.example.kinover_backend.repository.FamilyRepository;
+import com.example.kinover_backend.repository.MessageRepository;
+import com.example.kinover_backend.repository.UserBlockRepository;
+import com.example.kinover_backend.repository.UserChatRoomRepository;
+import com.example.kinover_backend.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +39,7 @@ public class ChatRoomService {
     private final UserChatRoomRepository userChatRoomRepository;
     private final ChatRoomNotificationRepository chatRoomNotificationRepository;
     private final UserRepository userRepository;
+    private final UserBlockRepository userBlockRepository;
     private final UserService userService;
     private final MessageRepository messageRepository;
     private final S3Service s3Service;
@@ -390,6 +397,21 @@ public class ChatRoomService {
         }
         return users.stream()
                 .map(UserDTO::new)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 조회자(viewer) 기준으로, viewer가 차단한 멤버는 목록에서 제외 (프로필/멤버 노출용)
+     */
+    @Transactional(readOnly = true)
+    public List<UserDTO> getUsersByChatRoomForViewer(UUID chatRoomId, Long viewerUserId) {
+        List<UserDTO> all = getUsersByChatRoom(chatRoomId);
+        if (viewerUserId == null) {
+            return all;
+        }
+        return all.stream()
+                .filter(u -> u.getUserId() == null
+                        || !userBlockRepository.existsByBlocker_UserIdAndBlocked_UserId(viewerUserId, u.getUserId()))
                 .collect(Collectors.toList());
     }
 
