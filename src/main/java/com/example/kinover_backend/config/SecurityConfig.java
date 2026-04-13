@@ -63,11 +63,8 @@ public class SecurityConfig {
                     "/swagger-ui/**"
                 ).permitAll()
 
-                // 로그인/토큰 발급 엔드포인트 (네 프로젝트에 맞게 넉넉히 열어두기)
-                .requestMatchers(
-                    "/api/login/**",
-                    "/api/auth/**"
-                ).permitAll()
+                // 로그인/토큰 발급 (전화 인증은 JWT 필요 → /api/auth 는 여기서 제외)
+                .requestMatchers("/api/login/**").permitAll()
 
                 // WebSocket (필요 경로만)
                 .requestMatchers("/chat/**", "/status/**", "/family-status/**").permitAll()

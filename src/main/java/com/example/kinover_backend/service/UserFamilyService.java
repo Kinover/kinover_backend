@@ -9,6 +9,7 @@ import com.example.kinover_backend.entity.UserFamily;
 import com.example.kinover_backend.repository.ChatRoomRepository;
 import com.example.kinover_backend.repository.FamilyRepository;
 import com.example.kinover_backend.repository.UserChatRoomRepository;
+import com.example.kinover_backend.controller.ForbiddenException;
 import com.example.kinover_backend.repository.UserFamilyRepository;
 import com.example.kinover_backend.repository.UserRepository;
 import jakarta.transaction.Transactional;
@@ -79,6 +80,10 @@ public class UserFamilyService {
 
         if (existing.isPresent()) {
             return;
+        }
+
+        if (!Boolean.TRUE.equals(user.getPhoneVerified())) {
+            throw new ForbiddenException("전화번호 인증을 완료한 뒤에 가족에 참여할 수 있습니다.");
         }
 
         UserFamily userFamily = new UserFamily();

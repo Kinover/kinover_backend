@@ -18,13 +18,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DuplicateSocialProviderException.class)
     public ResponseEntity<DuplicateSocialProviderResponseDTO> duplicateSocialProvider(DuplicateSocialProviderException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(new DuplicateSocialProviderResponseDTO("DUPLICATE_SOCIAL_PROVIDER", e.getProvider()));
+                .body(new DuplicateSocialProviderResponseDTO("DUPLICATE_SOCIAL_PROVIDER", e.getProvider(), null));
     }
 
     @ExceptionHandler(DuplicatePhoneNumberException.class)
     public ResponseEntity<DuplicateSocialProviderResponseDTO> duplicatePhoneNumber(DuplicatePhoneNumberException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(new DuplicateSocialProviderResponseDTO("DUPLICATE_PHONE_NUMBER", e.getProvider()));
+                .body(new DuplicateSocialProviderResponseDTO(
+                        "DUPLICATE_PHONE_NUMBER",
+                        e.getProvider(),
+                        e.getMessage()));
     }
 
     @ExceptionHandler(BadRequestException.class)

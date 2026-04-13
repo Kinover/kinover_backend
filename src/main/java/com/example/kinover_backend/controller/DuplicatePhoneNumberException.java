@@ -4,7 +4,7 @@ public class DuplicatePhoneNumberException extends RuntimeException {
     private final String provider; // 기존 계정의 소셜 제공자 (KAKAO / APPLE)
 
     public DuplicatePhoneNumberException(String provider) {
-        super("이미 해당 전화번호로 가입된 계정이 있습니다.");
+        super("이미 가입된 전화번호입니다. 해당 번호로 연결된 계정으로 로그인해 주세요.");
         this.provider = provider;
     }
 
