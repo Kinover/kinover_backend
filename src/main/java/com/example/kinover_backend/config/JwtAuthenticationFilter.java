@@ -91,6 +91,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 sendAccountBanned(response);
                 return;
             }
+            if (UserAccountStatus.INVALIDATED.equals(user.getAccountStatus())) {
+                sendAccountInvalidated(response);
+                return;
+            }
 
             var authorities = List.of(new SimpleGrantedAuthority("ROLE_USER"));
             UsernamePasswordAuthenticationToken authentication =
@@ -132,6 +136,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         response.setContentType("application/json;charset=UTF-8");
         response.getWriter().write(objectMapper.writeValueAsString(
                 new ErrorResponseDTO("ACCOUNT_BANNED", "계정이 제재되어 이용할 수 없습니다.")
+        ));
+    }
+
+    private void sendAccountInvalidated(HttpServletResponse response) throws IOException {
+        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setContentType("application/json;charset=UTF-8");
+        response.getWriter().write(objectMapper.writeValueAsString(
+                new ErrorResponseDTO(
+                        "ACCOUNT_INVALIDATED",
+                        "가입이 취소된 계정입니다. 다시 로그인하여 진행해 주세요.")
         ));
     }
 }

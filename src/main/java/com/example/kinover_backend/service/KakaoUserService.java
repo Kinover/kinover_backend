@@ -2,6 +2,7 @@ package com.example.kinover_backend.service;
 
 import com.example.kinover_backend.JwtUtil;
 import com.example.kinover_backend.controller.AccountBannedException;
+import com.example.kinover_backend.controller.AccountInvalidatedException;
 import com.example.kinover_backend.controller.DuplicateSocialProviderException;
 import com.example.kinover_backend.enums.UserAccountStatus;
 import com.example.kinover_backend.dto.KakaoUserDto;
@@ -56,6 +57,9 @@ public class KakaoUserService {
 
         if (UserAccountStatus.BANNED.equals(user.getAccountStatus())) {
             throw new AccountBannedException();
+        }
+        if (UserAccountStatus.INVALIDATED.equals(user.getAccountStatus())) {
+            throw new AccountInvalidatedException();
         }
 
         // 3) JWT에는 "우리 서비스 PK(userId)"만 넣는다

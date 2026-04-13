@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class PhoneVerificationService {
 
     private final UserRepository userRepository;
+    private final UserService userService;
 
     @Transactional
     public void verifyPhone(Long userId, String firebaseIdToken) {
@@ -40,8 +41,8 @@ public class PhoneVerificationService {
         // 3) 동일 전화번호로 가입된 다른 유저 체크 (중복 감지)
         userRepository.findByPhoneNumber(phoneNumber).ifPresent(existingUser -> {
             if (!existingUser.getUserId().equals(userId)) {
-                // 기존 유저가 어떤 소셜 제공자인지 파악해서 응답
                 String provider = existingUser.getKakaoId() != null ? "KAKAO" : "APPLE";
+                userService.invalidateUserForDuplicatePhoneSignup(userId);
                 throw new DuplicatePhoneNumberException(provider);
             }
         });

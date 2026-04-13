@@ -17,7 +17,9 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import com.example.kinover_backend.enums.UserAccountStatus;
 import com.example.kinover_backend.controller.NotFoundException;
 import com.example.kinover_backend.util.UserEmotionExpiry;
 
@@ -221,6 +223,21 @@ public class UserService {
         user.setKakaoId(null);
         user.setAppleId(null);
 
+        userRepository.save(user);
+    }
+
+    /**
+     * 전화번호가 이미 다른 계정에 연결된 상태에서 본인 인증을 시도한 계정을 무효화한다.
+     * 소셜 연동을 끊어 동일 소셜로 재로그인 시 새 userId로 가입할 수 있게 하고,
+     * account_status=INVALIDATED 로 남겨 기존 JWT로 API 호출도 막는다.
+     * (호출부 트랜잭션이 롤백돼도 이 메서드는 별도 트랜잭션으로 커밋된다.)
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void invalidateUserForDuplicatePhoneSignup(Long userId) {
+        deleteUserById(userId);
+        User user = userRepository.findByUserId(userId)
+                .orElseThrow(() -> new RuntimeException("존재하지 않는 유저입니다."));
+        user.setAccountStatus(UserAccountStatus.INVALIDATED);
         userRepository.save(user);
     }
 
