@@ -15,6 +15,8 @@
 - **Spring Data JPA / Hibernate**
 - **MariaDB**
 - **Spring Security + JWT** (JJWT, java-jwt)
+- **소셜 로그인**: 카카오, Apple
+- **Firebase Admin SDK** (전화번호 인증용 Firebase idToken 검증)
 - **WebSocket**
 - **Redis Pub/Sub** (Spring Data Redis, Redisson)
 - **AWS S3** (Presigned URL 기반 업로드)
@@ -30,7 +32,8 @@
 ## 주요 기능
 
 - 가족 단위 사용자/권한 시스템
-- 카카오 로그인 + JWT 인증
+- 카카오·Apple 로그인 및 JWT 기반 API 인증
+- 전화번호 인증 (클라이언트 Firebase Phone Auth → 서버 idToken 검증, 중복 번호 처리)
 - 가족 채팅방 및 메시지 관리
 - 실시간 채팅 (WebSocket + Redis Pub/Sub)
 - 가족 일정 등록/수정/조회
