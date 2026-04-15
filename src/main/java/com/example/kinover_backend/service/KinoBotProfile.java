@@ -7,7 +7,7 @@ public final class KinoBotProfile {
 
     public static final Long KINO_USER_ID = 9999999999L;
     public static final String KINO_USER_NAME = "키노";
-    public static final String KINO_ROOM_NAME = "챗봇 키노";
+    public static final String KINO_ROOM_NAME = "키노상담소";
 
     private KinoBotProfile() {
     }
