@@ -17,6 +17,30 @@ public class PhoneVerificationService {
     private final UserRepository userRepository;
     private final UserService userService;
 
+    private static final java.util.Set<String> TEST_PHONE_NUMBERS = java.util.Set.of("01011112222", "01012345678");
+    private static final String TEST_CODE = "123456";
+
+    @Transactional
+    public void verifyPhoneForTest(Long userId, String testPhone, String testCode) {
+        if (!TEST_PHONE_NUMBERS.contains(testPhone) || !TEST_CODE.equals(testCode)) {
+            throw new IllegalArgumentException("테스트 전화번호 또는 인증 코드가 올바르지 않습니다.");
+        }
+
+        User currentUser = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("유저를 찾을 수 없습니다."));
+
+        userRepository.findByPhoneNumber(testPhone).ifPresent(existingUser -> {
+            if (!existingUser.getUserId().equals(userId)) {
+                String provider = existingUser.getKakaoId() != null ? "KAKAO" : "APPLE";
+                userService.invalidateUserForDuplicatePhoneSignup(userId);
+                throw new DuplicatePhoneNumberException(provider);
+            }
+        });
+
+        currentUser.setPhoneNumber(testPhone);
+        currentUser.setPhoneVerified(true);
+    }
+
     @Transactional
     public void verifyPhone(Long userId, String firebaseIdToken) {
         // 1) Firebase idToken 검증 후 전화번호 추출

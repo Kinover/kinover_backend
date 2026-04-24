@@ -39,7 +39,7 @@ public class LoginController {
             return ResponseEntity.badRequest().body("identityToken is required.");
         }
     
-        LoginResponseDto response = appleUserService.processAppleLogin(dto.getIdentityToken());
+        LoginResponseDto response = appleUserService.processAppleLogin(dto);
         return ResponseEntity.ok(response);
     }
     

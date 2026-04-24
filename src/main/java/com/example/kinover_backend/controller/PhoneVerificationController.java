@@ -2,8 +2,8 @@ package com.example.kinover_backend.controller;
 
 import com.example.kinover_backend.dto.PhoneVerifyRequestDto;
 import com.example.kinover_backend.service.PhoneVerificationService;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -37,8 +37,20 @@ public class PhoneVerificationController {
      * Body: { "idToken": "firebase_id_token" }
      */
     @PostMapping("/phone/verify")
-    public ResponseEntity<Void> verifyPhone(@Valid @RequestBody PhoneVerifyRequestDto request) {
-        phoneVerificationService.verifyPhone(getAuthUserId(), request.getIdToken());
+    public ResponseEntity<Void> verifyPhone(@RequestBody PhoneVerifyRequestDto request) {
+        Long userId = getAuthUserId();
+
+        boolean isTestRequest = request.getTestPhone() != null && request.getTestCode() != null;
+        if (isTestRequest) {
+            phoneVerificationService.verifyPhoneForTest(userId, request.getTestPhone(), request.getTestCode());
+            return ResponseEntity.ok().build();
+        }
+
+        if (request.getIdToken() == null || request.getIdToken().isBlank()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        }
+
+        phoneVerificationService.verifyPhone(userId, request.getIdToken());
         return ResponseEntity.ok().build();
     }
 }
