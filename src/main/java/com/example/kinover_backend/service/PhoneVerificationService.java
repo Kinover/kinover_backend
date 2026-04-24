@@ -94,14 +94,6 @@ public class PhoneVerificationService {
         User currentUser = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("유저를 찾을 수 없습니다."));
 
-        userRepository.findByPhoneNumber(testPhone).ifPresent(existingUser -> {
-            if (!existingUser.getUserId().equals(userId)) {
-                String provider = existingUser.getKakaoId() != null ? "KAKAO" : "APPLE";
-                userService.invalidateUserForDuplicatePhoneSignup(userId);
-                throw new DuplicatePhoneNumberException(provider);
-            }
-        });
-
         currentUser.setPhoneNumber(testPhone);
         currentUser.setPhoneVerified(true);
         log.info("event=TEST_OTP_VERIFY_SUCCESS userId={} ip={} phone={}", userId, clientIp, maskedPhone);
