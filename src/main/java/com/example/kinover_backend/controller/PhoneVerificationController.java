@@ -2,8 +2,8 @@ package com.example.kinover_backend.controller;
 
 import com.example.kinover_backend.dto.PhoneVerifyRequestDto;
 import com.example.kinover_backend.service.PhoneVerificationService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -37,20 +37,53 @@ public class PhoneVerificationController {
      * Body: { "idToken": "firebase_id_token" }
      */
     @PostMapping("/phone/verify")
-    public ResponseEntity<Void> verifyPhone(@RequestBody PhoneVerifyRequestDto request) {
+    public ResponseEntity<Void> verifyPhone(
+            @RequestBody PhoneVerifyRequestDto request,
+            HttpServletRequest httpServletRequest
+    ) {
         Long userId = getAuthUserId();
+        String clientIp = resolveClientIp(httpServletRequest);
 
-        boolean isTestRequest = request.getTestPhone() != null && request.getTestCode() != null;
+        String idToken = normalize(request.getIdToken());
+        String testPhone = normalize(request.getTestPhone());
+        String testCode = normalize(request.getTestCode());
+
+        boolean hasIdToken = idToken != null;
+        boolean hasTestPhone = testPhone != null;
+        boolean hasTestCode = testCode != null;
+        boolean isTestRequest = hasTestPhone && hasTestCode && !hasIdToken;
+        boolean isNormalRequest = hasIdToken && !hasTestPhone && !hasTestCode;
+
+        if (!isTestRequest && !isNormalRequest) {
+            throw new ApiException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "INVALID_VERIFY_PAYLOAD",
+                    "요청 형식이 올바르지 않습니다. idToken 또는 testPhone+testCode 중 하나만 보내야 합니다."
+            );
+        }
+
         if (isTestRequest) {
-            phoneVerificationService.verifyPhoneForTest(userId, request.getTestPhone(), request.getTestCode());
+            phoneVerificationService.verifyPhoneForTest(userId, testPhone, testCode, clientIp);
             return ResponseEntity.ok().build();
         }
 
-        if (request.getIdToken() == null || request.getIdToken().isBlank()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-        }
-
-        phoneVerificationService.verifyPhone(userId, request.getIdToken());
+        phoneVerificationService.verifyPhone(userId, idToken, clientIp);
         return ResponseEntity.ok().build();
+    }
+
+    private String normalize(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String resolveClientIp(HttpServletRequest request) {
+        String forwardedFor = request.getHeader("X-Forwarded-For");
+        if (forwardedFor != null && !forwardedFor.isBlank()) {
+            return forwardedFor.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 }

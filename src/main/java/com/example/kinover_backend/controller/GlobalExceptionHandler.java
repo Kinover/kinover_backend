@@ -30,6 +30,12 @@ public class GlobalExceptionHandler {
                         e.getMessage()));
     }
 
+    @ExceptionHandler(ApiException.class)
+    public ResponseEntity<ErrorResponseDTO> apiException(ApiException e) {
+        return ResponseEntity.status(e.getStatus())
+                .body(new ErrorResponseDTO(e.getCode(), e.getMessage()));
+    }
+
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<ErrorResponseDTO> badRequest(BadRequestException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
